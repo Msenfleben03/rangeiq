@@ -173,8 +173,7 @@ class CalibrationReport:
 
 
 class ForecastingDatabase:
-    """
-    Database interface for superforecasting prediction market tracking.
+    """Database interface for superforecasting prediction market tracking.
 
     Provides methods for:
     - Creating and managing forecasts
@@ -184,8 +183,7 @@ class ForecastingDatabase:
     """
 
     def __init__(self, db_path: str = "data/betting.db"):
-        """
-        Initialize database connection.
+        """Initialize database connection.
 
         Args:
             db_path: Path to SQLite database file
@@ -255,8 +253,7 @@ class ForecastingDatabase:
         tags: Optional[str] = None,
         notes: Optional[str] = None,
     ) -> str:
-        """
-        Create a new forecast.
+        """Create a new forecast.
 
         Args:
             question_text: Full question text
@@ -361,8 +358,7 @@ class ForecastingDatabase:
         outcome_notes: Optional[str] = None,
         is_ambiguous: bool = False,
     ) -> Dict[str, float]:
-        """
-        Resolve a forecast with the actual outcome.
+        """Resolve a forecast with the actual outcome.
 
         Args:
             forecast_id: Forecast to resolve
@@ -435,8 +431,7 @@ class ForecastingDatabase:
         evidence_quality: Optional[str] = None,
         evidence_direction: Optional[str] = None,
     ) -> int:
-        """
-        Record a belief revision for a forecast.
+        """Record a belief revision for a forecast.
 
         Args:
             forecast_id: Forecast being updated
@@ -556,8 +551,7 @@ class ForecastingDatabase:
         source_type: Optional[str] = None,
         applicable_question_types: Optional[str] = None,
     ) -> int:
-        """
-        Create a new reference class for base rate forecasting.
+        """Create a new reference class for base rate forecasting.
 
         Returns:
             id: Reference class ID
@@ -614,8 +608,7 @@ class ForecastingDatabase:
         platform: Optional[str] = None,
         days: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        Calculate Brier score for resolved forecasts.
+        """Calculate Brier score for resolved forecasts.
 
         Args:
             category: Filter by question category
@@ -662,8 +655,7 @@ class ForecastingDatabase:
     def generate_calibration_curve(
         self, category: Optional[str] = None, platform: Optional[str] = None, n_bins: int = 10
     ) -> List[CalibrationBin]:
-        """
-        Generate calibration curve data.
+        """Generate calibration curve data.
 
         Args:
             category: Filter by question category
@@ -731,8 +723,7 @@ class ForecastingDatabase:
         return bins
 
     def analyze_overconfidence(self) -> Dict[str, Any]:
-        """
-        Analyze overconfidence patterns in forecasts.
+        """Analyze overconfidence patterns in forecasts.
 
         Returns:
             Dict with overconfidence metrics by confidence level
@@ -771,8 +762,7 @@ class ForecastingDatabase:
         return analysis
 
     def analyze_revision_patterns(self) -> Dict[str, Any]:
-        """
-        Analyze belief revision patterns and effectiveness.
+        """Analyze belief revision patterns and effectiveness.
 
         Returns:
             Dict with revision pattern analysis
@@ -825,8 +815,7 @@ class ForecastingDatabase:
         position_size_pct: Optional[float] = None,
         notes: Optional[str] = None,
     ) -> str:
-        """
-        Create a new market position.
+        """Create a new market position.
 
         Args:
             forecast_id: Associated forecast
@@ -895,8 +884,7 @@ class ForecastingDatabase:
     def close_position(
         self, position_uuid: str, exit_price: float, exit_quantity: Optional[float] = None
     ) -> Dict[str, float]:
-        """
-        Close a position (fully or partially).
+        """Close a position (fully or partially).
 
         Args:
             position_uuid: Position to close
@@ -1024,8 +1012,7 @@ class ForecastingDatabase:
         category: Optional[str] = None,
         platform: Optional[str] = None,
     ) -> int:
-        """
-        Calculate and store calibration metrics for a period.
+        """Calculate and store calibration metrics for a period.
 
         Args:
             period_type: 'daily', 'weekly', 'monthly', etc.
@@ -1110,8 +1097,7 @@ class ForecastingDatabase:
 def calculate_kelly_fraction(
     probability: float, odds: float, fraction: float = 0.25  # decimal odds
 ) -> float:
-    """
-    Calculate Kelly fraction for prediction market position.
+    """Calculate Kelly fraction for prediction market position.
 
     Args:
         probability: Estimated probability of winning

@@ -179,8 +179,7 @@ class MarketPrices:
 
 
 class PolymarketFetcher:
-    """
-    Fetches prediction market data from Polymarket.
+    """Fetches prediction market data from Polymarket.
 
     Provides methods to:
     - Fetch sports, political, and other markets
@@ -202,8 +201,7 @@ class PolymarketFetcher:
         rate_limit_delay: float = DEFAULT_RATE_LIMIT_DELAY,
         max_retries: int = MAX_RETRIES,
     ):
-        """
-        Initialize Polymarket fetcher.
+        """Initialize Polymarket fetcher.
 
         Args:
             db_path: Path to SQLite database
@@ -380,8 +378,7 @@ class PolymarketFetcher:
     def _make_request(
         self, url: str, params: Optional[Dict[str, Any]] = None, method: str = "GET"
     ) -> Optional[Dict[str, Any]]:
-        """
-        Make an HTTP request with retry logic and rate limiting.
+        """Make an HTTP request with retry logic and rate limiting.
 
         Args:
             url: Request URL
@@ -436,8 +433,7 @@ class PolymarketFetcher:
     def fetch_all_markets(
         self, limit: int = 100, offset: int = 0, active_only: bool = True
     ) -> List[PolymarketMarket]:
-        """
-        Fetch all available markets from Polymarket.
+        """Fetch all available markets from Polymarket.
 
         Args:
             limit: Maximum markets to return per page
@@ -462,8 +458,7 @@ class PolymarketFetcher:
         return markets
 
     def fetch_sports_markets(self, sport: Optional[str] = None) -> List[PolymarketMarket]:
-        """
-        Fetch sports prediction markets.
+        """Fetch sports prediction markets.
 
         Args:
             sport: Filter by sport (e.g., 'nfl', 'nba', 'mlb')
@@ -534,8 +529,7 @@ class PolymarketFetcher:
         return all_markets
 
     def fetch_political_markets(self) -> List[PolymarketMarket]:
-        """
-        Fetch political and economic prediction markets.
+        """Fetch political and economic prediction markets.
 
         Returns:
             List of political/economic markets
@@ -590,8 +584,7 @@ class PolymarketFetcher:
         return all_markets
 
     def fetch_market_by_id(self, market_id: str) -> Optional[PolymarketMarket]:
-        """
-        Fetch a specific market by its ID.
+        """Fetch a specific market by its ID.
 
         Args:
             market_id: Polymarket market ID or condition ID
@@ -612,8 +605,7 @@ class PolymarketFetcher:
         return markets[0] if markets else None
 
     def _parse_markets(self, data: Union[List[Dict], Dict]) -> List[PolymarketMarket]:
-        """
-        Parse raw API response into PolymarketMarket objects.
+        """Parse raw API response into PolymarketMarket objects.
 
         Args:
             data: API response data
@@ -738,8 +730,7 @@ class PolymarketFetcher:
     # =========================================================================
 
     def fetch_market_prices(self, token_id: str) -> Optional[MarketPrices]:
-        """
-        Fetch current bid/ask/mid prices for a token.
+        """Fetch current bid/ask/mid prices for a token.
 
         Args:
             token_id: Token ID from Polymarket
@@ -818,8 +809,7 @@ class PolymarketFetcher:
     def fetch_price_history(
         self, token_id: str, interval: str = "1d", limit: int = 100
     ) -> List[PricePoint]:
-        """
-        Fetch historical price data for a token.
+        """Fetch historical price data for a token.
 
         Args:
             token_id: Token ID
@@ -895,8 +885,7 @@ class PolymarketFetcher:
 
     @staticmethod
     def _probability_to_american(prob: float) -> Optional[int]:
-        """
-        Convert probability to American odds.
+        """Convert probability to American odds.
 
         Args:
             prob: Probability (0-1)
@@ -914,8 +903,7 @@ class PolymarketFetcher:
 
     @staticmethod
     def probability_to_decimal(prob: float) -> Optional[float]:
-        """
-        Convert probability to decimal odds.
+        """Convert probability to decimal odds.
 
         Args:
             prob: Probability (0-1)
@@ -929,8 +917,7 @@ class PolymarketFetcher:
 
     @staticmethod
     def calculate_market_vig(yes_price: float, no_price: float) -> float:
-        """
-        Calculate market vig (vigorish/overround).
+        """Calculate market vig (vigorish/overround).
 
         Args:
             yes_price: Price of YES shares
@@ -944,8 +931,7 @@ class PolymarketFetcher:
 
     @staticmethod
     def calculate_no_vig_probability(yes_price: float, no_price: float) -> Tuple[float, float]:
-        """
-        Calculate vig-free probabilities.
+        """Calculate vig-free probabilities.
 
         Args:
             yes_price: Price of YES shares
@@ -964,8 +950,7 @@ class PolymarketFetcher:
     # =========================================================================
 
     def store_markets(self, markets: List[PolymarketMarket]) -> int:
-        """
-        Store markets in SQLite database.
+        """Store markets in SQLite database.
 
         Args:
             markets: List of PolymarketMarket objects
@@ -1027,8 +1012,7 @@ class PolymarketFetcher:
         return stored_count
 
     def store_price_history(self, market_id: str, token_id: str, prices: List[PricePoint]) -> int:
-        """
-        Store price history in database.
+        """Store price history in database.
 
         Args:
             market_id: Market ID
@@ -1073,8 +1057,7 @@ class PolymarketFetcher:
     def get_stored_markets(
         self, category: Optional[str] = None, active_only: bool = True, limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """
-        Retrieve markets from database.
+        """Retrieve markets from database.
 
         Args:
             category: Filter by category
@@ -1105,8 +1088,7 @@ class PolymarketFetcher:
     def get_price_history_from_db(
         self, market_id: str, token_id: Optional[str] = None, since: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Retrieve price history from database.
+        """Retrieve price history from database.
 
         Args:
             market_id: Market ID to query
@@ -1139,8 +1121,7 @@ class PolymarketFetcher:
     # =========================================================================
 
     def link_to_forecast(self, market_id: str, forecast_id: str) -> bool:
-        """
-        Link a Polymarket market to a forecast in the forecasting schema.
+        """Link a Polymarket market to a forecast in the forecasting schema.
 
         Args:
             market_id: Polymarket market ID
@@ -1175,8 +1156,7 @@ class PolymarketFetcher:
     def create_forecast_from_market(
         self, market: PolymarketMarket, initial_probability: float, confidence: str = "medium"
     ) -> Optional[str]:
-        """
-        Create a forecast entry from a Polymarket market.
+        """Create a forecast entry from a Polymarket market.
 
         Args:
             market: PolymarketMarket object
@@ -1240,8 +1220,7 @@ class PolymarketFetcher:
     # =========================================================================
 
     def get_market_summary(self, market_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a summary of a market with current prices and stats.
+        """Get a summary of a market with current prices and stats.
 
         Args:
             market_id: Market ID
@@ -1285,8 +1264,7 @@ class PolymarketFetcher:
         return summary
 
     def refresh_all_markets(self) -> int:
-        """
-        Refresh all stored markets with current data.
+        """Refresh all stored markets with current data.
 
         Returns:
             Number of markets updated
