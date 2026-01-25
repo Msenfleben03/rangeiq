@@ -230,12 +230,77 @@ sports_betting/
 
 ### Current Sprint Focus
 
-- [ ] Set up project structure and environment
-- [ ] Initialize claude-flow with memory namespaces
-- [ ] Implement NCAAB data pipeline (sportsipy)
+- [x] Set up project structure and environment
+- [x] Initialize claude-flow with memory namespaces
+- [x] Implement NCAAB data pipeline (sportsipy)
 - [ ] Build baseline NCAAB Elo model
-- [ ] Create SQLite database with schema
+- [x] Create SQLite database with schema (22 tables)
 - [ ] Begin paper betting tracking
+
+### Prediction Markets Integration (New)
+
+- [x] Research prediction market platforms (Polymarket, Kalshi, PredictIt)
+- [x] Research Superforecasting methodology (Tetlock/GJP)
+- [x] Design forecasting schema (7 tables)
+- [x] Build Polymarket data fetcher
+- [ ] Open Kalshi account (CFTC-regulated)
+- [ ] Paper trade 50+ positions
+- [ ] Achieve Brier score < 0.125
+
+---
+
+## Prediction Markets Module
+
+### Strategic Focus
+
+| Category | Priority | Expected CLV |
+|----------|----------|--------------|
+| Political/Economic | ⭐ HIGH | 3-10% |
+| Sports | ❌ AVOID | Inferior to sportsbooks |
+
+### Platform Hierarchy
+
+| Platform | Use Case | Risk | Fees |
+|----------|----------|------|------|
+| **Kalshi** | Primary trading (US legal) | Low | 1.2% |
+| **Polymarket** | Data source + US launch Mar 2026 | Medium | 0.01% |
+| **PredictIt** | Accuracy benchmark only | High | 16% |
+
+### Key Metrics
+
+| Metric | Target | Benchmark |
+|--------|--------|-----------|
+| Brier Score | < 0.125 | Superforecasters: 0.10 |
+| Calibration Error | < 5% | Per probability bin |
+| CLV | > 3% | Political/economic markets |
+
+### Superforecasting Principles
+
+1. **Fermi Decomposition** - Break complex questions into sub-questions
+2. **Outside View First** - Start with base rates
+3. **Granular Estimates** - 65% beats "likely"
+4. **Bayesian Updating** - Many small revisions
+5. **Track Every Revision** - With reasoning
+
+### Quick Start
+
+```python
+# Polymarket data fetching
+from pipelines.polymarket_fetcher import PolymarketFetcher
+fetcher = PolymarketFetcher()
+markets = fetcher.fetch_political_markets()
+
+# Forecasting with belief tracking
+from tracking.forecasting_db import ForecastingDatabase
+db = ForecastingDatabase("data/betting.db")
+fc_id = db.create_forecast(
+    question_text="Will X happen?",
+    platform="kalshi",
+    initial_probability=0.35
+)
+db.record_revision(fc_id, new_probability=0.42,
+                   revision_trigger="news_event")
+```
 
 ---
 

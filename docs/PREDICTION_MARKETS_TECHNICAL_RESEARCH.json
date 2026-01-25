@@ -1,0 +1,346 @@
+{
+  "search_summary": {
+    "platforms_searched": ["github", "pypi", "official_docs", "technical_blogs"],
+    "repositories_analyzed": 12,
+    "docs_reviewed": 8,
+    "search_date": "2026-01-25"
+  },
+  "repositories": [
+    {
+      "citation": "[1] Polymarket. 'py-clob-client: Python client for the Polymarket CLOB.' GitHub, Updated Jan 13 2026. https://github.com/Polymarket/py-clob-client",
+      "platform": "github",
+      "stats": {
+        "stars": "Not available from search",
+        "forks": "Not available from search",
+        "contributors": "Multiple",
+        "last_updated": "2026-01-13"
+      },
+      "key_features": [
+        "Official Polymarket CLOB client",
+        "Read-only market data access without authentication",
+        "Full trading capabilities with wallet integration",
+        "WebSocket support for real-time updates",
+        "Historical price data via /prices-history endpoint",
+        "Support for both EOA and proxy wallets"
+      ],
+      "architecture": "REST API client with WebSocket support, Polygon blockchain integration for settlements",
+      "code_quality": {
+        "testing": "adequate",
+        "documentation": "excellent",
+        "maintenance": "active"
+      },
+      "usage_example": "from py_clob_client.client import ClobClient\nclient = ClobClient('https://clob.polymarket.com')\nmarkets = client.get_simplified_markets()\nmid_price = client.get_midpoint('<token-id>')",
+      "limitations": [
+        "Requires Python 3.9+",
+        "Complex wallet setup for trading (USDC/Conditional Token approvals)",
+        "Historical data API has reported blank response issues (Issue #189)",
+        "Polygon blockchain dependency"
+      ],
+      "alternatives": [
+        "polymarket-apis (third-party unified client)",
+        "Direct REST API calls",
+        "NautilusTrader integration"
+      ]
+    },
+    {
+      "citation": "[2] lowgrind. 'kalshi-python: The official API client library for kalshi.com.' GitHub. https://github.com/lowgrind/kalshi-python",
+      "platform": "github",
+      "stats": {
+        "stars": "Not available from search",
+        "forks": "Not available from search",
+        "contributors": "Multiple",
+        "last_updated": "2026-01-07"
+      },
+      "key_features": [
+        "Official Kalshi Python SDK",
+        "CFTC-regulated exchange (US-based)",
+        "REST API implementation",
+        "Token-based authentication (30-min expiry)",
+        "Portfolio and trade history access",
+        "Order book data for all markets",
+        "Async version available (kalshi-python-async v3.4.0)"
+      ],
+      "architecture": "REST API with OpenAPI spec, USD settlements (no crypto), tier-based rate limiting",
+      "code_quality": {
+        "testing": "adequate",
+        "documentation": "good",
+        "maintenance": "active"
+      },
+      "usage_example": "pip install kalshi-python\n# See docs.kalshi.com for authentication and usage examples",
+      "limitations": [
+        "Tokens expire every 30 minutes",
+        "Rate limits vary by tier (Standard/Premier/Prime)",
+        "Prime tier requires 7.5% of exchange traded volume",
+        "Rate limits make true HFT impractical"
+      ],
+      "alternatives": [
+        "KalshiPythonClient by AndrewNolte",
+        "kalshi-py (type-safe client built from OpenAPI spec)",
+        "Direct REST API integration"
+      ]
+    },
+    {
+      "citation": "[3] bcongdon. 'PyManifold: Python API client for Manifold Markets.' GitHub. https://github.com/bcongdon/PyManifold",
+      "platform": "github",
+      "stats": {
+        "stars": "Not available from search",
+        "forks": "Not available from search",
+        "contributors": "Multiple",
+        "last_updated": "Not specified"
+      },
+      "key_features": [
+        "Play money prediction market (educational value)",
+        "Simple Python interface",
+        "Market listing and retrieval",
+        "Bet creation and market creation",
+        "Kelly criterion calculator utility",
+        "No authentication required for read operations"
+      ],
+      "architecture": "REST API wrapper, play money settlements, community-driven platform",
+      "code_quality": {
+        "testing": "minimal",
+        "documentation": "fair",
+        "maintenance": "minimal"
+      },
+      "usage_example": "from pymanifold import ManifoldClient\nclient = ManifoldClient()\nmarkets = client.list_markets()\nclient.create_bet(contractId, amount, outcome)",
+      "limitations": [
+        "Play money only (not real money)",
+        "Not published to PyPI yet (installation via source)",
+        "Limited maintenance activity",
+        "Less suitable for production trading"
+      ],
+      "alternatives": [
+        "manifoldpy (vluzko) - deprecated",
+        "ManifoldMarketManager on PyPI",
+        "Direct API calls to api.manifold.markets"
+      ]
+    },
+    {
+      "citation": "[4] tuttlepower. 'predictit_markets: Simple Python code to retrieve PredictIt market data.' GitHub. https://github.com/tuttlepower/predictit_markets",
+      "platform": "github",
+      "stats": {
+        "stars": "Not available from search",
+        "forks": "Not available from search",
+        "contributors": "Single developer",
+        "last_updated": "Not specified"
+      },
+      "key_features": [
+        "Returns Pandas DataFrame of market data",
+        "Supports 24h, 7-day, 30-day, and 90-day historical periods",
+        "Public API access (no authentication)",
+        "Simple Python interface"
+      ],
+      "architecture": "Simple wrapper around PredictIt public REST API",
+      "code_quality": {
+        "testing": "minimal",
+        "documentation": "fair",
+        "maintenance": "minimal"
+      },
+      "usage_example": "# Returns Pandas DataFrame with market data\n# Endpoint: https://www.predictit.org/api/marketdata/all/",
+      "limitations": [
+        "API only shows OPEN markets (no closed markets)",
+        "Historical data requires manual CSV download per contract",
+        "No comprehensive historical data API",
+        "Data for non-commercial use only",
+        "Must attribute PredictIt as source"
+      ],
+      "alternatives": [
+        "pyredictit (kcinnick) - full wrapper with trading",
+        "Manual CSV downloads from PredictIt website",
+        "Academic data sharing program for researchers"
+      ]
+    },
+    {
+      "citation": "[5] Metaculus. 'forecasting-tools: Framework for building AI Forecasting Bots.' GitHub, Updated Jan 13 2026. https://github.com/Metaculus/forecasting-tools",
+      "platform": "github",
+      "stats": {
+        "stars": "Not available from search",
+        "forks": "Not available from search",
+        "contributors": "Multiple",
+        "last_updated": "2026-01-13"
+      },
+      "key_features": [
+        "Official Metaculus Python framework",
+        "AI forecasting bot templates",
+        "Supports Binary, Multiple Choice, Numeric, and Date questions",
+        "Historical forecast data with timestamp filtering",
+        "Tournament and question APIs",
+        "Streamlit-based research tools"
+      ],
+      "architecture": "Python framework with API wrapper, forecasting aggregation engine, community-driven predictions",
+      "code_quality": {
+        "testing": "adequate",
+        "documentation": "good",
+        "maintenance": "active"
+      },
+      "usage_example": "# Create METACULUS_TOKEN at https://metaculus.com/aib\n# API docs: https://www.metaculus.com/api/\n# Framework provides bot templates for automated forecasting",
+      "limitations": [
+        "Focused on forecasting/prediction rather than trading",
+        "No direct financial markets",
+        "Requires API token from metaculus.com/aib",
+        "Learning curve for bot framework"
+      ],
+      "alternatives": [
+        "Direct API integration",
+        "metac-bot-template repository",
+        "Custom bot implementations"
+      ]
+    },
+    {
+      "citation": "[6] warproxxx. 'poly_data: Polymarket Data Retriever.' GitHub. https://github.com/warproxxx/poly_data",
+      "platform": "github",
+      "stats": {
+        "stars": "Not available from search",
+        "forks": "Not available from search",
+        "contributors": "Single developer",
+        "last_updated": "Not specified"
+      },
+      "key_features": [
+        "Comprehensive Polymarket data fetcher",
+        "Outputs to CSV files",
+        "Markets dataset (markets.csv)",
+        "Order events (orderFilled.csv)",
+        "Processed trades (trades.csv)",
+        "Historical data processing"
+      ],
+      "architecture": "Data scraper/processor with CSV export capabilities",
+      "code_quality": {
+        "testing": "minimal",
+        "documentation": "fair",
+        "maintenance": "moderate"
+      },
+      "usage_example": "# Fetches and structures Polymarket data\n# Exports: markets.csv, orderFilled.csv, trades.csv",
+      "limitations": [
+        "Community project (not official)",
+        "May require updates as API changes",
+        "Limited documentation"
+      ],
+      "alternatives": [
+        "py-clob-client for real-time data",
+        "Bitquery GraphQL API for blockchain data",
+        "Direct CLOB API calls"
+      ]
+    },
+    {
+      "citation": "[7] arbbets. 'Prediction-Markets-Data: Python script for multi-platform data collection.' GitHub. https://github.com/arbbets/Prediction-Markets-Data",
+      "platform": "github",
+      "stats": {
+        "stars": "Not available from search",
+        "forks": "Not available from search",
+        "contributors": "Single developer",
+        "last_updated": "Not specified"
+      },
+      "key_features": [
+        "Multi-platform support (Kalshi, Polymarket, PredictIt, Limitless)",
+        "Historical data collection",
+        "Data analysis and visualization",
+        "Years of historical prediction market data"
+      ],
+      "architecture": "Unified data collection framework across multiple prediction market platforms",
+      "code_quality": {
+        "testing": "minimal",
+        "documentation": "fair",
+        "maintenance": "moderate"
+      },
+      "usage_example": "# Unified interface for multiple prediction markets\n# Supports historical data analysis",
+      "limitations": [
+        "Community project",
+        "Maintenance dependent on single developer",
+        "Documentation may be limited"
+      ],
+      "alternatives": [
+        "Individual platform clients",
+        "Custom integration per platform",
+        "predmarket library (if available)"
+      ]
+    }
+  ],
+  "technical_insights": {
+    "common_patterns": [
+      "REST API as primary interface across all platforms",
+      "WebSocket support for real-time data (Polymarket, Kalshi)",
+      "Token/API key authentication with varying expiration",
+      "Rate limiting on free tiers (100 req/min typical)",
+      "Historical data via dedicated endpoints or CSV downloads",
+      "Pandas DataFrame integration in Python libraries"
+    ],
+    "best_practices": [
+      "Use official clients where available (py-clob-client, kalshi-python)",
+      "Implement proper error handling for rate limits (HTTP 429)",
+      "Cache historical data locally to minimize API calls",
+      "Use WebSocket connections for real-time price updates",
+      "Store timestamps as Unix time for cross-platform consistency",
+      "Implement exponential backoff for failed requests"
+    ],
+    "pitfalls": [
+      "PredictIt API only shows OPEN markets (no closed markets in API)",
+      "Kalshi tokens expire every 30 minutes (requires re-auth)",
+      "Polymarket requires blockchain wallet setup for trading",
+      "Rate limits can be restrictive for high-frequency strategies",
+      "Historical data availability varies significantly by platform",
+      "Regulatory uncertainty for sports markets (state vs federal jurisdiction)"
+    ],
+    "emerging_trends": [
+      "Prediction markets challenging traditional sportsbooks (2026)",
+      "CFTC regulation vs state gambling law conflicts",
+      "AI forecasting bots becoming mainstream (Metaculus tournaments)",
+      "Lower vig/juice on prediction markets vs traditional books",
+      "Migration of sharp bettors to prediction markets for better pricing",
+      "Integration with DeFi protocols (Polymarket on Polygon)"
+    ]
+  },
+  "implementation_recommendations": [
+    {
+      "scenario": "Real-time sports betting odds monitoring",
+      "recommended_solution": "Polymarket py-clob-client with WebSocket for NFL/NBA/MLB markets",
+      "rationale": "Most comprehensive sports coverage, real-time updates, no authentication needed for read-only, active maintenance"
+    },
+    {
+      "scenario": "CFTC-regulated US-based trading",
+      "recommended_solution": "Kalshi official Python SDK (kalshi-python)",
+      "rationale": "Only CFTC-regulated option, USD settlements, legal clarity for US users, growing sports market coverage"
+    },
+    {
+      "scenario": "Historical data analysis and backtesting",
+      "recommended_solution": "Polymarket poly_data + py-clob-client for historical prices",
+      "rationale": "CSV exports for bulk analysis, /prices-history endpoint for time series, extensive sports market history"
+    },
+    {
+      "scenario": "Multi-platform arbitrage/line shopping",
+      "recommended_solution": "Custom integration using Prediction-Markets-Data framework or individual platform clients",
+      "rationale": "Need to compare Kalshi vs Polymarket pricing, unified data structure, historical comparison capability"
+    },
+    {
+      "scenario": "Model testing without real money",
+      "recommended_solution": "Manifold Markets (PyManifold)",
+      "rationale": "Play money platform, low stakes testing, active community, Kelly calculator included"
+    },
+    {
+      "scenario": "Probability forecasting research",
+      "recommended_solution": "Metaculus forecasting-tools framework",
+      "rationale": "Aggregated crowd wisdom, historical forecast accuracy data, AI bot integration, academic focus"
+    }
+  ],
+  "community_insights": {
+    "popular_solutions": [
+      "py-clob-client for Polymarket (official, well-maintained)",
+      "kalshi-python for regulated US trading",
+      "Manual CSV downloads for PredictIt historical data",
+      "Bitquery GraphQL for on-chain Polymarket data"
+    ],
+    "controversial_topics": [
+      "Prediction markets vs sports betting legal classification",
+      "State gambling laws vs federal CFTC jurisdiction",
+      "College sports integrity concerns (NCAA letter to Kalshi)",
+      "Transfer portal betting ethics and legality",
+      "Impact on traditional sportsbook revenue"
+    ],
+    "expert_opinions": [
+      "Prediction markets offer better pricing (lower vig) than traditional sportsbooks",
+      "Sharp bettors migrating to prediction markets for CLV advantages",
+      "Legal uncertainty may persist until US Supreme Court (2027+)",
+      "Polymarket's crypto settlement creates friction but avoids state banking regulations",
+      "Kalshi's CFTC approval provides regulatory moat but slower market creation"
+    ]
+  }
+}

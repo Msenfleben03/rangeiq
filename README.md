@@ -323,6 +323,30 @@ sports_betting/
 | NFL | 📋 Future | EPA-based | nfl-data-py |
 | NCAAF | 📋 Future | Returning production | cfbd |
 
+## 🔮 Prediction Markets (New)
+
+Diversifying into political/economic prediction markets based on Tetlock's Superforecasting methodology.
+
+| Platform | Use Case | Status |
+|----------|----------|--------|
+| **Kalshi** | Primary trading (CFTC-regulated) | 📋 Account setup |
+| **Polymarket** | Data source, US launch Mar 2026 | ✅ Fetcher built |
+| **PredictIt** | Accuracy benchmark only | 📋 Future |
+
+### Why Prediction Markets?
+
+- **Higher CLV potential**: 3-10% vs 1-3% in sports
+- **Different inefficiencies**: Political/economic vs athletic
+- **Uncorrelated returns**: Portfolio diversification
+- **Less competition**: 2-3 year window before institutional saturation
+
+### Key Resources
+
+- `pipelines/polymarket_fetcher.py` - Market data fetching
+- `tracking/forecasting_db.py` - Belief revision tracking
+- `docs/SUPERFORECASTING_RESEARCH_SYNTHESIS.md` - Tetlock methodology
+- `docs/PREDICTION_MARKETS_INTEGRATION_GUIDE.md` - Technical guide
+
 ## 💰 Bankroll Management
 
 | Parameter | Value |
