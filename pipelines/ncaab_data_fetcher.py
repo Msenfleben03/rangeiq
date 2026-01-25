@@ -1,5 +1,4 @@
-"""
-NCAAB Data Fetcher using sportsipy
+"""NCAAB Data Fetcher using sportsipy.
 
 Fetches NCAA Men's Basketball game data, team statistics,
 and schedules for model training and prediction.
@@ -24,16 +23,14 @@ logger = logging.getLogger(__name__)
 
 
 class NCAABDataFetcher:
-    """
-    Fetches NCAA Basketball data using sportsipy.
+    """Fetches NCAA Basketball data using sportsipy.
 
     Provides methods to download team data, schedules, and
     game results for specified seasons.
     """
 
     def __init__(self, output_dir: str = "data/raw/ncaab"):
-        """
-        Initialize NCAAB data fetcher.
+        """Initialize NCAAB data fetcher.
 
         Args:
             output_dir: Directory to save raw data files
@@ -42,8 +39,7 @@ class NCAABDataFetcher:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def fetch_teams(self, season: int) -> pd.DataFrame:
-        """
-        Fetch all teams for a season.
+        """Fetch all teams for a season.
 
         Args:
             season: Year of season (e.g., 2024 for 2023-24 season)
@@ -89,8 +85,7 @@ class NCAABDataFetcher:
             raise
 
     def fetch_team_schedule(self, team_id: str, season: int) -> pd.DataFrame:
-        """
-        Fetch schedule and results for a specific team.
+        """Fetch schedule and results for a specific team.
 
         Args:
             team_id: Team abbreviation (e.g., 'DUKE')
@@ -142,8 +137,7 @@ class NCAABDataFetcher:
             return pd.DataFrame()
 
     def fetch_games_by_date(self, date: datetime) -> List[Dict]:
-        """
-        Fetch all games on a specific date.
+        """Fetch all games on a specific date.
 
         Args:
             date: Date to fetch games for
@@ -186,8 +180,7 @@ class NCAABDataFetcher:
             return []
 
     def fetch_season_data(self, season: int, delay: float = 1.0) -> pd.DataFrame:
-        """
-        Fetch complete season data for all teams.
+        """Fetch complete season data for all teams.
 
         Args:
             season: Year of season
@@ -234,8 +227,7 @@ class NCAABDataFetcher:
         return pd.DataFrame()
 
     def fetch_multiple_seasons(self, start_season: int, end_season: int) -> pd.DataFrame:
-        """
-        Fetch data for multiple seasons.
+        """Fetch data for multiple seasons.
 
         Args:
             start_season: First season year

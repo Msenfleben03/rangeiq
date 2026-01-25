@@ -1,5 +1,4 @@
-"""
-Global Configuration Settings
+"""Global Configuration Settings.
 
 Centralizes configuration for the sports betting project including
 bankroll management, risk parameters, and API settings.

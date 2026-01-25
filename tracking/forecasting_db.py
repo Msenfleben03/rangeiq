@@ -1,5 +1,4 @@
-"""
-Superforecasting Prediction Market Database Interface
+"""Superforecasting Prediction Market Database Interface.
 
 Provides a clean API for interacting with the forecasting schema,
 including belief revision tracking, calibration analysis, and

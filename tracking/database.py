@@ -1,5 +1,4 @@
-"""
-Sports Betting Database Management
+"""Sports Betting Database Management.
 
 Handles SQLite database creation, connection, and schema management
 for tracking bets, predictions, and team ratings.
@@ -15,16 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 class BettingDatabase:
-    """
-    Manages SQLite database for sports betting tracking.
+    """Manages SQLite database for sports betting tracking.
 
     Handles connection pooling, schema creation, and provides
     context managers for safe transaction handling.
     """
 
     def __init__(self, db_path: str = "data/betting.db"):
-        """
-        Initialize database connection.
+        """Initialize database connection.
 
         Args:
             db_path: Path to SQLite database file
@@ -41,8 +38,7 @@ class BettingDatabase:
 
     @contextmanager
     def get_cursor(self):
-        """
-        Context manager for database operations.
+        """Context manager for database operations.
 
         Yields:
             sqlite3.Cursor: Database cursor
@@ -70,8 +66,7 @@ class BettingDatabase:
         with self.get_cursor() as cursor:
             # Core bet tracking table
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS bets (
+                """CREATE TABLE IF NOT EXISTS bets (.
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     sport TEXT NOT NULL,
@@ -110,8 +105,7 @@ class BettingDatabase:
 
             # Bankroll tracking table
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS bankroll_log (
+                """CREATE TABLE IF NOT EXISTS bankroll_log (.
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date DATE NOT NULL UNIQUE,
                     starting_balance REAL,
@@ -127,8 +121,7 @@ class BettingDatabase:
 
             # Model predictions table
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS predictions (
+                """CREATE TABLE IF NOT EXISTS predictions (.
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     sport TEXT NOT NULL,
@@ -148,8 +141,7 @@ class BettingDatabase:
 
             # Team ratings table
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS team_ratings (
+                """CREATE TABLE IF NOT EXISTS team_ratings (.
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     sport TEXT NOT NULL,
@@ -167,8 +159,7 @@ class BettingDatabase:
             logger.info(f"Database initialized at {self.db_path}")
 
     def execute_query(self, query: str, params: Optional[tuple] = None):
-        """
-        Execute a SQL query.
+        """Execute a SQL query.
 
         Args:
             query: SQL query string
@@ -182,8 +173,7 @@ class BettingDatabase:
             return cursor.fetchall()
 
     def insert_bet(self, bet_data: dict) -> int:
-        """
-        Insert a new bet record.
+        """Insert a new bet record.
 
         Args:
             bet_data: Dictionary containing bet information
@@ -202,8 +192,7 @@ class BettingDatabase:
     def update_bet_result(
         self, bet_id: int, result: str, profit_loss: float, clv: Optional[float] = None
     ):
-        """
-        Update bet result after game completion.
+        """Update bet result after game completion.
 
         Args:
             bet_id: Bet ID
@@ -211,8 +200,7 @@ class BettingDatabase:
             profit_loss: Profit or loss amount
             clv: Closing line value (optional)
         """
-        query = """
-            UPDATE bets
+        query = """UPDATE bets.
             SET result = ?, profit_loss = ?, clv = ?
             WHERE id = ?
         """
@@ -220,8 +208,7 @@ class BettingDatabase:
             cursor.execute(query, (result, profit_loss, clv, bet_id))
 
     def get_active_bets(self, sport: Optional[str] = None) -> list:
-        """
-        Get all bets without results.
+        """Get all bets without results.
 
         Args:
             sport: Filter by sport (optional)
@@ -239,8 +226,7 @@ class BettingDatabase:
         return self.execute_query(query, params)
 
     def get_performance_stats(self, sport: Optional[str] = None, days: int = 30) -> dict:
-        """
-        Calculate performance statistics.
+        """Calculate performance statistics.
 
         Args:
             sport: Filter by sport (optional)
@@ -249,8 +235,7 @@ class BettingDatabase:
         Returns:
             Dictionary of performance metrics
         """
-        query = """
-            SELECT
+        query = """SELECT.
                 COUNT(*) as total_bets,
                 SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
                 SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as losses,

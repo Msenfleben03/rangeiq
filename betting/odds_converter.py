@@ -1,5 +1,4 @@
-"""
-Odds Conversion Utilities
+"""Odds Conversion Utilities.
 
 Converts between different odds formats (American, Decimal, Implied Probability)
 and calculates key betting metrics like expected value and closing line value.
@@ -7,8 +6,7 @@ and calculates key betting metrics like expected value and closing line value.
 
 
 def american_to_decimal(american: int) -> float:
-    """
-    Convert American odds to decimal odds.
+    """Convert American odds to decimal odds.
 
     Args:
         american: American odds (e.g., -110, +150)
@@ -28,8 +26,7 @@ def american_to_decimal(american: int) -> float:
 
 
 def american_to_implied_prob(american: int) -> float:
-    """
-    Convert American odds to implied probability.
+    """Convert American odds to implied probability.
 
     Args:
         american: American odds
@@ -49,8 +46,7 @@ def american_to_implied_prob(american: int) -> float:
 
 
 def decimal_to_american(decimal: float) -> int:
-    """
-    Convert decimal odds to American odds.
+    """Convert decimal odds to American odds.
 
     Args:
         decimal: Decimal odds
@@ -70,8 +66,7 @@ def decimal_to_american(decimal: float) -> int:
 
 
 def expected_value(win_prob: float, profit_if_win: float, stake: float) -> float:
-    """
-    Calculate expected value of a bet.
+    """Calculate expected value of a bet.
 
     EV = (p × profit) - (q × stake)
 
@@ -91,8 +86,7 @@ def expected_value(win_prob: float, profit_if_win: float, stake: float) -> float
 
 
 def calculate_edge(model_prob: float, american_odds: int) -> float:
-    """
-    Calculate edge: model probability minus implied probability.
+    """Calculate edge: model probability minus implied probability.
 
     Args:
         model_prob: Model's win probability (0 to 1)
@@ -110,8 +104,7 @@ def calculate_edge(model_prob: float, american_odds: int) -> float:
 
 
 def calculate_clv(odds_placed: int, odds_closing: int) -> float:
-    """
-    Calculate Closing Line Value.
+    """Calculate Closing Line Value.
 
     CLV is THE KEY PREDICTOR of long-term profitability.
     Positive CLV = got better odds than market closed at.
@@ -137,8 +130,7 @@ def calculate_clv(odds_placed: int, odds_closing: int) -> float:
 def fractional_kelly(
     win_prob: float, decimal_odds: float, fraction: float = 0.25, max_bet: float = 0.03
 ) -> float:
-    """
-    Conservative fractional Kelly bet sizing.
+    """Conservative fractional Kelly bet sizing.
 
     ALWAYS use fractional Kelly - full Kelly is too aggressive.
 

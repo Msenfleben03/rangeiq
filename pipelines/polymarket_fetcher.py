@@ -1,5 +1,4 @@
-"""
-Polymarket Data Fetcher
+"""Polymarket Data Fetcher.
 
 Fetches prediction market data from Polymarket's CLOB API for sports,
 political, and other markets. Integrates with the forecasting database
