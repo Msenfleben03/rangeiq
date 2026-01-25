@@ -1,0 +1,48 @@
+{
+    // Recommended extensions for Sports Betting Model Development
+    // VS Code will prompt to install these when opening the project
+    "recommendations": [
+        // Python Development (Essential)
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+
+        // Jupyter Notebooks
+        "ms-toolsai.jupyter",
+        "ms-toolsai.jupyter-keymap",
+        "ms-toolsai.jupyter-renderers",
+
+        // Code Quality
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+
+        // Git
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+
+        // Database (SQLite)
+        "alexcvzz.vscode-sqlite",
+        "qwtel.sqlite-viewer",
+
+        // Markdown & Documentation
+        "yzhang.markdown-all-in-one",
+        "bierner.markdown-preview-github-styles",
+        "davidanson.vscode-markdownlint",
+
+        // Data & CSV
+        "mechatroner.rainbow-csv",
+        "GrapeCity.gc-excelviewer",
+        "RandomFractalsInc.vscode-data-preview",
+
+        // Productivity
+        "streetsidesoftware.code-spell-checker",
+        "gruntfuggly.todo-tree",
+        "aaron-bond.better-comments",
+
+        // Remote Development (optional)
+        "ms-vscode-remote.remote-ssh",
+        "ms-vscode-remote.remote-containers"
+    ],
+    "unwantedRecommendations": []
+}

@@ -1,0 +1,120 @@
+# Pre-commit configuration
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: ^\.vscode/  # VS Code uses JSONC with comments
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+        exclude: ^\.swarm/  # Vector DB cache files
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-case-conflict
+
+  # Python code formatting
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3
+        args: ['--line-length=100']
+
+  # Python linting and import sorting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        args: ['--fix', '--exit-non-zero-on-fix']
+
+  # Type checking (optional - can be slow)
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.8.0
+  #   hooks:
+  #     - id: mypy
+  #       additional_dependencies: [pandas-stubs, types-requests]
+  #       args: ['--ignore-missing-imports']
+
+  # Security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.6
+    hooks:
+      - id: bandit
+        args: ['-ll', '--skip=B101']  # Skip assert warnings
+        exclude: tests/
+
+  # Check for secrets
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: \.env\.example$
+
+  # Documentation validation
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        args: ['--convention=google', '--add-ignore=D100,D104']
+        exclude: tests/|scripts/
+
+  # Docstring coverage check
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.5.0
+    hooks:
+      - id: interrogate
+        args: ['-vv', '--fail-under=70', '--ignore-init-method', '--ignore-private']
+        exclude: tests/|scripts/|setup.py
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.37.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix', '--config=.markdownlint.json']
+        files: \.md$
+
+  # Local documentation checks
+  - repo: local
+    hooks:
+      - id: doc-coverage-report
+        name: Documentation Coverage Report
+        entry: python tracking/doc_metrics.py
+        language: system
+        pass_filenames: false
+        stages: [pre-push]  # Only run before push, not every commit
+
+# Configuration for specific hooks
+default_language_version:
+  python: python3
+
+# Files to exclude from all hooks
+exclude: |
+  (?x)^(
+    \.git/|
+    \.tox/|
+    \.venv/|
+    venv/|
+    __pycache__/|
+    \.pytest_cache/|
+    data/|
+    notebooks/|
+    backups/|
+    logs/|
+    reports/|
+    \.env
+  )
+
+# Fail fast - stop on first failure
+fail_fast: false
+
+# Run hooks in parallel
+default_stages: [pre-commit]

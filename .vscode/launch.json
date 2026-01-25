@@ -1,0 +1,162 @@
+{
+    // Debug configurations for Sports Betting Model Development
+    // Use: Run > Start Debugging (F5) or Run > Run Without Debugging (Ctrl+F5)
+    "version": "0.2.0",
+    "configurations": [
+        // ==========================================================================
+        // Daily Operations
+        // ==========================================================================
+        {
+            "name": "Daily Run: Refresh & Predict",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/daily_run.py",
+            "args": ["--refresh", "--predict"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+        {
+            "name": "Daily Run: Reconcile",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/daily_run.py",
+            "args": ["--reconcile"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+
+        // ==========================================================================
+        // Backtesting
+        // ==========================================================================
+        {
+            "name": "Backtest: NCAAB 2020-2025",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/backtest_runner.py",
+            "args": ["--sport", "ncaab", "--seasons", "2020-2025"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+        {
+            "name": "Backtest: MLB 2020-2025",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/backtest_runner.py",
+            "args": ["--sport", "mlb", "--seasons", "2020-2025"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+
+        // ==========================================================================
+        // Testing
+        // ==========================================================================
+        {
+            "name": "Pytest: All Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["tests/", "-v", "--tb=short"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Pytest: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["${file}", "-v", "--tb=long"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Pytest: Fast (skip slow)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["tests/", "-v", "-m", "not slow"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false
+        },
+
+        // ==========================================================================
+        // Development / Debugging
+        // ==========================================================================
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+        {
+            "name": "Python: Current File (All Code)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false  // Step into library code
+        },
+
+        // ==========================================================================
+        // Interactive / REPL
+        // ==========================================================================
+        {
+            "name": "Python: Interactive Console",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "IPython",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ],
+
+    // Compound configurations (run multiple)
+    "compounds": [
+        {
+            "name": "Full Daily Pipeline",
+            "configurations": [
+                "Daily Run: Refresh & Predict"
+            ]
+        }
+    ]
+}
