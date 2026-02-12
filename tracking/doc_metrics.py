@@ -102,7 +102,7 @@ def find_python_files(root: Path, exclude_patterns: list[str] = None) -> list[Pa
         List of Path objects for Python files.
     """
     if exclude_patterns is None:
-        exclude_patterns = [".venv", "__pycache__", ".git", "tests", ".claude-flow"]
+        exclude_patterns = [".venv", "__pycache__", ".git", "tests"]
 
     python_files = []
     for py_file in root.rglob("*.py"):

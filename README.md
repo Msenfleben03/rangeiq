@@ -2,11 +2,11 @@
 
 A systematic approach to building profitable sports betting projection models using quantitative methods and disciplined bankroll management.
 
-## 🎯 Project Goal
+## Project Goal
 
 Achieve positive ROI through **Closing Line Value (CLV)** capture across NCAA Basketball, MLB, NFL, and NCAA Football markets, starting with zero capital outlay for data and tools.
 
-## 📊 Core Philosophy
+## Core Philosophy
 
 > **CLV > Win Rate**: A bettor who consistently beats closing lines will profit long-term, even through losing streaks.
 
@@ -16,8 +16,24 @@ This project prioritizes:
 - **Walk-forward validation** to prevent overfitting
 - **Conservative bankroll management** (Quarter Kelly, 3% max bet)
 - **Market inefficiency targeting** (player props, small conferences)
+- **Rigorous model validation** via 5-dimension validation framework
 
-## 🚀 Quick Start
+## Key Features
+
+- **5-Dimension Validation Framework** - 198 tests ensuring model integrity
+  - Temporal validation (26 tests) - Prevents look-ahead bias
+  - Statistical validation (49 tests) - Sample size, Sharpe, significance
+  - Overfitting detection (42 tests) - Catches suspiciously good results
+  - Betting validation (52 tests) - CLV, vig, Kelly limits
+  - Gatekeeper (29 tests) - Final PASS/QUARANTINE decision
+- **Elo Rating System** - Team strength estimation with MOV adjustments
+- **CLV Tracking** - Automated closing line value calculation
+- **Walk-Forward Backtesting** - Chronological validation preventing data leakage
+- **Kelly Criterion Sizing** - Conservative fractional Kelly bet sizing
+- **Multi-Sportsbook Support** - Line shopping across DraftKings, FanDuel, BetMGM, Caesars
+- **Prediction Markets Integration** - Polymarket/Kalshi data fetching
+
+## Quick Start
 
 ### Step 1: Install Prerequisites
 
@@ -36,7 +52,7 @@ Before running the setup script, install these dependencies:
 #    - Search "Environment Variables" in Windows
 #    - Edit PATH, add: C:\sqlite
 
-# 3. Install Node.js (optional, for claude-flow)
+# 3. Install Node.js (optional)
 #    Download from: https://nodejs.org/
 #    Choose: LTS version, run installer
 
@@ -76,12 +92,12 @@ bash scripts/setup_environment.sh
 
 This script will:
 
-- ✅ Create conda environment `sports_betting` with Python 3.11
-- ✅ Install all Python dependencies from `requirements.txt`
-- ✅ Create project directory structure
-- ✅ Copy `.env.example` to `.env`
-- ✅ Initialize SQLite database with schema
-- ✅ Set up pre-commit hooks
+- Create conda environment `sports_betting` with Python 3.11
+- Install all Python dependencies from `requirements.txt`
+- Create project directory structure
+- Copy `.env.example` to `.env`
+- Initialize SQLite database with schema
+- Set up pre-commit hooks
 
 ### Step 4: Configure API Keys
 
@@ -112,14 +128,9 @@ make test
 # Or manually verify:
 python -c "import pandas; import numpy; import sklearn; print('Core packages OK')"
 python -c "from sportsipy.ncaab.teams import Teams; print('sportsipy OK')"
-```
 
-### Step 6: Initialize Claude-Flow (Optional)
-
-```bash
-# Only if you have Node.js installed and want AI-assisted development
-npx claude-flow@alpha init
-npx claude-flow@alpha memory init --reasoningbank
+# Verify validators
+python -c "from backtesting.validators import Gatekeeper; print('Validators OK')"
 ```
 
 ### Troubleshooting
@@ -135,7 +146,7 @@ npx claude-flow@alpha memory init --reasoningbank
 
 ---
 
-## 💻 VS Code Setup
+## VS Code Setup
 
 This project includes pre-configured VS Code settings for optimal development experience.
 
@@ -273,12 +284,11 @@ These are committed to the repository so all developers have consistent settings
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 sports_betting/
 ├── CLAUDE.md              # AI context (Claude Code reads this)
-├── CLAUDE-FLOW.md         # Multi-agent orchestration config
 ├── README.md              # This file
 ├── requirements.txt       # Python dependencies
 ├── .env                   # API keys (gitignored)
@@ -301,9 +311,15 @@ sports_betting/
 ├── betting/               # Bet sizing, CLV tracking
 ├── tracking/              # Database interface, logging
 ├── backtesting/           # Walk-forward validation
+│   └── validators/        # 5-Dimension Validation Framework (198 tests)
+│       ├── temporal_validator.py    # Look-ahead bias detection
+│       ├── statistical_validator.py # Sample size, Sharpe
+│       ├── overfit_validator.py     # Overfitting detection
+│       ├── betting_validator.py     # CLV, vig, Kelly
+│       └── gatekeeper.py            # Final PASS/QUARANTINE gate
 ├── pipelines/             # Daily automation
 ├── notebooks/             # Exploration & analysis
-├── tests/                 # Unit tests
+├── tests/                 # Unit tests (198 validator tests)
 ├── scripts/               # Utility scripts
 │
 └── docs/                  # Documentation
@@ -314,24 +330,24 @@ sports_betting/
     └── SESSION_HANDOFF.md # Session continuity
 ```
 
-## 🏈 Supported Sports
+## Supported Sports
 
 | Sport | Status | Primary Model | Data Source |
 |-------|--------|---------------|-------------|
-| NCAAB | 🔄 In Progress | Elo ratings | sportsipy |
-| MLB | ⏳ Planned | Pitcher-based | pybaseball |
-| NFL | 📋 Future | EPA-based | nfl-data-py |
-| NCAAF | 📋 Future | Returning production | cfbd |
+| NCAAB | In Progress | Elo ratings | sportsipy |
+| MLB | Planned | Pitcher-based | pybaseball |
+| NFL | Future | EPA-based | nfl-data-py |
+| NCAAF | Future | Returning production | cfbd |
 
-## 🔮 Prediction Markets (New)
+## Prediction Markets (New)
 
 Diversifying into political/economic prediction markets based on Tetlock's Superforecasting methodology.
 
 | Platform | Use Case | Status |
 |----------|----------|--------|
-| **Kalshi** | Primary trading (CFTC-regulated) | 📋 Account setup |
-| **Polymarket** | Data source, US launch Mar 2026 | ✅ Fetcher built |
-| **PredictIt** | Accuracy benchmark only | 📋 Future |
+| **Kalshi** | Primary trading (CFTC-regulated) | Account setup |
+| **Polymarket** | Data source, US launch Mar 2026 | Fetcher built |
+| **PredictIt** | Accuracy benchmark only | Future |
 
 ### Why Prediction Markets?
 
@@ -347,7 +363,7 @@ Diversifying into political/economic prediction markets based on Tetlock's Super
 - `docs/SUPERFORECASTING_RESEARCH_SYNTHESIS.md` - Tetlock methodology
 - `docs/PREDICTION_MARKETS_INTEGRATION_GUIDE.md` - Technical guide
 
-## 💰 Bankroll Management
+## Bankroll Management
 
 | Parameter | Value |
 |-----------|-------|
@@ -365,7 +381,7 @@ Diversifying into political/economic prediction markets based on Tetlock's Super
 | Weekly Loss | 15% | Reduce sizing 50% |
 | Monthly Loss | 25% | Full stop, review |
 
-## 📈 Development Phases
+## Development Phases
 
 | Phase | Weeks | Focus | Target |
 |-------|-------|-------|--------|
@@ -375,7 +391,7 @@ Diversifying into political/economic prediction markets based on Tetlock's Super
 | 7-8 | Mar 7 - Mar 20 | Live testing | Small stakes |
 | 9-10 | Mar 21 - Apr 3 | MLB deployment | Full operation |
 
-## 🧪 Key Metrics
+## Key Metrics
 
 | Metric | Target | Why It Matters |
 |--------|--------|----------------|
@@ -384,29 +400,24 @@ Diversifying into political/economic prediction markets based on Tetlock's Super
 | ROI | > 2% | Profitability (secondary) |
 | Sample Size | > 500 bets | Statistical significance |
 
-## 📚 Documentation
+## Documentation
 
 - **[DECISIONS.md](docs/DECISIONS.md)** - Why we made each architectural choice
 - **[RUNBOOK.md](docs/RUNBOOK.md)** - Daily/weekly/monthly operations
 - **[DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)** - Field definitions
 - **[DATA_SOURCES.md](docs/DATA_SOURCES.md)** - API details and rate limits
+- **[backtesting/validators/README.md](backtesting/validators/README.md)** - Validation framework guide
 
-## 🛠 Development with Claude
+## Development with Claude
 
-This project is designed for AI-assisted development using Claude Code and claude-flow:
+This project is designed for AI-assisted development using Claude Code:
 
 ```bash
-# Start new model with SPARC methodology
-npx claude-flow@alpha sparc tdd "NCAAB Elo model"
-
-# Use swarm for complex tasks
-npx claude-flow@alpha swarm "Backtest NCAAB Elo 2020-2025" --agents 4
-
-# Query stored patterns
-npx claude-flow@alpha memory query "data leakage" --namespace betting/patterns
+# Validate model before deployment
+python -c "from backtesting.validators import Gatekeeper; gk = Gatekeeper(); gk.load_validators(); print('Ready')"
 ```
 
-## ⚠️ Disclaimers
+## Disclaimers
 
 ### Financial Risk
 
@@ -424,14 +435,14 @@ Ensure sports betting is legal in your jurisdiction. This project was developed 
 
 If you or someone you know has a gambling problem, call 1-800-522-4700 (National Council on Problem Gambling).
 
-## 📄 License
+## License
 
 This project is for personal use. If you find it helpful, consider contributing improvements back.
 
-## 🤝 Contributing
+## Contributing
 
 This is a personal project, but suggestions are welcome. Please open an issue to discuss before submitting PRs.
 
 ---
 
-**Remember: CLV > Win Rate. Track everything. Stay disciplined.**
+**Remember: CLV > Win Rate. Track everything. Stay disciplined. Run the Gatekeeper.**

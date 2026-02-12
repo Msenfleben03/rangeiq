@@ -619,15 +619,6 @@ if ev < 0:
 - [CLAUDE.md: Bankroll Management](../CLAUDE.md#bankroll--risk-management)
 - [docs/RISK_MANAGEMENT_COMPACT.md](../docs/RISK_MANAGEMENT_COMPACT.md)
 
-### Code Examples in Memory
-
-Query claude-flow memory for betting patterns:
-
-```bash
-npx claude-flow@alpha memory query "kelly criterion" --namespace betting/code-examples
-npx claude-flow@alpha memory query "CLV calculation" --namespace betting/patterns
-```
-
 ## Contributing
 
 When modifying this module:
@@ -726,6 +717,5 @@ kelly_pct = min(kelly_pct, 0.02)  # Never exceed 2%
 ---
 
 **Maintained by**: Betting Strategy Team
-**Last Updated**: 2026-01-24
-**Status**: ✅ Active - Foundation Phase
-**Claude-Flow Integration**: Use `documentation-engineer` agent for updates
+**Last Updated**: 2026-02-12
+**Status**: Active - Foundation Phase

@@ -502,15 +502,6 @@ check_for_leakage(df, features=['rolling_avg', 'recent_form'])
 - [CLAUDE.md: Model Development Workflow](../CLAUDE.md#new-model-development)
 - [docs/DECISIONS.md: Architecture Decisions](../docs/DECISIONS.md)
 
-### Code Examples in Memory
-
-Query claude-flow memory for model patterns:
-
-```bash
-npx claude-flow@alpha memory query "elo implementation" --namespace betting/code-examples
-npx claude-flow@alpha memory query "model validation" --namespace betting/patterns
-```
-
 ## Contributing
 
 When modifying this module:
@@ -613,6 +604,5 @@ if model_prob > market_prob and calculate_ev(model_prob, odds) > 0:
 ---
 
 **Maintained by**: Model Development Team
-**Last Updated**: 2026-01-24
-**Status**: ✅ Active - Foundation Phase
-**Claude-Flow Integration**: Use `documentation-engineer` agent for updates
+**Last Updated**: 2026-02-12
+**Status**: Active - Foundation Phase

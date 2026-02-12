@@ -78,6 +78,50 @@ NCAAB_SEASONS_START = 2020  # Start from 2019-20 season
 NCAAB_SEASONS_END = 2025  # Through 2024-25 season
 
 # =============================================================================
+# ZERO-COST DATA RETRIEVAL SLA DEFINITIONS
+# =============================================================================
+# Service Level Agreements for data freshness
+# Violation incurs opportunity_cost = edge_loss × bet_frequency × avg_stake
+
+SLA_CLOSING_ODDS_MAX_AGE = 15 * 60  # 15 minutes - CRITICAL for CLV
+SLA_CLOSING_ODDS_EDGE_LOSS = 0.10  # 10% of bet profit per violation
+
+SLA_MARKET_PRICES_MAX_AGE = 5 * 60  # 5 minutes
+SLA_MARKET_PRICES_EDGE_LOSS = 0.02  # 2% edge loss per violation
+
+SLA_TEAM_RATINGS_MAX_AGE = 24 * 60 * 60  # 1 day
+SLA_TEAM_RATINGS_EDGE_LOSS = 0.005  # 0.5% edge loss per violation
+
+SLA_SCHEDULE_DATA_MAX_AGE = 6 * 60 * 60  # 6 hours
+SLA_SCHEDULE_DATA_EDGE_LOSS = 0.001  # 0.1% edge loss per violation
+
+SLA_HISTORICAL_DATA_MAX_AGE = 7 * 24 * 60 * 60  # 7 days
+SLA_HISTORICAL_DATA_EDGE_LOSS = 0.0001  # 0.01% edge loss per violation
+
+# Rate limits for zero-cost sources (requests per minute)
+RATE_LIMITS: Dict[str, dict] = {
+    "sportsipy": {"rpm": 60, "delay": 1.0},
+    "sports_reference": {"rpm": 30, "delay": 2.0},
+    "espn_undocumented": {"rpm": 20, "delay": 3.0},
+    "polymarket": {"rpm": 100, "delay": 0.6},
+    "kalshi": {"rpm": 60, "delay": 1.0},
+    "draftkings_scrape": {"rpm": 10, "delay": 6.0},
+    "fanduel_scrape": {"rpm": 10, "delay": 6.0},
+    "betmgm_scrape": {"rpm": 10, "delay": 6.0},
+}
+
+# Blocked paid APIs (zero-cost enforcement)
+PAID_APIS_BLOCKED = [
+    "the-odds-api",
+    "odds-api.com",
+    "prophetx",
+    "sportsdata.io",
+    "sportradar",
+    "action-network",
+    "pinnacle-api",
+]
+
+# =============================================================================
 # FEATURE ENGINEERING
 # =============================================================================
 # Rolling window sizes for statistics

@@ -37,7 +37,7 @@ class TestEnvironmentSetup:
     def test_sportsipy_import(self):
         """Verify sportsipy is installed (used for NCAAB data)."""
         try:
-            from sportsipy.ncaab.teams import Teams
+            from sportsipy.ncaab.teams import Teams  # noqa: F401
 
             assert True
         except ImportError:
@@ -47,7 +47,7 @@ class TestEnvironmentSetup:
     def test_pybaseball_import(self):
         """Verify pybaseball is installed (used for MLB data)."""
         try:
-            import pybaseball
+            import pybaseball  # noqa: F401
 
             assert True
         except ImportError:
@@ -57,7 +57,7 @@ class TestEnvironmentSetup:
     def test_nfl_data_import(self):
         """Verify nfl_data_py is installed (used for NFL data)."""
         try:
-            import nfl_data_py
+            import nfl_data_py  # noqa: F401
 
             assert True
         except ImportError:

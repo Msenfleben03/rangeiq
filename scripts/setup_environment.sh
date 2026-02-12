@@ -134,23 +134,6 @@ if [ -f ".pre-commit-config.yaml" ]; then
     echo -e "${GREEN}✓ Pre-commit hooks installed${NC}"
 fi
 
-# Check for Node.js (needed for claude-flow)
-echo ""
-if command -v node &> /dev/null; then
-    NODE_VERSION=$(node -v)
-    echo -e "${GREEN}✓ Node.js found: $NODE_VERSION${NC}"
-
-    # Test claude-flow availability
-    if npx claude-flow@alpha --version &> /dev/null; then
-        echo -e "${GREEN}✓ claude-flow available${NC}"
-    else
-        echo -e "${YELLOW}Note: claude-flow not yet initialized. Run 'npx claude-flow@alpha init' to set up.${NC}"
-    fi
-else
-    echo -e "${YELLOW}Warning: Node.js not found. claude-flow features will not be available.${NC}"
-    echo "Install Node.js from: https://nodejs.org/"
-fi
-
 # Verify critical packages
 echo ""
 echo "Verifying critical package imports..."
@@ -169,8 +152,7 @@ echo ""
 echo "Next steps:"
 echo "  1. Edit .env to add your API keys"
 echo "  2. Activate environment: conda activate $ENV_NAME"
-echo "  3. Initialize claude-flow: npx claude-flow@alpha init"
-echo "  4. Run a test: python -c \"from sportsipy.ncaab.teams import Teams; print('OK')\""
+echo "  3. Run a test: python -c \"from sportsipy.ncaab.teams import Teams; print('OK')\""
 echo ""
 echo "Project structure created at: $(pwd)"
 echo ""

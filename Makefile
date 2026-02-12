@@ -119,24 +119,6 @@ run-reconcile:
 	@echo "Reconciliation complete."
 
 # =============================================================================
-# Claude Flow
-# =============================================================================
-
-cf-init:
-	npx claude-flow@alpha init
-	npx claude-flow@alpha memory init --reasoningbank
-
-cf-status:
-	npx claude-flow@alpha swarm status
-	npx claude-flow@alpha agent list
-
-cf-memory-list:
-	@echo "=== Decisions ===" && npx claude-flow@alpha memory list --namespace betting/decisions
-	@echo "=== Patterns ===" && npx claude-flow@alpha memory list --namespace betting/patterns
-	@echo "=== Models ===" && npx claude-flow@alpha memory list --namespace betting/models
-	@echo "=== Bugs ===" && npx claude-flow@alpha memory list --namespace betting/bugs
-
-# =============================================================================
 # Maintenance
 # =============================================================================
 
@@ -214,3 +196,23 @@ db-performance:
 
 db-daily:
 	sqlite3 data/betting.db "SELECT * FROM v_daily_pnl ORDER BY date DESC LIMIT 7;"
+
+# =============================================================================
+# Arbitrage Detection (Optional Module)
+# =============================================================================
+
+arb-scan:
+	@echo "Scanning for arbitrage opportunities..."
+	python -m pipelines.arb_scanner
+
+arb-scan-ncaab:
+	python -m pipelines.arb_scanner --sport NCAAB --hours 12
+
+arb-scan-mlb:
+	python -m pipelines.arb_scanner --sport MLB --hours 24
+
+arb-scan-json:
+	python -m pipelines.arb_scanner --json
+
+arb-history:
+	sqlite3 data/betting.db "SELECT * FROM arb_opportunities ORDER BY detected_at DESC LIMIT 20;"

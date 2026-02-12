@@ -310,52 +310,7 @@ Implement strict stop-loss and exposure limits.
 
 ---
 
-## ADR-011: Claude-Flow for Multi-Agent Development
-
-**Date:** January 2026
-**Status:** Accepted
-**Context:** Need efficient development workflow for complex, multi-component system.
-
-**Decision:**
-Use claude-flow for orchestrating multi-agent development with persistent memory across sessions.
-
-**Configuration:**
-
-- Topology: hierarchical (coordinator + specialized agents)
-- Max Agents: 8
-- Memory: Enabled with reasoning bank
-- Namespaces: betting/decisions, betting/patterns, betting/models, betting/bugs
-
-**Rationale:**
-
-- Complex models benefit from specialized agents (data, modeling, testing, review)
-- Persistent memory prevents re-solving same problems
-- Swarm enables parallel development of independent components
-- SPARC methodology ensures systematic feature development
-
-**When to Use Swarm:**
-
-- Multi-component features (data pipeline + model + backtest)
-- Parallel model development (Elo + regression + ensemble)
-- Comprehensive backtesting with multiple validation angles
-- Complex debugging requiring multiple perspectives
-
-**When to Use Single Agent:**
-
-- Simple bug fixes
-- Documentation updates
-- Minor refactoring
-- Quick data exploration
-
-**Consequences:**
-
-- Additional setup overhead (worth it for complex tasks)
-- Must maintain memory namespaces
-- Session handoffs require memory state documentation
-
----
-
-## ADR-012: Timezone Handling
+## ADR-011: Timezone Handling
 
 **Date:** January 2026
 **Status:** Accepted
@@ -402,7 +357,7 @@ def parse_game_time(time_str: str, source_tz: str = "America/New_York") -> datet
 
 ---
 
-## ADR-013: Missing Data Strategy
+## ADR-012: Missing Data Strategy
 
 **Date:** January 2026
 **Status:** Accepted
@@ -443,7 +398,7 @@ def get_team_rating(team_id: str, as_of_date: date) -> float:
 
 ---
 
-## ADR-014: Go-Live Criteria (Formalized)
+## ADR-013: Go-Live Criteria (Formalized)
 
 **Date:** January 2026
 **Status:** Accepted
@@ -499,7 +454,7 @@ Must meet ALL criteria before deploying real money:
 
 ---
 
-## ADR-015: Model Versioning
+## ADR-014: Model Versioning
 
 **Date:** January 2026
 **Status:** Accepted
@@ -544,7 +499,6 @@ model_metadata = {
 
 - Git tags for code versions
 - Database `models` table for metadata
-- claude-flow memory for quick reference: `betting/models` namespace
 
 **Consequences:**
 
@@ -554,7 +508,7 @@ model_metadata = {
 
 ---
 
-## ADR-016: Logging Strategy
+## ADR-015: Logging Strategy
 
 **Date:** January 2026
 **Status:** Accepted

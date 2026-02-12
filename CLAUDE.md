@@ -10,105 +10,151 @@ Build profitable projection models for NCAA Football, NCAA Basketball, NFL, and 
 - Framework: pandas, scikit-learn, statsmodels
 - Database: SQLite (local), potential PostgreSQL migration
 - Testing: pytest
-- Orchestration: claude-flow (multi-agent swarms)
 
 ---
 
-## Claude Flow Configuration
+## Backtesting Validation Framework
 
-### Swarm Settings
+### Overview
 
-```yaml
-topology: hierarchical
-maxAgents: 8
-strategy: parallel
-memoryEnabled: true
+A comprehensive 5-dimension validation framework ensures no model reaches production without rigorous testing. The framework catches data leakage, insufficient evidence, overfitting, and unrealistic betting assumptions.
+
+### Validation Pipeline
+
+```
+Raw Model -> [TEMPORAL] -> [STATISTICAL] -> [OVERFIT] -> [BETTING] -> [GATEKEEPER] -> PASS/QUARANTINE
 ```
 
-### Agent Types for This Project
+### The 5 Validators
 
-| Agent | Purpose |
-|-------|---------|
-| `architect` | Model design, system structure |
-| `coder` | Implementation |
-| `tester` | Write tests, validation |
-| `analyst` | Data analysis, performance review |
-| `reviewer` | Code review, overfitting detection |
-| `researcher` | Market inefficiency research |
+| Validator | Tests | Purpose |
+|-----------|-------|---------|
+| **TEMPORAL** | 26 | Prevents look-ahead bias (THE MOST CRITICAL) |
+| **STATISTICAL** | 49 | Enforces sample size, Sharpe, significance |
+| **OVERFIT** | 42 | Detects overfitting patterns |
+| **BETTING** | 52 | Domain-specific checks (CLV, vig, Kelly) |
+| **GATEKEEPER** | 29 | Final gate - aggregates all decisions |
+| **TOTAL** | **198** | Complete validation suite |
 
-### Memory Namespaces
+### Blocking Check Thresholds
 
-- `coordination` — Agent state (required for swarms)
-- `betting/decisions` — Architectural choices, ADRs
-- `betting/patterns` — Learned solutions, reusable code
-- `betting/models` — Model configs, hyperparameters
-- `betting/bugs` — Known issues and fixes
+| Check | Threshold | Dimension |
+|-------|-----------|-----------|
+| `temporal_no_leakage` | 0 leaky features | TEMPORAL |
+| `statistical_sample_size` | >= 200 bets | STATISTICAL |
+| `statistical_sharpe` | >= 0.5 | STATISTICAL |
+| `overfit_in_sample_roi` | <= 15% | OVERFIT |
+| `betting_clv_threshold` | >= 1.5% | BETTING |
+| `betting_ruin_probability` | <= 5% | BETTING |
+
+### Gate Decisions
+
+- **PASS**: All blocking checks pass - model approved for deployment
+- **QUARANTINE**: Any blocking check fails - model needs fixes
+- **NEEDS_REVIEW**: Passes but has warnings or edge cases
+
+### Usage Example
+
+```python
+from backtesting.validators import Gatekeeper, GateDecision
+
+# Initialize and load all validators
+gatekeeper = Gatekeeper()
+gatekeeper.load_validators()
+
+# Run full validation pipeline
+report = gatekeeper.generate_report(
+    model_name="ncaab_elo_v1",
+    backtest_results={
+        "profit_loss": [...],
+        "stake": [...],
+        "clv_values": [...],
+        "game_date": [...]
+    },
+    model_metadata={
+        "n_features": 10,
+        "n_samples": 500,
+        "in_sample_roi": 0.06
+    }
+)
+
+# Check decision
+if report.decision == GateDecision.PASS:
+    print("Model approved for deployment!")
+    print(report.summary())
+elif report.decision == GateDecision.QUARANTINE:
+    print(f"Model quarantined: {report.blocking_failures}")
+    gatekeeper.quarantine_model("ncaab_elo_v1", report)
+    print(gatekeeper.explain_failure(report))
+```
+
+### Individual Validator Usage
+
+```python
+from backtesting.validators import (
+    TemporalValidator,
+    StatisticalValidator,
+    OverfitValidator,
+    BettingValidator,
+)
+
+# Temporal: Check for data leakage
+temporal = TemporalValidator()
+result = temporal.full_validation(
+    df=betting_data,
+    feature_cols=features,
+    target_col='result',
+    date_col='game_date'
+)
+if not result.passed:
+    print(f"Leakage detected: {[f.feature_name for f in result.leaky_features]}")
+
+# Statistical: Verify sample size and significance
+statistical = StatisticalValidator(min_sample_size=200, min_sharpe=0.5)
+result = statistical.validate(backtest_df, model_metadata)
+if not result.sample_size_adequate:
+    print("Insufficient sample size for statistical conclusions")
+
+# Overfit: Check for overfitting red flags
+overfit = OverfitValidator()
+result = overfit.full_validation(
+    {'season_rois': [0.05, 0.03, 0.04], 'in_sample_roi': 0.08},
+    {'n_features': 10, 'n_samples': 500}
+)
+if result.in_sample_too_good:
+    print("WARNING: In-sample ROI suspiciously high!")
+
+# Betting: Validate CLV and realistic assumptions
+betting = BettingValidator(min_clv=0.015)
+result = betting.full_validation({
+    'clv_values': [0.02, 0.015, 0.018],
+    'config': {'assumed_vig': -110},
+    'bet_sizes': [100, 150, 100],
+    'bankroll': 5000
+})
+print(f"CLV passes: {result.clv_passes}")
+```
 
 ---
 
 ## Workflows
 
-### New Model Development
+### Model Validation Workflow
 
 ```bash
-# 1. Design
-npx claude-flow@alpha sparc run specification "NCAAB Elo rating system with MOV adjustments"
-npx claude-flow@alpha sparc run architecture "NCAAB Elo model"
+# Run full validation before deployment
+python -c "
+from backtesting.validators import Gatekeeper
+gk = Gatekeeper()
+gk.load_validators()
+report = gk.generate_report('model_name', results, metadata)
+print(report.summary())
+"
 
-# 2. Implement with TDD
-npx claude-flow@alpha sparc tdd "NCAAB Elo model"
-
-# 3. Or use swarm for complex features
-npx claude-flow@alpha swarm init --topology hierarchical --max-agents 5
-npx claude-flow@alpha swarm "Build MLB F5 pitcher model with xFIP, SIERA, Statcast metrics" --agents 4
-```
-
-### Bug Fix
-
-```bash
-# Query for similar past fixes
-npx claude-flow@alpha memory query "data leakage" --reasoningbank
-
-# Fix and store pattern
-npx claude-flow@alpha memory store "leakage_fix_rolling" "Always use .shift(1) after rolling calculations" --namespace betting/patterns
-```
-
-### Backtesting
-
-```bash
-npx claude-flow@alpha swarm "Walk-forward backtest NCAAB Elo 2020-2025, track CLV" --agents 3
-
-# Store results
-npx claude-flow@alpha memory store "ncaab_elo_v1" "CLV: 1.2%, ROI: 3.1%, n=847" --namespace betting/models
-```
-
----
-
-## Commands Cheatsheet
-
-```bash
-# SETUP
-npx claude-flow@alpha init
-npx claude-flow@alpha memory init --reasoningbank
-
-# SWARM
-npx claude-flow@alpha swarm init --topology hierarchical --max-agents 6
-npx claude-flow@alpha swarm "[task]" --agents 4
-npx claude-flow@alpha swarm status
-
-# AGENTS
-npx claude-flow@alpha agent spawn [type] --name "[name]"
-npx claude-flow@alpha agent list
-
-# MEMORY
-npx claude-flow@alpha memory store [key] "[value]" --namespace betting/[ns]
-npx claude-flow@alpha memory query "[search]" --namespace betting/[ns]
-npx claude-flow@alpha memory list --namespace betting/[ns]
-
-# SPARC
-npx claude-flow@alpha sparc run specification "[task]"
-npx claude-flow@alpha sparc run architecture "[task]"
-npx claude-flow@alpha sparc tdd "[task]"
+# Run validator tests
+pytest tests/test_temporal_validator.py -v
+pytest tests/test_gatekeeper.py -v
+pytest tests/ -k "validator" -v  # All validator tests
 ```
 
 ---
@@ -122,9 +168,6 @@ sports_betting/
 ├── requirements.txt          # Python dependencies
 ├── .env                      # API keys (gitignored)
 ├── .gitignore
-├── .claude-flow/             # Claude-flow configuration (auto-generated)
-│   ├── config.yaml
-│   └── memory/
 │
 ├── config/
 │   ├── settings.py           # Global configuration
@@ -133,10 +176,6 @@ sports_betting/
 │
 ├── data/
 │   ├── raw/                  # Unprocessed data downloads
-│   │   ├── ncaab/
-│   │   ├── mlb/
-│   │   ├── nfl/
-│   │   └── ncaaf/
 │   ├── processed/            # Cleaned, feature-engineered data
 │   ├── odds/                 # Historical and current odds
 │   └── external/             # Weather, injuries, etc.
@@ -149,26 +188,14 @@ sports_betting/
 │   ├── ensemble.py           # Model combination logic
 │   └── sport_specific/
 │       ├── ncaab/
-│       │   ├── team_ratings.py
-│       │   ├── player_impact.py
-│       │   └── tournament.py
-│       ├── mlb/
-│       │   ├── pitcher_model.py
-│       │   ├── team_offense.py
-│       │   ├── f5_model.py
-│       │   └── player_props.py
-│       ├── nfl/
-│       │   └── [future]
-│       └── ncaaf/
+│       │   └── team_ratings.py
+│       └── mlb/
 │           └── [future]
 │
 ├── features/
 │   ├── engineering.py        # Feature creation utilities
 │   ├── selection.py          # Feature importance, selection
 │   └── sport_specific/
-│       ├── ncaab_features.py
-│       ├── mlb_features.py
-│       └── [others]
 │
 ├── betting/
 │   ├── kelly.py              # Kelly criterion calculations
@@ -186,32 +213,35 @@ sports_betting/
 ├── backtesting/
 │   ├── walk_forward.py       # Walk-forward validation
 │   ├── metrics.py            # Evaluation metrics
-│   └── simulation.py         # Monte Carlo simulations
+│   ├── simulation.py         # Monte Carlo simulations
+│   └── validators/           # 5-Dimension Validation Framework
+│       ├── temporal_validator.py    # Look-ahead bias detection
+│       ├── statistical_validator.py # Sample size, Sharpe, significance
+│       ├── overfit_validator.py     # Overfitting detection
+│       ├── betting_validator.py     # CLV, vig, Kelly validation
+│       └── gatekeeper.py            # Final validation gate
 │
 ├── pipelines/
-│   ├── data_refresh.py       # Daily data updates
-│   ├── prediction.py         # Generate daily predictions
-│   └── betting_workflow.py   # End-to-end betting flow
-│
-├── notebooks/
-│   ├── exploration/          # EDA notebooks
-│   ├── modeling/             # Model development
-│   └── analysis/             # Performance analysis
+│   ├── polymarket_fetcher.py # Polymarket API client
+│   ├── kalshi_fetcher.py     # Kalshi API client (CFTC-regulated)
+│   └── arb_scanner.py        # Cross-book arbitrage detection
 │
 ├── tests/
 │   ├── test_models.py
 │   ├── test_betting.py
-│   └── test_data.py
+│   ├── test_temporal_validator.py
+│   ├── test_statistical_validator.py
+│   ├── test_overfit_validator.py
+│   ├── test_betting_validator.py
+│   └── test_gatekeeper.py
 │
 ├── scripts/
 │   ├── setup_database.py     # Initialize SQLite
-│   ├── daily_run.py          # Daily prediction script
-│   └── backtest_runner.py    # Run backtests
+│   └── daily_run.py          # Daily prediction script
 │
 └── docs/
     ├── DATA_DICTIONARY.md    # Field definitions
-    ├── DECISIONS.md          # Architecture decisions
-    └── SESSION_HANDOFF.md    # Session continuity
+    └── DECISIONS.md          # Architecture decisions
 ```
 
 ---
@@ -222,27 +252,28 @@ sports_betting/
 
 | Phase | Dates | Focus | Status |
 |-------|-------|-------|--------|
-| 1-2 | Jan 24 - Feb 6 | NCAAB foundation | 🔄 In Progress |
-| 3-4 | Feb 7 - Feb 20 | NCAAB paper betting + MLB build | ⏳ Upcoming |
-| 5-6 | Feb 21 - Mar 6 | March Madness prep | ⏳ Upcoming |
-| 7-8 | Mar 7 - Mar 20 | Live testing (small stakes) | ⏳ Upcoming |
-| 9-10 | Mar 21 - Apr 3 | MLB deployment | ⏳ Upcoming |
+| 1-2 | Jan 24 - Feb 6 | NCAAB foundation | In Progress |
+| 3-4 | Feb 7 - Feb 20 | NCAAB paper betting + MLB build | Upcoming |
+| 5-6 | Feb 21 - Mar 6 | March Madness prep | Upcoming |
+| 7-8 | Mar 7 - Mar 20 | Live testing (small stakes) | Upcoming |
+| 9-10 | Mar 21 - Apr 3 | MLB deployment | Upcoming |
 
 ### Current Sprint Focus
 
 - [x] Set up project structure and environment
-- [x] Initialize claude-flow with memory namespaces
 - [x] Implement NCAAB data pipeline (sportsipy)
-- [ ] Build baseline NCAAB Elo model
+- [x] Build baseline NCAAB Elo model (models/elo.py, models/sport_specific/ncaab/team_ratings.py)
 - [x] Create SQLite database with schema (22 tables)
+- [x] Build 5-dimension validation framework (198 tests)
 - [ ] Begin paper betting tracking
 
-### Prediction Markets Integration (New)
+### Prediction Markets Integration
 
 - [x] Research prediction market platforms (Polymarket, Kalshi, PredictIt)
 - [x] Research Superforecasting methodology (Tetlock/GJP)
 - [x] Design forecasting schema (7 tables)
 - [x] Build Polymarket data fetcher
+- [x] Build Kalshi data fetcher (CFTC-regulated)
 - [ ] Open Kalshi account (CFTC-regulated)
 - [ ] Paper trade 50+ positions
 - [ ] Achieve Brier score < 0.125
@@ -255,8 +286,8 @@ sports_betting/
 
 | Category | Priority | Expected CLV |
 |----------|----------|--------------|
-| Political/Economic | ⭐ HIGH | 3-10% |
-| Sports | ❌ AVOID | Inferior to sportsbooks |
+| Political/Economic | HIGH | 3-10% |
+| Sports | AVOID | Inferior to sportsbooks |
 
 ### Platform Hierarchy
 
@@ -290,6 +321,12 @@ from pipelines.polymarket_fetcher import PolymarketFetcher
 fetcher = PolymarketFetcher()
 markets = fetcher.fetch_political_markets()
 
+# Kalshi data fetching (CFTC-regulated, US legal)
+from pipelines.kalshi_fetcher import KalshiFetcher
+kalshi = KalshiFetcher(api_key="your_key")  # or from .env
+political = kalshi.fetch_political_markets()
+economic = kalshi.fetch_economic_markets()
+
 # Forecasting with belief tracking
 from tracking.forecasting_db import ForecastingDatabase
 db = ForecastingDatabase("data/betting.db")
@@ -313,9 +350,9 @@ db.record_revision(fc_id, new_probability=0.42,
 ### Key Formulas
 
 ```python
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # ODDS CONVERSIONS
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 def american_to_decimal(american: int) -> float:
     """Convert American odds to decimal odds"""
@@ -335,14 +372,14 @@ def decimal_to_american(decimal: float) -> int:
         return int((decimal - 1) * 100)
     return int(-100 / (decimal - 1))
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # EXPECTED VALUE
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 def expected_value(win_prob: float, profit_if_win: float, stake: float) -> float:
     """
     Calculate expected value of a bet
-    EV = (p × profit) - (q × stake)
+    EV = (p * profit) - (q * stake)
     """
     return (win_prob * profit_if_win) - ((1 - win_prob) * stake)
 
@@ -351,9 +388,9 @@ def calculate_edge(model_prob: float, american_odds: int) -> float:
     implied = american_to_implied_prob(american_odds)
     return model_prob - implied
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # CLOSING LINE VALUE
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 def calculate_clv(odds_placed: int, odds_closing: int) -> float:
     """
@@ -365,9 +402,9 @@ def calculate_clv(odds_placed: int, odds_closing: int) -> float:
     prob_closing = american_to_implied_prob(odds_closing)
     return (prob_closing - prob_placed) / prob_placed
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # KELLY CRITERION
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 def fractional_kelly(
     win_prob: float,
@@ -389,9 +426,9 @@ def fractional_kelly(
     recommended = max(0, kelly * fraction)
     return min(recommended, max_bet)
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # ELO RATING SYSTEM
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 def elo_expected(rating_a: float, rating_b: float) -> float:
     """Calculate expected win probability for team A"""
@@ -581,6 +618,7 @@ CREATE TABLE team_ratings (
 - All model calculations must have unit tests
 - Backtest results must be reproducible (set random seeds)
 - Test with edge cases: missing data, extreme odds, zero probabilities
+- **All models must pass the Gatekeeper before deployment**
 
 ### Error Handling Pattern
 
@@ -601,46 +639,42 @@ except APIRateLimitError:
 ## Quick Start Commands
 
 ```bash
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # ENVIRONMENT SETUP
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 conda activate sports_betting
 cd ~/sports_betting
 
-# ═══════════════════════════════════════════════════════════════
-# CLAUDE-FLOW INITIALIZATION (first time only)
-# ═══════════════════════════════════════════════════════════════
-npx claude-flow@alpha init
-npx claude-flow@alpha memory init --reasoningbank
-
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # DAILY WORKFLOW
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 python scripts/daily_run.py --sport ncaab
-# OR with swarm:
-npx claude-flow@alpha swarm "Daily: refresh NCAAB data, generate predictions, find edges" --agents 3
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # RUN BACKTESTS
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 python scripts/backtest_runner.py --sport ncaab --seasons 2020-2025
-# OR with swarm:
-npx claude-flow@alpha swarm "Backtest NCAAB Elo 2020-2025, walk-forward, track CLV" --agents 4
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
+# VALIDATE MODEL BEFORE DEPLOYMENT
+# ===============================================================
+pytest tests/test_gatekeeper.py -v
+python -c "from backtesting.validators import Gatekeeper; print('Validators loaded OK')"
+
+# ===============================================================
 # PERFORMANCE REPORT
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 python -c "from tracking.reports import weekly_report; weekly_report()"
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # DATABASE ACCESS
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 sqlite3 data/betting.db
 ```
 
 ---
 
-## Notes for Claude Code / Claude Flow
+## Notes for Claude Code
 
 ### Personality & Approach
 
@@ -648,7 +682,7 @@ sqlite3 data/betting.db
 - Always explain the "why" behind model choices
 - Proactively flag potential overfitting or data leakage risks
 - Suggest tests for any new functionality
-- Store successful patterns in memory for future reference
+- **Run Gatekeeper validation before approving any model for deployment**
 
 ### Domain Expertise Expected
 
@@ -656,13 +690,7 @@ sqlite3 data/betting.db
 - Know the difference between sharp and soft books
 - Recognize common modeling pitfalls (look-ahead bias, leakage)
 - Understand walk-forward validation vs random cross-validation
-
-### Memory Usage Guidelines
-
-- **Store** successful patterns, bug fixes, and insights in appropriate namespaces
-- **Query** memory before implementing to check for existing solutions
-- **Update** performance namespace after each significant backtest or live period
-- Use **reasoningbank** for complex debugging and problem-solving
+- Know the 5-dimension validation framework and blocking checks
 
 ### When In Doubt
 
@@ -670,4 +698,4 @@ sqlite3 data/betting.db
 - Default to simpler implementations first
 - Prioritize correctness over performance initially
 - Always consider: "Could this leak future information?"
-- Query memory: `npx claude-flow@alpha memory query "[topic]" --reasoningbank`
+- **When model looks too good: Run the Gatekeeper**

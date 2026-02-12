@@ -158,14 +158,6 @@ Common errors and how to resolve them:
 - [Library/API Name](https://url) — Relevant external docs
 - Domain knowledge in [CLAUDE.md](../../CLAUDE.md#section)
 
-### Code Examples in Memory
-
-Query claude-flow memory for patterns:
-
-```bash
-npx claude-flow@alpha memory query "[module] usage" --namespace betting/code-examples
-```
-
 ## Contributing
 
 When modifying this module:

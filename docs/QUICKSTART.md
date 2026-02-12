@@ -160,21 +160,6 @@ python config/settings.py
 
 ## 💡 Development Tips
 
-### Using Claude-Flow Memory
-
-Store important findings and decisions:
-
-```bash
-# Store a decision
-npx @claude-flow/cli@latest memory store -k "elo_k_factor" -v "Using K=20 for NCAAB based on backtesting" -n "betting/decisions"
-
-# Query past decisions
-npx @claude-flow/cli@latest memory query "elo" -n "betting/decisions"
-
-# List all stored items
-npx @claude-flow/cli@latest memory list -n "betting/decisions"
-```
-
 ### Database Queries
 
 ```bash

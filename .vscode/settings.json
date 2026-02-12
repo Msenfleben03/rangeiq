@@ -80,8 +80,7 @@
         "*.sql": "sql",
         ".env": "dotenv",
         ".env.example": "dotenv",
-        "CLAUDE.md": "markdown",
-        "CLAUDE-FLOW.md": "markdown"
+        "CLAUDE.md": "markdown"
     },
 
     // ==========================================================================

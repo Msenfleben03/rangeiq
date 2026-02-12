@@ -543,55 +543,6 @@ Create scheduled tasks for same operations using Task Scheduler GUI or PowerShel
 
 ---
 
-## Claude-Flow Integration
-
-### Daily Workflow with Claude-Flow
-
-```bash
-# Morning: Orchestrate daily workflow with swarm
-npx claude-flow@alpha swarm "Daily: Refresh NCAAB data, generate predictions, identify edges" --agents 3
-
-# If complex analysis needed
-npx claude-flow@alpha agent spawn analyst --name "clv-investigation"
-
-# Query historical patterns
-npx claude-flow@alpha memory query "similar losing streak" --namespace betting/bugs
-```
-
-### Weekly Review with Agents
-
-```bash
-# Comprehensive weekly analysis
-npx claude-flow@alpha swarm "Weekly review: Calculate metrics, analyze by sport/type, flag issues" --agents 4
-
-# Store insights
-npx claude-flow@alpha memory store --key "week_$(date +%Y%m%d)_insights" --value "Key findings from week..." --namespace betting/patterns
-```
-
-### Memory Namespace Usage
-
-| Namespace | When to Query | When to Store |
-|-----------|---------------|---------------|
-| `betting/decisions` | Before making ADR-level changes | After documenting decision |
-| `betting/patterns` | When encountering familiar problem | After solving novel issue |
-| `betting/models` | Before deploying new model | After backtest/live validation |
-| `betting/bugs` | When debugging recurring issue | After fixing bug |
-
-### SPARC Methodology for Features
-
-```bash
-# Specification phase
-npx claude-flow@alpha sparc run specification "Build MLB pitcher vs lineup matchup model"
-
-# Architecture phase
-npx claude-flow@alpha sparc run architecture "MLB pitcher matchup model"
-
-# TDD implementation
-npx claude-flow@alpha sparc tdd "MLB pitcher matchup model with pytests"
-```
-
----
-
 ## Troubleshooting
 
 ### Common Issues
@@ -627,27 +578,6 @@ npx claude-flow@alpha sparc tdd "MLB pitcher matchup model with pytests"
 2. Check odds format (ensure American odds, not decimal)
 3. Verify odds aren't edge cases (0, extreme values)
 4. Review `betting/clv.py` calculation logic
-
-**Issue**: Claude Code statusline shows different metrics than CLI command
-**Solution**:
-
-1. The statusline should directly call the claude-flow CLI command to ensure consistency
-2. Update the `statusLine` section in `~/.claude/settings.json` (around line 48-51):
-
-   ```json
-   "statusLine": {
-     "type": "command",
-     "command": "npx @claude-flow/cli@latest hooks statusline"
-   }
-   ```
-
-3. Restart Claude Code or reload the window (`Ctrl+Shift+P` → "Reload Window")
-4. Verify metrics match the CLI output: DDD Domains, Swarm status, AgentDB vectors, etc.
-5. Test manually to compare: `npx @claude-flow/cli@latest hooks statusline`
-
-**Root Cause**: Custom statusline scripts that parse claude-flow data files directly can become outdated or calculate metrics differently than the official CLI. Using the CLI command directly ensures the statusline always shows the same values as running the command manually.
-
-**Note**: If you need project-specific statusline customization (e.g., showing sports betting metrics), you can wrap the claude-flow command in a custom script that appends additional information, but always call `npx @claude-flow/cli@latest hooks statusline` first to ensure base metrics are accurate.
 
 ---
 
@@ -723,9 +653,7 @@ git commit -m "Add: MLB pitcher matchup model
 
 - Implemented platoon split adjustments
 - Added Statcast pitch quality metrics
-- Backtest shows 1.2% CLV over 500 bets
-
-Co-Authored-By: claude-flow <ruv@ruv.net>"
+- Backtest shows 1.2% CLV over 500 bets"
 
 # Create feature branch for major work
 git checkout -b feature/mlb-f5-model

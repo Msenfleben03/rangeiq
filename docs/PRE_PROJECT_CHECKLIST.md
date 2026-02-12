@@ -11,9 +11,8 @@ This document identifies what's ready, what's missing, and what decisions need t
 | Document | Status | Purpose |
 |----------|--------|---------|
 | CLAUDE.md | ✅ Ready | Main Claude Code context |
-| CLAUDE-FLOW.md | ✅ Ready | Multi-agent orchestration |
 | DATA_DICTIONARY.md | ✅ Ready | Field definitions |
-| DECISIONS.md | ✅ Ready | 11 ADRs documented |
+| DECISIONS.md | ✅ Ready | ADRs documented |
 | SESSION_HANDOFF.md | ✅ Ready | Session continuity |
 | constants.py | ✅ Ready | Configuration values |
 
@@ -158,63 +157,7 @@ Needed content:
 
 ## Recommended New ADRs
 
-### ADR-012: Timezone Handling
-
-```
-Decision: Store all timestamps in UTC. Convert to America/Chicago for display.
-Rationale: Game times come in various formats. UTC is unambiguous.
-Implementation:
-- Database: All TIMESTAMP columns are UTC
-- Display: Convert using pytz or zoneinfo
-- Odds timestamps: Convert from source timezone to UTC on ingestion
-```
-
-### ADR-013: Missing Data Strategy
-
-```
-Decision: Document handling per feature category.
-Categories:
-- Team ratings: Impute with conference average for new teams
-- Player stats: Require minimum games, exclude otherwise
-- Odds: Skip bet if closing line unavailable
-- Weather: Use fallback (dome assumption) if missing
-```
-
-### ADR-014: Go-Live Criteria (Formalized)
-
-```
-Decision: Must meet ALL criteria before deploying real capital.
-Criteria:
-- Paper betting period: Minimum 14 days
-- Sample size: Minimum 50 tracked bets
-- CLV: > 0.5% average over paper period
-- Systems: Data refresh, prediction, tracking all operational
-- Sportsbooks: 5+ accounts funded and tested
-- Mental state: No major life stressors
-```
-
-### ADR-015: Model Versioning
-
-```
-Decision: Use semantic versioning with config tracking.
-Format: {sport}-{model_type}-v{major}.{minor}.{patch}
-Example: ncaab-elo-v1.2.0
-Track: Git tag + config hash + backtest results
-Storage: betting/models namespace in claude-flow memory
-```
-
-### ADR-016: Logging Strategy
-
-```
-Decision: Structured logging with tiered retention.
-Levels:
-- DEBUG: Development only
-- INFO: All predictions, bets placed
-- WARNING: Data quality issues, API failures
-- ERROR: System failures, missing required data
-Retention: 90 days files, permanent for bet records
-Format: JSON for machine parsing
-```
+These ADRs have been documented in DECISIONS.md
 
 ---
 

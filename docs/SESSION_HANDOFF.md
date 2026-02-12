@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document maintains continuity between Claude Code and Claude Flow sessions. Update after each significant work session.
+This document maintains continuity between Claude Code sessions. Update after each significant work session.
 
 ---
 
@@ -18,14 +18,6 @@ This document maintains continuity between Claude Code and Claude Flow sessions.
 
 **Branch:** `main` / `feature/xxx`
 **Last Commit:** [hash] - [message]
-
-### Claude Flow State
-
-**Swarm Active:** Yes/No
-**Active Agents:** [list or "none"]
-**Memory Items Stored This Session:**
-
-- `betting/[namespace]`: [key] — [brief description]
 
 ### Files Modified
 
@@ -52,7 +44,6 @@ This document maintains continuity between Claude Code and Claude Flow sessions.
 ### Notes for Next Session
 
 - Any context needed
-- Memory queries to run: `npx claude-flow@alpha memory query "[topic]" --namespace betting/[ns]`
 
 ---
 
@@ -130,11 +121,6 @@ Copy this for new sessions:
 **Duration:** X hours
 **Focus:**
 
-**Claude Flow Usage:**
-- Swarm: Yes/No, [agents] agents
-- Memory Stored: [list keys]
-- Memory Queried: [list queries]
-
 **Completed:**
 -
 
@@ -154,32 +140,4 @@ Copy this for new sessions:
 1.
 2.
 3.
-```
-
----
-
-## Claude Flow Quick Reference
-
-### Before Starting Session
-
-```bash
-# Check for relevant stored patterns
-npx claude-flow@alpha memory query "[today's topic]" --namespace betting/patterns
-npx claude-flow@alpha memory query "[today's topic]" --namespace betting/bugs
-
-# Check model status
-npx claude-flow@alpha memory list --namespace betting/models
-```
-
-### After Completing Session
-
-```bash
-# Store any new patterns discovered
-npx claude-flow@alpha memory store "[pattern-key]" "[description]" --namespace betting/patterns
-
-# Store bug fixes
-npx claude-flow@alpha memory store "[bug-key]" "[issue and fix]" --namespace betting/bugs
-
-# Update model status if applicable
-npx claude-flow@alpha memory store "[model-version]" "[current status and metrics]" --namespace betting/models
 ```

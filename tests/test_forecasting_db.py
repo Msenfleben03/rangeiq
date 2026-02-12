@@ -227,7 +227,7 @@ class TestForecastManagement:
         assert forecast["forecast_id"] == forecast_id
         assert forecast["initial_probability"] == 0.50
         assert forecast["current_probability"] == 0.50
-        assert forecast["is_resolved"] is False
+        assert not forecast["is_resolved"]  # SQLite stores as 0/1
 
     def test_get_active_forecasts(self, temp_db):
         """Test retrieving active forecasts."""
@@ -275,7 +275,7 @@ class TestForecastManagement:
 
         # Verify forecast is marked resolved
         forecast = temp_db.get_forecast(forecast_id)
-        assert forecast["is_resolved"] is True
+        assert forecast["is_resolved"]  # SQLite stores as 0/1
         assert forecast["outcome"] == 1.0
 
 

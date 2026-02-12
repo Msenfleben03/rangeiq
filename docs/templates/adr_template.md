@@ -309,11 +309,6 @@ When creating a new ADR:
 4. **Use specific examples** — Generic text isn't helpful
 5. **Link to code** — Make it traceable
 6. **Update STATUS** as decision evolves
-7. **Store in memory**:
-
-   ```bash
-   npx claude-flow@alpha memory store "adr_XXX_summary" "One-line summary" --namespace betting/decisions
-   ```
 
 **Good ADR characteristics**:
 
