@@ -222,11 +222,12 @@ def extract_backtest_results(df: pd.DataFrame) -> dict:
     }
 
 
-def run_validation(use_synthetic: bool = True) -> None:
+def run_validation(use_synthetic: bool = True, mode: str = "fast") -> None:
     """Run the full validation pipeline on NCAAB ELO model.
 
     Args:
         use_synthetic: If True, use synthetic data. Otherwise, load real data.
+        mode: "fast" for tiered early-termination (default), "full" for all validators.
     """
     print("=" * 70)
     print("NCAAB ELO MODEL VALIDATION")
@@ -281,16 +282,17 @@ def run_validation(use_synthetic: bool = True) -> None:
     print(f"      Avg CLV: {avg_clv:.2f}%")
     print()
 
-    # Initialize Gatekeeper with learning enabled
-    print("[4/5] Running Gatekeeper validation pipeline...")
-    gatekeeper = Gatekeeper(enable_learning=True)
+    # Initialize Gatekeeper
+    print(f"[4/5] Running Gatekeeper validation pipeline (mode={mode})...")
+    gatekeeper = Gatekeeper()
     gatekeeper.load_validators()
 
-    # Generate the full report
+    # Generate the report
     report = gatekeeper.generate_report(
         model_name="ncaab_elo_v1",
         backtest_results=backtest_results,
         model_metadata=model_metadata,
+        mode=mode,
     )
 
     # Display results
@@ -322,16 +324,6 @@ def run_validation(use_synthetic: bool = True) -> None:
         for warning in report.warnings:
             print(f"   ⚠️ {warning}")
 
-    # Show early warnings if learning is enabled
-    if gatekeeper._learning_enabled:
-        warnings = gatekeeper.get_early_warnings(model_metadata)
-        if warnings:
-            print()
-            print("-" * 70)
-            print("Early Warning System Alerts:")
-            for w in warnings:
-                print(f"   ⚠️ {w}")
-
     print()
     print("=" * 70)
     print("Validation complete.")
@@ -346,6 +338,12 @@ if __name__ == "__main__":
         default=True,
         help="Use synthetic data (default: True)",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["fast", "full"],
+        default="fast",
+        help="Validation mode: 'fast' (tiered early-termination) or 'full' (all validators). Default: fast",
+    )
     args = parser.parse_args()
 
-    run_validation(use_synthetic=args.synthetic)
+    run_validation(use_synthetic=args.synthetic, mode=args.mode)

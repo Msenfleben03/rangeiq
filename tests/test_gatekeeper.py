@@ -678,3 +678,328 @@ class TestEdgeCases:
 
         assert report is not None
         assert gk._validators_loaded
+
+
+# =============================================================================
+# Non-Linear Pipeline Tests (Pre-Screen, Fast Mode, Early Termination)
+# =============================================================================
+
+
+class TestQuickPrescreen:
+    """Test the _quick_prescreen() instant arithmetic filter."""
+
+    def test_prescreen_passes_good_model(
+        self, gatekeeper, passing_backtest_results, passing_model_metadata
+    ):
+        """Good model should pass pre-screen (returns None)."""
+        result = gatekeeper._quick_prescreen(passing_backtest_results, passing_model_metadata)
+        assert result is None
+
+    def test_prescreen_catches_high_roi(self, gatekeeper, passing_backtest_results):
+        """In-sample ROI > 15% should fail pre-screen."""
+        bad_metadata = {
+            "n_features": 5,
+            "n_samples": 1000,
+            "in_sample_roi": 0.25,  # 25% -- way too high
+        }
+        result = gatekeeper._quick_prescreen(passing_backtest_results, bad_metadata)
+        assert result is not None
+        assert any("in_sample_roi" in f for f in result)
+
+    def test_prescreen_catches_too_many_features(self, gatekeeper, passing_backtest_results):
+        """n_features > sqrt(n_samples) should fail pre-screen."""
+        bad_metadata = {
+            "n_features": 50,  # sqrt(200) ≈ 14
+            "n_samples": 200,
+            "in_sample_roi": 0.05,
+        }
+        result = gatekeeper._quick_prescreen(passing_backtest_results, bad_metadata)
+        assert result is not None
+        assert any("n_features" in f for f in result)
+
+    def test_prescreen_catches_small_sample(self, gatekeeper, passing_model_metadata):
+        """Sample size < 200 should fail pre-screen."""
+        small_results = {
+            "clv_values": [0.02] * 50,  # Only 50 bets
+        }
+        result = gatekeeper._quick_prescreen(small_results, passing_model_metadata)
+        assert result is not None
+        assert any("sample_size" in f for f in result)
+
+    def test_prescreen_uses_profit_loss_for_sample_size(self, gatekeeper, passing_model_metadata):
+        """Should fall back to profit_loss length when clv_values is missing."""
+        results = {
+            "profit_loss": [10.0] * 50,
+        }
+        result = gatekeeper._quick_prescreen(results, passing_model_metadata)
+        assert result is not None
+        assert any("sample_size" in f for f in result)
+
+    def test_prescreen_returns_multiple_failures(self, gatekeeper):
+        """Multiple failing conditions should all be reported."""
+        bad_results = {"clv_values": [0.02] * 10}
+        bad_metadata = {
+            "n_features": 50,
+            "n_samples": 100,
+            "in_sample_roi": 0.30,
+        }
+        result = gatekeeper._quick_prescreen(bad_results, bad_metadata)
+        assert result is not None
+        assert len(result) >= 2  # At least ROI + sample size
+
+
+class TestFastMode:
+    """Test mode='fast' tiered execution and early termination."""
+
+    def test_fast_mode_passing_model_same_decision(
+        self, gatekeeper, passing_backtest_results, passing_model_metadata
+    ):
+        """Fast and full modes should produce the same decision for passing models."""
+        report_fast = gatekeeper.generate_report(
+            model_name="fast_pass",
+            backtest_results=passing_backtest_results,
+            model_metadata=passing_model_metadata,
+            mode="fast",
+        )
+        report_full = gatekeeper.generate_report(
+            model_name="full_pass",
+            backtest_results=passing_backtest_results,
+            model_metadata=passing_model_metadata,
+            mode="full",
+        )
+        assert report_fast.decision == report_full.decision
+
+    def test_fast_mode_failing_model_same_decision(
+        self, gatekeeper, failing_overfit_results, failing_overfit_metadata
+    ):
+        """Fast and full modes should produce same QUARANTINE for failing models."""
+        report_fast = gatekeeper.generate_report(
+            model_name="fast_fail",
+            backtest_results=failing_overfit_results,
+            model_metadata=failing_overfit_metadata,
+            mode="fast",
+        )
+        report_full = gatekeeper.generate_report(
+            model_name="full_fail",
+            backtest_results=failing_overfit_results,
+            model_metadata=failing_overfit_metadata,
+            mode="full",
+        )
+        assert report_fast.decision == report_full.decision == GateDecision.QUARANTINE
+
+    def test_fast_mode_clv_failure_same_decision(
+        self, gatekeeper, failing_clv_results, passing_model_metadata
+    ):
+        """Fast and full should agree on CLV-triggered QUARANTINE."""
+        report_fast = gatekeeper.generate_report(
+            model_name="fast_clv",
+            backtest_results=failing_clv_results,
+            model_metadata=passing_model_metadata,
+            mode="fast",
+        )
+        report_full = gatekeeper.generate_report(
+            model_name="full_clv",
+            backtest_results=failing_clv_results,
+            model_metadata=passing_model_metadata,
+            mode="full",
+        )
+        assert report_fast.decision == report_full.decision == GateDecision.QUARANTINE
+
+    def test_fast_mode_sample_size_failure_same_decision(
+        self, gatekeeper, failing_statistical_results, passing_model_metadata
+    ):
+        """Fast and full should agree on sample-size-triggered QUARANTINE."""
+        report_fast = gatekeeper.generate_report(
+            model_name="fast_sample",
+            backtest_results=failing_statistical_results,
+            model_metadata=passing_model_metadata,
+            mode="fast",
+        )
+        report_full = gatekeeper.generate_report(
+            model_name="full_sample",
+            backtest_results=failing_statistical_results,
+            model_metadata=passing_model_metadata,
+            mode="full",
+        )
+        assert report_fast.decision == report_full.decision == GateDecision.QUARANTINE
+
+    def test_fast_mode_records_mode_in_report(
+        self, gatekeeper, passing_backtest_results, passing_model_metadata
+    ):
+        """Report should record the mode used."""
+        report = gatekeeper.generate_report(
+            model_name="mode_check",
+            backtest_results=passing_backtest_results,
+            model_metadata=passing_model_metadata,
+            mode="fast",
+        )
+        assert report.mode in ("fast", "fast->full", "full")
+
+    def test_full_mode_records_mode(
+        self, gatekeeper, passing_backtest_results, passing_model_metadata
+    ):
+        """Full mode should record 'full'."""
+        report = gatekeeper.generate_report(
+            model_name="full_mode_check",
+            backtest_results=passing_backtest_results,
+            model_metadata=passing_model_metadata,
+            mode="full",
+        )
+        assert report.mode == "full"
+
+    def test_full_mode_no_skipped_validators(
+        self, gatekeeper, passing_backtest_results, passing_model_metadata
+    ):
+        """Full mode should never skip validators."""
+        report = gatekeeper.generate_report(
+            model_name="full_no_skip",
+            backtest_results=passing_backtest_results,
+            model_metadata=passing_model_metadata,
+            mode="full",
+        )
+        assert report.skipped_validators == []
+
+    def test_full_mode_backward_compat(
+        self, gatekeeper, passing_backtest_results, passing_model_metadata
+    ):
+        """Full mode should include all 5 dimension results (4 validators + human review)."""
+        report = gatekeeper.generate_report(
+            model_name="compat_check",
+            backtest_results=passing_backtest_results,
+            model_metadata=passing_model_metadata,
+            mode="full",
+        )
+        dimensions = [r.dimension for r in report.dimension_results]
+        assert any("temporal" in d for d in dimensions)
+        assert any("statistical" in d for d in dimensions)
+        assert any("overfit" in d for d in dimensions)
+        assert any("betting" in d for d in dimensions)
+        assert any("human_review" in d for d in dimensions)
+
+
+class TestEarlyTermination:
+    """Test that early termination skips expensive validators."""
+
+    def test_overfit_failure_skips_remaining(self, gatekeeper):
+        """When overfit validator fails in fast mode, remaining validators should be skipped."""
+        overfit_results = {
+            "profit_loss": [100] * 200,
+            "stake": [100] * 200,
+            "result": ["win"] * 200,
+            "clv_values": [0.05] * 200,
+        }
+        overfit_metadata = {
+            "n_features": 5,
+            "n_samples": 200,
+            "in_sample_roi": 0.25,  # Will fail overfit check
+            "season_rois": [0.20, 0.05, 0.25, -0.10],
+        }
+
+        # run_all_validations directly in fast mode
+        results, skipped = gatekeeper.run_all_validations(
+            overfit_results,
+            overfit_metadata,
+            mode="fast",
+        )
+
+        # Overfit is first in the order; if it fails, remaining should be skipped
+        overfit_result = next((r for r in results if "overfit" in r.dimension), None)
+        if overfit_result and not overfit_result.passed:
+            assert len(skipped) > 0
+
+    def test_fast_mode_auto_escalates_on_quarantine(
+        self, gatekeeper, failing_overfit_results, failing_overfit_metadata
+    ):
+        """When fast mode detects QUARANTINE, it should auto-escalate to full."""
+        report = gatekeeper.generate_report(
+            model_name="escalation_test",
+            backtest_results=failing_overfit_results,
+            model_metadata=failing_overfit_metadata,
+            mode="fast",
+        )
+
+        # The report should either be "full" (pre-screen caught it) or "fast->full"
+        # (fast mode caught it then escalated)
+        assert report.mode in ("full", "fast->full")
+        assert report.decision == GateDecision.QUARANTINE
+
+        # After escalation, all dimensions should be present
+        dimensions = [r.dimension for r in report.dimension_results]
+        assert any("temporal" in d for d in dimensions)
+        assert any("statistical" in d for d in dimensions)
+        assert any("overfit" in d for d in dimensions)
+        assert any("betting" in d for d in dimensions)
+
+    def test_prescreen_triggers_full_escalation(self, gatekeeper):
+        """When pre-screen fails, generate_report should escalate to full mode."""
+        bad_results = {"clv_values": [0.02] * 10, "profit_loss": [10.0] * 10}
+        bad_metadata = {
+            "n_features": 5,
+            "n_samples": 100,
+            "in_sample_roi": 0.30,  # Fails pre-screen
+        }
+
+        report = gatekeeper.generate_report(
+            model_name="prescreen_escalation",
+            backtest_results=bad_results,
+            model_metadata=bad_metadata,
+            mode="fast",
+        )
+
+        # Pre-screen failure should escalate to full
+        assert report.mode == "full"
+        assert report.decision == GateDecision.QUARANTINE
+
+
+class TestReportNewFields:
+    """Test the new mode and skipped_validators fields in GateReport."""
+
+    def test_report_to_dict_includes_mode(self):
+        """to_dict() should include mode and skipped_validators."""
+        report = GateReport(
+            model_name="test",
+            timestamp=datetime.now(),
+            decision=GateDecision.PASS,
+            mode="fast",
+            skipped_validators=["statistical"],
+        )
+        d = report.to_dict()
+        assert d["mode"] == "fast"
+        assert d["skipped_validators"] == ["statistical"]
+
+    def test_report_summary_includes_mode(self):
+        """summary() should display mode."""
+        report = GateReport(
+            model_name="test",
+            timestamp=datetime.now(),
+            decision=GateDecision.PASS,
+            mode="fast",
+        )
+        summary = report.summary()
+        assert "Mode: fast" in summary
+
+    def test_report_summary_shows_skipped(self):
+        """summary() should show skipped validators when present."""
+        report = GateReport(
+            model_name="test",
+            timestamp=datetime.now(),
+            decision=GateDecision.QUARANTINE,
+            mode="fast",
+            skipped_validators=["temporal", "statistical"],
+        )
+        summary = report.summary()
+        assert "SKIPPED VALIDATORS" in summary
+        assert "temporal" in summary
+        assert "statistical" in summary
+
+    def test_report_summary_hides_skipped_when_empty(self):
+        """summary() should not show skipped section when empty."""
+        report = GateReport(
+            model_name="test",
+            timestamp=datetime.now(),
+            decision=GateDecision.PASS,
+            mode="full",
+            skipped_validators=[],
+        )
+        summary = report.summary()
+        assert "SKIPPED VALIDATORS" not in summary

@@ -39,8 +39,9 @@ Example:
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import json
+import math
 
 import pandas as pd
 
@@ -97,6 +98,8 @@ class GateReport:
     warnings: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
     human_review_required: bool = False
+    mode: str = "full"
+    skipped_validators: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert report to dictionary for serialization."""
@@ -109,6 +112,8 @@ class GateReport:
             "warnings": self.warnings,
             "recommendations": self.recommendations,
             "human_review_required": self.human_review_required,
+            "mode": self.mode,
+            "skipped_validators": self.skipped_validators,
             "dimension_results": [
                 {
                     "dimension": r.dimension,
@@ -128,6 +133,7 @@ class GateReport:
             "=" * 70,
             "",
             f"Decision: {self.decision.value}",
+            f"Mode: {self.mode}",
             f"Timestamp: {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
             f"Overall Score: {self.overall_score:.1%}",
             f"Human Review Required: {'Yes' if self.human_review_required else 'No'}",
@@ -156,6 +162,11 @@ class GateReport:
             lines.extend(["", "RECOMMENDATIONS:", "-" * 40])
             for rec in self.recommendations:
                 lines.append(f"  - {rec}")
+
+        if self.skipped_validators:
+            lines.extend(["", "SKIPPED VALIDATORS (early termination):", "-" * 40])
+            for skipped in self.skipped_validators:
+                lines.append(f"  - {skipped}")
 
         lines.append("")
         lines.append("=" * 70)
@@ -250,11 +261,69 @@ class Gatekeeper:
         if not self._validators_loaded:
             self.load_validators()
 
+    def _quick_prescreen(
+        self,
+        backtest_results: Dict[str, Any],
+        model_metadata: Dict[str, Any],
+    ) -> Optional[List[str]]:
+        """Run instant arithmetic pre-screen before any validator.
+
+        Checks 3 cheap conditions that catch ~40% of bad models immediately:
+        1. in_sample_roi <= 15% (overfit threshold)
+        2. n_features <= sqrt(n_samples) (feature count rule)
+        3. Sample size >= 200 bets (minimum for statistical validity)
+
+        Args:
+            backtest_results: Dictionary with backtest data.
+            model_metadata: Dictionary with model information.
+
+        Returns:
+            None if pre-screen passes, or a list of failure reasons if it fails.
+        """
+        failures = []
+
+        in_sample_roi = model_metadata.get("in_sample_roi", 0.0)
+        if in_sample_roi > self.THRESHOLDS["max_in_sample_roi"]:
+            failures.append(
+                f"Pre-screen: in_sample_roi {in_sample_roi:.1%} > "
+                f"{self.THRESHOLDS['max_in_sample_roi']:.1%} threshold"
+            )
+
+        n_features = model_metadata.get("n_features", 0)
+        n_samples = model_metadata.get("n_samples", 0)
+        if n_samples > 0 and n_features > math.sqrt(n_samples):
+            max_features = int(math.sqrt(n_samples))
+            failures.append(
+                f"Pre-screen: n_features {n_features} > sqrt({n_samples}) = {max_features}"
+            )
+
+        clv_values = backtest_results.get("clv_values", [])
+        if not clv_values and "clv" in backtest_results:
+            clv_values = (
+                backtest_results["clv"]
+                if isinstance(backtest_results["clv"], list)
+                else list(backtest_results["clv"])
+            )
+        sample_size = (
+            len(clv_values) if clv_values else len(backtest_results.get("profit_loss", []))
+        )
+        if sample_size < self.THRESHOLDS["min_sample_size"]:
+            failures.append(
+                f"Pre-screen: sample_size {sample_size} < "
+                f"{self.THRESHOLDS['min_sample_size']} minimum"
+            )
+
+        return failures if failures else None
+
+    # Validators ordered by execution cost (cheapest first) for fast mode
+    _VALIDATOR_ORDER_FAST = ["overfit", "betting", "temporal", "statistical"]
+
     def run_all_validations(
         self,
         backtest_results: Dict[str, Any],
         model_metadata: Dict[str, Any],
-    ) -> List[ValidationResult]:
+        mode: str = "full",
+    ) -> Tuple[List[ValidationResult], List[str]]:
         """Execute all dimension validations.
 
         Args:
@@ -271,13 +340,16 @@ class Gatekeeper:
                 - n_samples: Number of training samples
                 - season_rois: List of ROI per season
                 - in_sample_roi: In-sample ROI
+            mode: "fast" for tiered early-termination, "full" for all
+                validators regardless (default: "full").
 
         Returns:
-            List of ValidationResult for each dimension
+            Tuple of (list of ValidationResult, list of skipped validator names)
         """
         self._ensure_validators_loaded()
 
         results = []
+        skipped = []
 
         # Convert dict to DataFrame if needed for some validators
         df = None
@@ -286,27 +358,35 @@ class Gatekeeper:
         elif isinstance(backtest_results, pd.DataFrame):
             df = backtest_results
 
-        # Dimension 1: Temporal Validation
-        temporal_result = self._validate_temporal(df, model_metadata)
-        results.append(temporal_result)
+        if mode == "full":
+            # Original sequential order -- run everything unconditionally
+            results.append(self._validate_temporal(df, model_metadata))
+            results.append(self._validate_statistical(df, model_metadata))
+            results.append(self._validate_overfit(backtest_results, model_metadata))
+            results.append(self._validate_betting(backtest_results, model_metadata))
+        else:
+            # Fast mode: cheapest validators first, early termination
+            validator_dispatch = {
+                "overfit": lambda: self._validate_overfit(backtest_results, model_metadata),
+                "betting": lambda: self._validate_betting(backtest_results, model_metadata),
+                "temporal": lambda: self._validate_temporal(df, model_metadata),
+                "statistical": lambda: self._validate_statistical(df, model_metadata),
+            }
 
-        # Dimension 2: Statistical Validation
-        statistical_result = self._validate_statistical(df, model_metadata)
-        results.append(statistical_result)
+            for i, name in enumerate(self._VALIDATOR_ORDER_FAST):
+                result = validator_dispatch[name]()
+                results.append(result)
 
-        # Dimension 3: Overfitting Validation
-        overfit_result = self._validate_overfit(backtest_results, model_metadata)
-        results.append(overfit_result)
+                # Early termination: if a blocking check failed, skip remaining validators
+                if not result.passed and any(bc in result.dimension for bc in self.BLOCKING_CHECKS):
+                    skipped.extend(self._VALIDATOR_ORDER_FAST[i + 1 :])
+                    break
 
-        # Dimension 4: Betting-Specific Validation
-        betting_result = self._validate_betting(backtest_results, model_metadata)
-        results.append(betting_result)
-
-        # Dimension 5: Human Review Flag
+        # Dimension 5: Human Review Flag (always runs -- depends on prior results)
         review_result = self._check_human_review_needed(results, model_metadata)
         results.append(review_result)
 
-        return results
+        return results, skipped
 
     def _validate_temporal(
         self,
@@ -620,6 +700,7 @@ class Gatekeeper:
         model_name: str,
         backtest_results: Dict[str, Any],
         model_metadata: Dict[str, Any],
+        mode: str = "fast",
     ) -> GateReport:
         """Full validation pipeline with comprehensive report.
 
@@ -631,14 +712,54 @@ class Gatekeeper:
             model_name: Identifier for the model being validated
             backtest_results: Dictionary with backtest data
             model_metadata: Dictionary with model information
+            mode: "fast" for tiered early-termination (default), "full" to
+                run every validator regardless. On QUARANTINE in fast mode,
+                auto-escalates to full to capture all failures.
 
         Returns:
             GateReport with complete validation results and decision
         """
         self._ensure_validators_loaded()
 
-        # Run all validations
-        dimension_results = self.run_all_validations(backtest_results, model_metadata)
+        effective_mode = mode
+        skipped: List[str] = []
+
+        if mode == "fast":
+            # Pre-screen: instant arithmetic checks before any validator
+            prescreen_failures = self._quick_prescreen(backtest_results, model_metadata)
+            if prescreen_failures is not None:
+                # Obvious failure -- build a minimal QUARANTINE report, then
+                # auto-escalate to full mode for complete diagnostics.
+                effective_mode = "full"
+                dimension_results, skipped = self.run_all_validations(
+                    backtest_results,
+                    model_metadata,
+                    mode="full",
+                )
+            else:
+                # Pre-screen passed -- run tiered validators with early exit
+                dimension_results, skipped = self.run_all_validations(
+                    backtest_results,
+                    model_metadata,
+                    mode="fast",
+                )
+
+                # Auto-escalate: if fast mode quarantines, re-run full to
+                # capture ALL failures for the quarantine report.
+                preliminary_decision = self.make_decision(dimension_results)
+                if preliminary_decision == GateDecision.QUARANTINE and skipped:
+                    dimension_results, skipped = self.run_all_validations(
+                        backtest_results,
+                        model_metadata,
+                        mode="full",
+                    )
+                    effective_mode = "fast->full"
+        else:
+            dimension_results, skipped = self.run_all_validations(
+                backtest_results,
+                model_metadata,
+                mode="full",
+            )
 
         # Make decision
         decision = self.make_decision(dimension_results)
@@ -684,6 +805,8 @@ class Gatekeeper:
             warnings=warnings,
             recommendations=recommendations,
             human_review_required=human_review,
+            mode=effective_mode,
+            skipped_validators=skipped,
         )
 
         return report
