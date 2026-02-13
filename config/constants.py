@@ -1,8 +1,8 @@
 # Configuration & Constants
 # sports_betting/config/constants.py
 
-"""
-Central location for all magic numbers, thresholds, and configuration values.
+"""Central location for all magic numbers, thresholds, and configuration values.
+
 Claude Code: Reference this file when implementing any betting logic.
 DO NOT hardcode these values elsewhere in the codebase.
 """
@@ -17,7 +17,7 @@ from typing import Dict, List
 
 @dataclass
 class BankrollConfig:
-    """Bankroll management configuration"""
+    """Bankroll management configuration."""
 
     TOTAL_BANKROLL: float = 5000.0
     ACTIVE_CAPITAL: float = 4000.0  # Distributed across sportsbooks
@@ -58,7 +58,7 @@ SPORTSBOOK_ALLOCATION: Dict[str, float] = {
 
 @dataclass
 class EloConfig:
-    """Elo rating system configuration"""
+    """Elo rating system configuration."""
 
     # Base parameters
     INITIAL_RATING: float = 1500.0
@@ -109,7 +109,7 @@ ELO = EloConfig()
 
 @dataclass
 class BettingThresholds:
-    """Thresholds for bet qualification"""
+    """Thresholds for bet qualification."""
 
     # Minimum edge required to place bet (model_prob - implied_prob)
     MIN_EDGE_SPREAD: float = 0.02  # 2% edge minimum
@@ -142,7 +142,7 @@ THRESHOLDS = BettingThresholds()
 
 @dataclass
 class NCABBConstants:
-    """NCAA Basketball specific constants"""
+    """NCAA Basketball specific constants."""
 
     # Game parameters
     GAME_LENGTH_MINUTES: int = 40
@@ -163,6 +163,7 @@ class NCABBConstants:
     SLOW_PACE_THRESHOLD: float = 65.0
 
     def __post_init__(self):
+        """Validate and compute derived NCAAB constants."""
         self.POWER_CONFERENCES = ["ACC", "Big 12", "Big Ten", "SEC", "Big East"]
         self.MID_MAJOR_CONFERENCES = ["A-10", "AAC", "MWC", "WCC"]
         self.SEEDS = list(range(1, 17))
@@ -173,7 +174,7 @@ NCAAB = NCABBConstants()
 
 @dataclass
 class MLBConstants:
-    """MLB specific constants"""
+    """MLB specific constants."""
 
     # Game parameters
     INNINGS_REGULATION: int = 9
@@ -203,7 +204,7 @@ MLB = MLBConstants()
 
 @dataclass
 class NFLConstants:
-    """NFL specific constants"""
+    """NFL specific constants."""
 
     # Game parameters
     GAME_LENGTH_MINUTES: int = 60
@@ -231,7 +232,7 @@ NFL = NFLConstants()
 
 @dataclass
 class ValidationRanges:
-    """Valid ranges for data validation"""
+    """Valid ranges for data validation."""
 
     # Spreads
     SPREAD_MIN: float = -35.0
@@ -267,7 +268,7 @@ VALIDATION = ValidationRanges()
 
 @dataclass
 class BacktestConfig:
-    """Backtesting configuration"""
+    """Backtesting configuration."""
 
     # Minimum sample sizes
     MIN_BETS_PRELIMINARY: int = 100
@@ -295,7 +296,7 @@ BACKTEST = BacktestConfig()
 
 @dataclass
 class APIConfig:
-    """External API configuration"""
+    """External API configuration."""
 
     # Rate limits
     ODDS_API_CALLS_PER_MONTH: int = 500
@@ -312,13 +313,39 @@ class APIConfig:
 API = APIConfig()
 
 # =============================================================================
+# ODDS RETRIEVAL CONFIGURATION
+# =============================================================================
+
+
+@dataclass
+class OddsConfig:
+    """Multi-modal odds retrieval configuration."""
+
+    DEFAULT_MODE: str = "auto"
+    API_CREDIT_MONTHLY_LIMIT: int = 500
+    API_CREDIT_WARNING_PCT: float = 0.80
+    API_CREDIT_CUTOFF_PCT: float = 0.90
+    CACHE_TTL_SECONDS: int = 300  # 5 minutes
+    STALE_THRESHOLD_SECONDS: int = 900  # 15 min = stale
+    ESPN_RATE_LIMIT_RPS: float = 2.0
+    DEFAULT_BOOKMAKERS: tuple = (
+        "draftkings",
+        "fanduel",
+        "betmgm",
+        "caesars",
+    )
+
+
+ODDS_CONFIG = OddsConfig()
+
+# =============================================================================
 # FEATURE ENGINEERING
 # =============================================================================
 
 
 @dataclass
 class FeatureConfig:
-    """Feature engineering parameters"""
+    """Feature engineering parameters."""
 
     # Rolling window sizes
     ROLLING_WINDOW_SHORT: int = 5  # games
@@ -341,7 +368,7 @@ FEATURES = FeatureConfig()
 
 @dataclass
 class LoggingConfig:
-    """Logging configuration"""
+    """Logging configuration."""
 
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

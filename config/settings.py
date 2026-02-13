@@ -3,6 +3,7 @@
 Centralizes configuration for the sports betting project including
 bankroll management, risk parameters, and API settings.
 """
+import os
 from pathlib import Path
 from typing import Dict
 
@@ -111,15 +112,23 @@ RATE_LIMITS: Dict[str, dict] = {
 }
 
 # Blocked paid APIs (zero-cost enforcement)
+# Note: the-odds-api is allowed when ALLOW_FREE_TIER_APIS is True (free 500 credits/mo)
+ALLOW_FREE_TIER_APIS = True
 PAID_APIS_BLOCKED = [
-    "the-odds-api",
-    "odds-api.com",
     "prophetx",
     "sportsdata.io",
     "sportradar",
     "action-network",
     "pinnacle-api",
 ]
+# Also block these when ALLOW_FREE_TIER_APIS is False
+_FREE_TIER_APIS = [
+    "the-odds-api",
+    "odds-api.com",
+]
+
+# The Odds API key (free tier: 500 credits/month)
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
 
 # =============================================================================
 # FEATURE ENGINEERING

@@ -66,7 +66,7 @@ class BettingDatabase:
         with self.get_cursor() as cursor:
             # Core bet tracking table
             cursor.execute(
-                """CREATE TABLE IF NOT EXISTS bets (.
+                """CREATE TABLE IF NOT EXISTS bets (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     sport TEXT NOT NULL,
@@ -105,7 +105,7 @@ class BettingDatabase:
 
             # Bankroll tracking table
             cursor.execute(
-                """CREATE TABLE IF NOT EXISTS bankroll_log (.
+                """CREATE TABLE IF NOT EXISTS bankroll_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date DATE NOT NULL UNIQUE,
                     starting_balance REAL,
@@ -121,7 +121,7 @@ class BettingDatabase:
 
             # Model predictions table
             cursor.execute(
-                """CREATE TABLE IF NOT EXISTS predictions (.
+                """CREATE TABLE IF NOT EXISTS predictions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     sport TEXT NOT NULL,
@@ -141,7 +141,7 @@ class BettingDatabase:
 
             # Team ratings table
             cursor.execute(
-                """CREATE TABLE IF NOT EXISTS team_ratings (.
+                """CREATE TABLE IF NOT EXISTS team_ratings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     sport TEXT NOT NULL,
@@ -152,6 +152,27 @@ class BettingDatabase:
                     rating_value REAL NOT NULL,
 
                     UNIQUE(sport, team_id, season, rating_type)
+                )
+            """
+            )
+
+            # Odds snapshots table
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS odds_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id TEXT NOT NULL,
+                    sportsbook TEXT NOT NULL,
+                    captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    spread_home REAL,
+                    spread_home_odds INTEGER,
+                    spread_away_odds INTEGER,
+                    total REAL,
+                    over_odds INTEGER,
+                    under_odds INTEGER,
+                    moneyline_home INTEGER,
+                    moneyline_away INTEGER,
+                    is_closing BOOLEAN DEFAULT FALSE,
+                    confidence REAL DEFAULT 1.0
                 )
             """
             )
@@ -183,7 +204,7 @@ class BettingDatabase:
         """
         columns = ", ".join(bet_data.keys())
         placeholders = ", ".join(["?" for _ in bet_data])
-        query = f"INSERT INTO bets ({columns}) VALUES ({placeholders})"
+        query = f"INSERT INTO bets ({columns}) VALUES ({placeholders})"  # nosec B608
 
         with self.get_cursor() as cursor:
             cursor.execute(query, tuple(bet_data.values()))
@@ -200,7 +221,7 @@ class BettingDatabase:
             profit_loss: Profit or loss amount
             clv: Closing line value (optional)
         """
-        query = """UPDATE bets.
+        query = """UPDATE bets
             SET result = ?, profit_loss = ?, clv = ?
             WHERE id = ?
         """
@@ -235,7 +256,7 @@ class BettingDatabase:
         Returns:
             Dictionary of performance metrics
         """
-        query = """SELECT.
+        query = """SELECT
                 COUNT(*) as total_bets,
                 SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
                 SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as losses,
@@ -272,6 +293,75 @@ class BettingDatabase:
             }
 
         return {}
+
+    def insert_prediction(self, prediction_data: dict) -> int:
+        """Insert a model prediction.
+
+        Args:
+            prediction_data: Dict with sport, game_id, game_date, model_name,
+                prediction_type, predicted_value. Optional: market_value, closing_value.
+
+        Returns:
+            ID of inserted prediction.
+        """
+        columns = ", ".join(prediction_data.keys())
+        placeholders = ", ".join(["?" for _ in prediction_data])
+        query = f"INSERT OR REPLACE INTO predictions ({columns}) VALUES ({placeholders})"
+
+        with self.get_cursor() as cursor:
+            cursor.execute(query, tuple(prediction_data.values()))
+            return cursor.lastrowid
+
+    def get_predictions_by_date(self, game_date: str, sport: Optional[str] = None) -> list:
+        """Get predictions for a specific date.
+
+        Args:
+            game_date: Date string (YYYY-MM-DD).
+            sport: Optional sport filter.
+
+        Returns:
+            List of prediction records.
+        """
+        query = "SELECT * FROM predictions WHERE game_date = ?"
+        params: list = [game_date]
+        if sport:
+            query += " AND sport = ?"
+            params.append(sport)
+        return self.execute_query(query, tuple(params))
+
+    def insert_odds_snapshot(self, odds_data: dict) -> int:
+        """Insert an odds snapshot.
+
+        Args:
+            odds_data: Dict with game_id, sportsbook, captured_at, and odds fields.
+
+        Returns:
+            ID of inserted snapshot.
+        """
+        columns = ", ".join(odds_data.keys())
+        placeholders = ", ".join(["?" for _ in odds_data])
+        query = f"INSERT OR REPLACE INTO odds_snapshots ({columns}) VALUES ({placeholders})"
+
+        with self.get_cursor() as cursor:
+            cursor.execute(query, tuple(odds_data.values()))
+            return cursor.lastrowid
+
+    def insert_bankroll_entry(self, entry: dict) -> int:
+        """Insert or update a bankroll log entry.
+
+        Args:
+            entry: Dict with date, starting_balance, ending_balance, daily_pnl, etc.
+
+        Returns:
+            ID of inserted entry.
+        """
+        columns = ", ".join(entry.keys())
+        placeholders = ", ".join(["?" for _ in entry])
+        query = f"INSERT OR REPLACE INTO bankroll_log ({columns}) VALUES ({placeholders})"
+
+        with self.get_cursor() as cursor:
+            cursor.execute(query, tuple(entry.values()))
+            return cursor.lastrowid
 
 
 if __name__ == "__main__":
