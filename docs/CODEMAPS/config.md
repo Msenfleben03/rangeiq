@@ -39,6 +39,9 @@ Runtime configuration for paths, bankroll allocation, and operational parameters
 | `ELO_K_FACTOR` | int | 20 |
 | `MIN_EDGE_REQUIRED` | float | 0.02 (2%) |
 | `TARGET_CLV` | float | 0.01 (1%) |
+| `NCAAB_SEASONS_START` | int | Starting season for data fetch |
+| `NCAAB_SEASONS_END` | int | Ending season for data fetch |
+| `ODDS_API_KEY` | str | The Odds API key (from env or .env) |
 | `SLA_CLOSING_ODDS_MAX_AGE` | int | 900 seconds (15 min) |
 | `RATE_LIMITS` | dict | Per-source rate limits (sportsipy, polymarket, kalshi, etc.) |
 | `PAID_APIS_BLOCKED` | list | Blocked paid API domains (zero-cost enforcement) |
@@ -62,11 +65,28 @@ Structured dataclass-based constants for all domain logic. Never hardcode these 
 | `APIConfig` / `API` | dataclass/instance | Rate limits, timeouts, retry logic |
 | `FeatureConfig` / `FEATURES` | dataclass/instance | Rolling window sizes (5/10/20), decay factor, min lag |
 | `LoggingConfig` / `LOGGING` | dataclass/instance | Log level, format, alert thresholds |
+| `OddsConfig` / `ODDS_CONFIG` | dataclass/instance | Odds retrieval: default mode, cache TTL, credit limit, provider chain |
+
+**OddsConfig Fields:**
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `DEFAULT_MODE` | "auto" | Default odds retrieval mode |
+| `CACHE_TTL_SECONDS` | 300 | TTL for odds cache (5 min) |
+| `API_CREDIT_MONTHLY_LIMIT` | 500 | The Odds API monthly credit budget |
+| `API_CREDIT_WARNING_PCT` | 0.80 | Warning threshold (80%) |
+| `API_CREDIT_CUTOFF_PCT` | 0.90 | Cutoff threshold (90%) |
+| `PROVIDER_CHAIN` | list | Ordered fallback chain |
 
 **Imported By:**
 
 - `models/elo.py` -> `ELO` (K-factor, rating bounds)
 - `models/sport_specific/ncaab/team_ratings.py` -> `ELO` (NCAAB-specific parameters)
+- `tracking/logger.py` -> `BANKROLL` (exposure limits)
+- `scripts/daily_predictions.py` -> `BANKROLL`, `ODDS_CONFIG`, `THRESHOLDS`
+- `scripts/backtest_ncaab_elo.py` -> `BANKROLL`, `ELO`, `THRESHOLDS`
+- `scripts/settle_paper_bets.py` -> `ODDS_CONFIG`
+- `pipelines/odds_orchestrator.py` -> (indirectly via scripts)
 - `backtesting/validators/gatekeeper.py` -> Thresholds referenced indirectly
 
 ## Sport-Specific Elo Parameters
@@ -88,3 +108,6 @@ None. Both files use only Python stdlib and dataclasses.
 - [models.md](models.md) - ELO config consumed by all Elo model implementations
 - [betting.md](betting.md) - THRESHOLDS defines min edge, CLV targets
 - [backtesting.md](backtesting.md) - BACKTEST config for sample sizes and deploy thresholds
+- [pipelines.md](pipelines.md) - ODDS_CONFIG consumed by odds_orchestrator
+- [tracking.md](tracking.md) - BANKROLL consumed by logger.py for limit validation
+- [scripts.md](scripts.md) - All scripts reference BANKROLL, ODDS_CONFIG, THRESHOLDS

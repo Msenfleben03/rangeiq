@@ -203,4 +203,4 @@ then auto-escalates to full mode for complete diagnostics.
 - [betting.md](betting.md) - Core odds/EV/CLV calculations used by metrics and validators
 - [models.md](models.md) - Models that must pass the Gatekeeper before deployment
 - [config.md](config.md) - BacktestConfig constants used by validators
-- [tests.md](tests.md) - 198 tests across 6 test files covering all validators
+- [tests.md](tests.md) - 219 tests across 5 validator test files covering all validators

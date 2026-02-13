@@ -6,39 +6,242 @@
 
 ```text
 scripts/
-  validate_ncaab_elo.py     # Run NCAAB Elo model through Gatekeeper validation
-  verify_schema.py          # Verify SQLite database schema matches expected structure
-  reset_closing_odds.py     # Reset/repair closing odds data in database
-  fix_docstrings.py         # Automated docstring formatting and repair
+  # === Phase 1: Data & Training ===
+  fetch_historical_data.py       # Download 5 seasons of NCAAB data via sportsipy
+  train_ncaab_elo.py             # Train Elo model on historical parquet data
+  # === Phase 3: Backtesting & Validation ===
+  backtest_ncaab_elo.py          # Walk-forward backtest with simulated odds + Kelly
+  run_gatekeeper_validation.py   # Full 5-dimension Gatekeeper validation
+  # === Phase 4: Daily Predictions ===
+  daily_predictions.py           # Morning: predict + fetch odds + recommend bets
+  # === Phase 5: Paper Betting ===
+  record_paper_bets.py           # Record bet decisions (interactive + CSV import)
+  settle_paper_bets.py           # Settle completed games, compute P/L and CLV
+  # === Phase 6: Reporting ===
+  generate_report.py             # CLI for daily/weekly/CLV/health reports
+  # === Utilities ===
+  validate_ncaab_elo.py          # Run NCAAB Elo through Gatekeeper (legacy)
+  verify_schema.py               # Verify SQLite schema matches expected structure
+  reset_closing_odds.py          # Reset/repair closing odds data
+  fix_docstrings.py              # Automated docstring formatting
 ```
 
-## Key Scripts
+## Phase 1: Data & Training
 
-### validate_ncaab_elo.py
+### fetch_historical_data.py
 
-Runs the NCAAB Elo model through the full 5-dimension validation pipeline.
-
-**Purpose:** Pre-deployment validation script that loads backtest results and passes them through the Gatekeeper.
+Downloads 5 seasons (2020-2025) of NCAAB game data via sportsipy with checkpoint/resume support.
 
 **Usage:**
 
 ```bash
-python scripts/validate_ncaab_elo.py
+python scripts/fetch_historical_data.py
+python scripts/fetch_historical_data.py --start 2022 --end 2025
+python scripts/fetch_historical_data.py --force  # Re-download all
 ```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `get_existing_seasons(output_dir)` | Find cached parquet files (checkpoint resume) |
+| `validate_season_data(df, season)` | Validate game count, columns, null scores |
+| `fetch_all_seasons(start, end, force, delay)` | Main entry: fetch with rate limiting |
+
+**Outputs:** `data/raw/ncaab/ncaab_games_{year}.parquet`
+**Dependencies:** pandas, sportsipy, config.settings (RAW_DATA_DIR, NCAAB_SEASONS_*)
+
+### train_ncaab_elo.py
+
+Loads raw parquet data, processes games chronologically with season regression, outputs a trained model.
+
+**Usage:**
+
+```bash
+python scripts/train_ncaab_elo.py
+python scripts/train_ncaab_elo.py --start 2020 --end 2025
+python scripts/train_ncaab_elo.py --validate  # Print top 25 + sanity checks
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `load_season_data(season)` | Load parquet for a single season |
+| `prepare_games_for_elo(df)` | Deduplicate, parse home/away, sort chronologically |
+| `extract_conferences(df)` | Build team_id -> conference mapping |
+| `train_model(start_season, end_season)` | Main: process seasons with regression between years |
+| `validate_model(model)` | Sanity checks: team count, rating bounds, mean |
+
+**Outputs:**
+
+- `data/processed/ncaab_elo_model.pkl` (pickled model + metadata)
+- `data/processed/ncaab_elo_ratings_current.csv` (human-readable)
+- `team_ratings` table entries via database
+
+**Dependencies:** pandas, config.constants (ELO), models.model_persistence, models.sport_specific.ncaab.team_ratings, tracking.database
+
+## Phase 3: Backtesting & Validation
+
+### backtest_ncaab_elo.py
+
+Walk-forward backtest: loads trained model, holds out test season,
+simulates bet selection with edge filtering, Kelly sizing, and CLV.
+
+**Usage:**
+
+```bash
+python scripts/backtest_ncaab_elo.py
+python scripts/backtest_ncaab_elo.py --test-season 2025 --min-edge 0.02
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `load_test_season(season)` | Load raw parquet for test season |
+| `prepare_test_games(df)` | Convert to game dicts, deduplicate |
+| `simulate_market_odds(win_prob, vig)` | Synthetic American odds with vig + noise |
+| `simulate_closing_odds(opening_odds)` | Synthetic line movement (1-3 pts) |
+| `run_backtest(model, games, ...)` | Walk-forward: predict -> odds -> edge -> Kelly -> P/L |
+| `summarize_backtest(df)` | Summary stats: ROI, Sharpe, drawdown, CLV |
+
+**Outputs:** `data/backtests/ncaab_elo_backtest_{season}.parquet`
+**Dependencies:** numpy, pandas, betting.odds_converter, models.model_persistence, config.constants
+
+### run_gatekeeper_validation.py
+
+Runs the full 5-dimension Gatekeeper validation on backtest results.
+Falls back to simplified validation if full Gatekeeper unavailable.
+
+**Usage:**
+
+```bash
+python scripts/run_gatekeeper_validation.py
+python scripts/run_gatekeeper_validation.py --backtest data/backtests/ncaab_elo_backtest_2025.parquet
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `load_backtest(path)` | Load backtest parquet |
+| `prepare_gatekeeper_inputs(df)` | Convert DataFrame to Gatekeeper input format |
+| `run_validation(backtest_path, model_name)` | Full or simplified validation |
+| `_simplified_validation(df, model_name)` | Fallback: checks 4 key blocking thresholds |
+
+**Outputs:** `data/validation/{model_name}_gatekeeper_report.json`
+**Dependencies:** pandas, backtesting.validators.gatekeeper (optional), config.settings
+
+## Phase 4: Daily Predictions
+
+### daily_predictions.py
+
+Morning workflow: loads trained model, fetches today's games,
+predicts outcomes, retrieves odds, calculates edges, outputs recs.
+
+**Usage:**
+
+```bash
+python scripts/daily_predictions.py --date today
+python scripts/daily_predictions.py --date 2026-02-15 --mode api
+python scripts/daily_predictions.py --date today --mode manual --odds-file odds.csv
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `parse_date(date_str)` | Parse "today", "tomorrow", or YYYY-MM-DD |
+| `fetch_todays_games(target_date)` | Fetch games via sportsipy |
+| `generate_predictions(model, games, orchestrator, ...)` | Predictions + odds + edge + Kelly recommendations |
+| `display_predictions(df)` | Pretty-print prediction table with bet recs |
+
+**Dependencies:** pandas, betting.odds_converter, config.constants,
+models.model_persistence, pipelines.odds_orchestrator, tracking.database
+
+## Phase 5: Paper Betting
+
+### record_paper_bets.py
+
+Records paper bet decisions via interactive prompt or CSV import. Validates exposure limits before confirming.
+
+**Usage:**
+
+```bash
+python scripts/record_paper_bets.py --date today       # Interactive mode
+python scripts/record_paper_bets.py --import-csv bets.csv
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `import_from_csv(csv_path, db)` | Bulk import bets from CSV with validation |
+| `interactive_mode(target_date, db)` | Interactive bet entry with limit checks |
+
+**Dependencies:** tracking.database, tracking.logger (log_paper_bet, validate_bet_limits)
+
+### settle_paper_bets.py
+
+Evening workflow: fetches game results, determines outcomes, calculates P/L and CLV, updates database, refreshes model ratings.
+
+**Usage:**
+
+```bash
+python scripts/settle_paper_bets.py --date today
+python scripts/settle_paper_bets.py --date yesterday
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `fetch_game_results(target_date)` | Get scores via sportsipy |
+| `determine_bet_outcome(bet, game_result)` | Win/loss/push for moneyline, spread, total |
+| `settle_bets(db, date, orchestrator, model)` | Main: settle pending bets + update ratings |
+
+**Dependencies:** betting.odds_converter, models.model_persistence, pipelines.odds_orchestrator, tracking.database, tracking.logger
+
+## Phase 6: Reporting
+
+### generate_report.py
+
+CLI wrapper for all report types from tracking.reports.
+
+**Usage:**
+
+```bash
+python scripts/generate_report.py --daily
+python scripts/generate_report.py --weekly --clv
+python scripts/generate_report.py --health --odds-health
+python scripts/generate_report.py --all
+```
+
+**Report Types:**
+
+| Flag | Function | Purpose |
+|------|----------|---------|
+| `--daily` | `print_daily()` | Today's bets, P/L, CLV |
+| `--weekly` | `print_weekly()` | Rolling week: ROI, Sharpe, CLV trend |
+| `--clv` | `print_clv()` | 30-day CLV distribution by bet type |
+| `--health` | `print_health()` | Model drift alerts (CRITICAL/WARNING) |
+| `--odds-health` | `print_odds_health()` | Provider success rates, stale data |
+| `--all` | all of above | Full dashboard |
+
+**Dependencies:** tracking.database, tracking.reports
+
+## Utility Scripts
+
+### validate_ncaab_elo.py
+
+Runs the NCAAB Elo model through the full 5-dimension validation pipeline (legacy — superseded by `run_gatekeeper_validation.py`).
 
 **Dependencies:** backtesting.validators (Gatekeeper), models.sport_specific.ncaab.team_ratings
 
 ### verify_schema.py
 
-Validates that the SQLite database schema matches the expected structure defined in tracking/database.py and tracking/models.py.
-
-**Purpose:** Database health check ensuring all tables and columns exist with correct types.
-
-**Usage:**
-
-```bash
-python scripts/verify_schema.py
-```
+Validates SQLite database schema matches expected structure.
 
 **Dependencies:** sqlite3, tracking.database
 
@@ -46,32 +249,33 @@ python scripts/verify_schema.py
 
 Utility to reset or repair closing odds data in the bets table.
 
-**Purpose:** Data maintenance when closing odds collector encounters issues or needs re-running.
-
-**Usage:**
-
-```bash
-python scripts/reset_closing_odds.py
-```
-
 **Dependencies:** sqlite3
 
 ### fix_docstrings.py
 
-Automated docstring formatting and repair tool.
-
-**Purpose:** Ensures consistent Google-style docstrings across the codebase. Used with pre-commit hooks.
-
-**Usage:**
-
-```bash
-python scripts/fix_docstrings.py
-```
+Automated docstring formatting and repair tool for consistent Google-style docstrings.
 
 **Dependencies:** ast (Python AST parsing)
 
+## Daily Workflow
+
+```text
+MORNING:
+  1. daily_predictions.py --date today           # Predict + odds + recommendations
+  2. record_paper_bets.py --date today            # Record bet decisions
+
+EVENING:
+  3. settle_paper_bets.py --date today            # Settle completed games
+  4. generate_report.py --daily --odds-health     # Performance check
+
+WEEKLY:
+  5. generate_report.py --weekly --clv            # Full review
+```
+
 ## Related Areas
 
-- [backtesting.md](backtesting.md) - validate_ncaab_elo.py uses the Gatekeeper
-- [tracking.md](tracking.md) - verify_schema.py and reset_closing_odds.py interact with database
-- [models.md](models.md) - validate_ncaab_elo.py tests the NCAAB model
+- [models.md](models.md) - model_persistence.py used by train/backtest/settle scripts
+- [pipelines.md](pipelines.md) - odds_orchestrator.py used by daily_predictions and settle
+- [tracking.md](tracking.md) - logger.py and reports.py used by record/settle/generate scripts
+- [backtesting.md](backtesting.md) - Gatekeeper used by run_gatekeeper_validation.py
+- [config.md](config.md) - ODDS_CONFIG, BANKROLL, THRESHOLDS consumed by all scripts

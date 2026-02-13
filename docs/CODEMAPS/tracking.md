@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-02-12
 **Entry Point:** `tracking/__init__.py` (empty)
-**Test Coverage:** `tests/test_forecasting_db.py`
+**Test Coverage:** `tests/test_forecasting_db.py`, `tests/test_logger.py`, `tests/test_reports.py`, `tests/test_settlement.py`
 
 ## Architecture
 
@@ -11,6 +11,8 @@ tracking/
   __init__.py           # Empty package marker
   database.py           # SQLite connection management, schema creation (BettingDatabase)
   models.py             # SQLAlchemy ORM models (Team, Game, Bet, Prediction, etc.)
+  logger.py             # Paper bet logging, validation, and batch operations
+  reports.py            # Performance reports: daily, weekly, CLV, health, odds system
   forecasting_db.py     # Superforecasting prediction market DB interface
   cost_tracker.py       # Zero-cost enforcement and opportunity cost tracking
   doc_metrics.py        # Documentation health metrics and reporting
@@ -30,6 +32,10 @@ SQLite database management for the core betting tracking system.
 
 - `__init__(db_path)` - Initialize and create schema if needed
 - `get_cursor()` - Context manager yielding cursor with auto-commit/rollback
+- `execute_query(sql, params)` - Execute query and return list of dicts
+- `insert_bet(bet_data)` - Insert a bet record
+- `update_bet_result(bet_id, result, profit_loss, clv)` - Update settled bet
+- `insert_bankroll_entry(entry)` - Insert daily bankroll log
 - `_initialize_schema()` - Creates all tables on first run
 
 **Database:** `data/betting.db` (SQLite)
@@ -43,6 +49,48 @@ SQLite database management for the core betting tracking system.
 - `games` - Game schedule and results
 - `odds_snapshots` - Historical odds from multiple sportsbooks
 - Plus additional tables (22 total in full schema)
+
+### logger.py
+
+Paper bet logging utilities with validation and batch operations.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `log_paper_bet(db, bet_data)` | function | Insert single paper bet (is_live=FALSE) |
+| `log_multiple_bets(db, bets)` | function | Batch insert with error handling |
+| `get_pending_bets(db, sport)` | function | Query unsettled bets |
+| `get_bets_by_date(db, game_date, sport)` | function | Query bets for a specific date |
+| `validate_bet_limits(bet_stake, db, bankroll_config)` | function | Check exposure limits |
+
+**Validation Checks:**
+
+1. Stake <= max bet (3% of bankroll)
+2. Daily exposure <= 10% of bankroll
+3. Required fields present (sport, game_date, bet_type, selection, odds_placed, stake, sportsbook)
+
+**Dependencies:** config.constants (BANKROLL), tracking.database (BettingDatabase)
+
+### reports.py
+
+Performance reports and monitoring for the paper betting pipeline.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `daily_report(db, report_date)` | function | Daily P/L, win rate, CLV for a single date |
+| `weekly_report(db, weeks)` | function | Rolling weekly: ROI, Sharpe ratio, CLV trend |
+| `clv_analysis(db, days)` | function | CLV distribution, by bet type, daily trend |
+| `model_health_check(db)` | function | Drift detection with CRITICAL/WARNING alerts |
+| `odds_system_health(db)` | function | Provider success rates, stale data detection |
+
+**Health Check Alerts:**
+
+| Condition | Level | Action |
+|-----------|-------|--------|
+| CLV < 0 for 7+ days | CRITICAL | Review model predictions and odds accuracy |
+| 5+ consecutive losses | WARNING | Reduce bet sizing by 50% |
+| Win rate < 48% over 100 bets | WARNING | Review model calibration |
+
+**Dependencies:** tracking.database (BettingDatabase)
 
 ### models.py
 
@@ -105,20 +153,6 @@ Enforces zero-cost data retrieval and tracks opportunity costs from stale data.
 | `SLACategory` | enum | CLOSING_ODDS, MARKET_PRICES, TEAM_RATINGS, SCHEDULE_DATA, HISTORICAL_DATA |
 | `SLADefinition` | dataclass | SLA parameters (max_age, edge_loss per violation) |
 
-**Key Principles:**
-
-1. Zero-cost is NON-NEGOTIABLE - reject any paid API calls
-2. Opportunity cost = edge_loss x bet_frequency x avg_stake
-3. SLA violations accumulate quantifiable costs
-
-**SLA Thresholds (from config/settings.py):**
-
-- Closing odds: 15 min max age, 10% edge loss per violation
-- Market prices: 5 min max age, 2% edge loss
-- Team ratings: 1 day max age, 0.5% edge loss
-- Schedule data: 6 hours max age, 0.1% edge loss
-- Historical data: 7 days max age, 0.01% edge loss
-
 ### doc_metrics.py
 
 Documentation health tracking and quality metrics.
@@ -129,32 +163,30 @@ Documentation health tracking and quality metrics.
 | `generate_coverage_report()` | function | Docstring coverage report across project |
 | `find_stale_documentation(days)` | function | Find docs not updated in N days |
 
-**Dependencies:** ast (for AST analysis of docstrings), git (GitPython for file ages)
-
 ## Data Flow
 
 ```text
-pipelines/ (fetchers)
+scripts/ (daily_predictions, record_paper_bets, settle_paper_bets)
      |
-     +---> database.py (BettingDatabase)
+     +---> logger.py (log_paper_bet, validate_bet_limits)
      |         |
-     |         +---> bets, predictions, team_ratings, odds_snapshots, ...
+     |         +---> database.py (BettingDatabase)
+     |                   |
+     |                   +---> bets, predictions, team_ratings, odds_snapshots, bankroll_log
      |
-     +---> forecasting_db.py (ForecastingDatabase)
-     |         |
-     |         +---> forecasts, forecast_revisions, calibration_bins, ...
-     |
-     +---> cost_tracker.py
+     +---> reports.py (daily_report, weekly_report, clv_analysis, model_health_check)
                |
-               +---> sla_violations, cost_events (monitoring)
+               +---> database.py (queries bets, odds_snapshots)
+
+pipelines/ (fetchers, odds_orchestrator)
+     |
+     +---> database.py (BettingDatabase) -- store odds, predictions
+     +---> forecasting_db.py (ForecastingDatabase) -- store forecasts
+     +---> cost_tracker.py -- enforce zero-cost
 
 backtesting/ (reads from database for validation)
      |
      +---> database.py (reads bets, predictions)
-
-scripts/ (daily_run, reports)
-     |
-     +---> database.py + forecasting_db.py (reads/writes)
 ```
 
 ## External Dependencies
@@ -165,10 +197,11 @@ scripts/ (daily_run, reports)
 | sqlalchemy | models.py | ORM for typed database access |
 | git (GitPython) | doc_metrics.py | File modification dates for staleness tracking |
 | ast | doc_metrics.py | Python AST for docstring coverage analysis |
+| config.constants | logger.py | BANKROLL limits for validation |
 
 ## Related Areas
 
-- [pipelines.md](pipelines.md) - Fetchers write to database via tracking
+- [pipelines.md](pipelines.md) - Fetchers write to database via tracking; odds_orchestrator stores to odds_snapshots
+- [scripts.md](scripts.md) - All paper betting scripts depend on logger.py and reports.py
 - [backtesting.md](backtesting.md) - Gatekeeper persists reports to data/ via tracking
-- [config.md](config.md) - SLA definitions and rate limits
-- [scripts.md](scripts.md) - Daily run and setup scripts interact with database
+- [config.md](config.md) - SLA definitions, rate limits, and bankroll config

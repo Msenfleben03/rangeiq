@@ -1,8 +1,13 @@
 # Operations Runbook
 
+**Last Updated:** 2026-02-12
+**Review Cycle:** Monthly
+**Next Review:** 2026-03-12
+
 ## Overview
 
-Standard operating procedures for daily, weekly, and monthly operations. Follow these checklists to maintain consistent performance tracking and system health.
+Standard operating procedures for the NCAAB paper betting pipeline.
+Follow these checklists for consistent performance tracking and health.
 
 ---
 
@@ -15,37 +20,17 @@ Standard operating procedures for daily, weekly, and monthly operations. Follow 
 ```markdown
 ## Daily Checklist - [DATE]
 
-### 1. Data Refresh
-- [ ] Run data refresh script: `python scripts/daily_run.py --refresh`
-- [ ] Verify no API errors in logs
-- [ ] Check last update timestamps in database
+### 1. Generate Predictions
+- [ ] Run predictions: `python scripts/daily_predictions.py --date today`
+- [ ] Review output for reasonableness (no >15 point edges)
+- [ ] Check odds API credit budget in output footer
 
-### 2. Generate Predictions
-- [ ] Run prediction pipeline: `python scripts/daily_run.py --predict`
-- [ ] Review prediction output for reasonableness
-- [ ] Flag any extreme predictions (>10 point edge) for manual review
-
-### 3. Odds Comparison
-- [ ] Fetch current odds from all sportsbooks
-- [ ] Compare model predictions to market lines
-- [ ] Identify edges meeting threshold (≥2% spread/total, ≥3% ML/prop)
-
-### 4. Bet Selection
-- [ ] Review all opportunities meeting edge threshold
-- [ ] Calculate Kelly sizing for each
-- [ ] Check daily exposure limit (10% of bankroll)
-- [ ] Prioritize by: edge size, confidence, market liquidity
-
-### 5. Execution
-- [ ] Place bets at best available odds
-- [ ] Log each bet immediately after placement:
-  - Game, selection, line, odds, stake, sportsbook
-  - Model probability, edge
-- [ ] Verify total exposure within limits
-
-### 6. Documentation
-- [ ] Screenshot bet slips (backup)
-- [ ] Update SESSION_HANDOFF.md if needed
+### 2. Record Bets
+- [ ] Record selected bets: `python scripts/record_paper_bets.py --date today`
+  - Interactive mode: enter each bet at prompt
+  - OR CSV import: `python scripts/record_paper_bets.py --import-csv bets.csv`
+- [ ] Verify exposure limits not exceeded (max 10% daily)
+- [ ] Confirm all bets logged (check total in output)
 ```
 
 ### Evening Routine (After Games Complete)
@@ -55,25 +40,15 @@ Standard operating procedures for daily, weekly, and monthly operations. Follow 
 ```markdown
 ## Evening Reconciliation - [DATE]
 
-### 1. Result Collection
-- [ ] Fetch final scores for all games with bets
-- [ ] Update game results in database
+### 1. Settle Bets
+- [ ] Run settlement: `python scripts/settle_paper_bets.py --date today`
+- [ ] Review P/L and CLV for each settled bet
+- [ ] Note any games not yet final (skipped)
 
-### 2. Bet Settlement
-- [ ] Settle all completed bets (win/loss/push)
-- [ ] Calculate actual P&L for each bet
-- [ ] Fetch closing lines if not already captured
-
-### 3. CLV Calculation
-- [ ] Calculate CLV for each settled bet
-- [ ] Log any bets where closing line unavailable
-- [ ] Flag any significantly negative CLV bets for review
-
-### 4. Daily Summary
-- [ ] Record daily P&L
-- [ ] Record daily average CLV
-- [ ] Update bankroll totals per sportsbook
-- [ ] Note any observations or anomalies
+### 2. Daily Report
+- [ ] Run report: `python scripts/generate_report.py --daily --odds-health`
+- [ ] Check for health alerts (CRITICAL / WARNING)
+- [ ] Record daily P/L and CLV in notes
 
 ### Daily Log Entry
 | Metric | Value |
@@ -82,10 +57,21 @@ Standard operating procedures for daily, weekly, and monthly operations. Follow 
 | Bets Placed | |
 | Bets Settled | |
 | Record | W-L-P |
-| Gross P&L | $ |
-| Net P&L | $ |
+| Daily P/L | $ |
 | Average CLV | % |
 | Notes | |
+```
+
+### Quick Daily Commands
+
+```bash
+# Morning
+python scripts/daily_predictions.py --date today
+python scripts/record_paper_bets.py --date today
+
+# Evening
+python scripts/settle_paper_bets.py --date today
+python scripts/generate_report.py --daily --odds-health
 ```
 
 ---
@@ -98,59 +84,29 @@ Standard operating procedures for daily, weekly, and monthly operations. Follow 
 ## Weekly Review - Week of [DATE]
 
 ### 1. Performance Summary
-- [ ] Calculate weekly totals:
-  - Total bets:
-  - Record: W-L-P
-  - Net P&L: $
-  - ROI: %
-  - Average CLV: %
+- [ ] Run weekly report: `python scripts/generate_report.py --weekly --clv`
+- [ ] Review: total bets, record, P/L, ROI, CLV, Sharpe
 
-### 2. Breakdown Analysis
-- [ ] Performance by sport:
-  | Sport | Bets | Record | P&L | CLV |
-  |-------|------|--------|-----|-----|
-  | NCAAB | | | | |
-  | MLB | | | | |
+### 2. Model Health
+- [ ] Run health check: `python scripts/generate_report.py --health`
+- [ ] Check for alerts:
+  - CRITICAL: CLV < 0 for 7+ days -> review model
+  - WARNING: 5+ consecutive losses -> reduce sizing 50%
+  - WARNING: Win rate < 48% over 100 bets -> review calibration
 
-- [ ] Performance by bet type:
-  | Type | Bets | Record | P&L | CLV |
-  |------|------|--------|-----|-----|
-  | Spread | | | | |
-  | Total | | | | |
-  | ML | | | | |
-  | Prop | | | | |
-
-- [ ] Performance by sportsbook:
-  | Book | Bets | Record | P&L | Best Odds % |
-  |------|------|--------|-----|-------------|
-  | DraftKings | | | | |
-  | FanDuel | | | | |
-
-### 3. Model Health Check
-- [ ] Review prediction accuracy by model
-- [ ] Check for any systematic biases
-- [ ] Compare predicted vs actual margins
-- [ ] Flag any model drift indicators
+### 3. Odds System Health
+- [ ] Run odds check: `python scripts/generate_report.py --odds-health`
+- [ ] Check provider success rates
+- [ ] Review API credit usage (500/month budget)
 
 ### 4. Risk Check
-- [ ] Current bankroll: $
-- [ ] Weekly drawdown: %
+- [ ] Current bankroll: $___
+- [ ] Weekly drawdown: ____%
 - [ ] Check against 15% weekly stop-loss threshold
 - [ ] If >10% down: reduce next week sizing by 50%
 
-### 5. System Health
-- [ ] Review error logs from past week
-- [ ] Check data freshness
-- [ ] Verify all cron jobs/scheduled tasks running
-- [ ] Test backup recovery (monthly, but note if due)
-
-### 6. Next Week Planning
-- [ ] Key games/events to target
-- [ ] Any model updates to deploy
-- [ ] Sportsbook balance reallocation needed?
-
-### Weekly Report
-Save to: `reports/weekly/week_[DATE].md`
+### 5. Full Dashboard (all reports)
+- [ ] Run: `python scripts/generate_report.py --all`
 ```
 
 ---
@@ -170,7 +126,7 @@ Save to: `reports/weekly/week_[DATE].md`
 | Net P&L | $ | |
 | ROI | % | Target: >2% |
 | Average CLV | % | Target: >1% |
-| Closing Line Beat % | % | Target: >55% |
+| Sharpe Ratio | | Target: >0.5 |
 
 ### 2. Bankroll Status
 | Account | Start | End | Change |
@@ -182,43 +138,33 @@ Save to: `reports/weekly/week_[DATE].md`
 | ESPN BET | $ | $ | $ |
 | **Total** | $ | $ | $ |
 
-### 3. Model Performance
-| Model | Bets | CLV | ROI | Status |
-|-------|------|-----|-----|--------|
-| ncaab-elo-v1.x | | | | |
-| mlb-f5-v1.x | | | | |
+### 3. Model Revalidation
+- [ ] Re-run Gatekeeper: `python scripts/run_gatekeeper_validation.py`
+- [ ] Verify model still passes all blocking checks:
+  - Sample size >= 200, Sharpe >= 0.5, ROI <= 15%, CLV >= 1.5%
+- [ ] If QUARANTINE: investigate and retrain
 
 ### 4. Strategic Review
-- [ ] Which markets outperformed?
-- [ ] Which markets underperformed?
-- [ ] Any books showing limits or restrictions?
-- [ ] Edge decay observed in any markets?
+- [ ] Which bet types outperformed?
+- [ ] Any sportsbooks showing limits?
+- [ ] Edge decay in any markets?
 
 ### 5. Risk Assessment
 - [ ] Maximum drawdown this month: %
-- [ ] Longest losing streak: X bets
+- [ ] Longest losing streak: __ bets
 - [ ] Check against 25% monthly stop-loss
 - [ ] If >20% down: pause and conduct full review
 
 ### 6. System Maintenance
-- [ ] Database backup verification
-- [ ] Log rotation check
-- [ ] Clean up temporary files
-- [ ] Update any deprecated dependencies
+- [ ] Database backup: `cp data/betting.db data/backups/betting_$(date +%Y%m%d).db`
+- [ ] Check API credit reset (resets on month boundary)
+- [ ] Review `data/odds_api_usage.json` credits
+- [ ] Run `python scripts/verify_schema.py` to check DB health
 
 ### 7. Tax Tracking (US)
-- [ ] Export monthly P&L for records
-- [ ] Note any W-2G forms received (wins >$600 at 300:1+)
+- [ ] Export monthly P/L for records
+- [ ] Note any W-2G forms (wins >$600 at 300:1+)
 - [ ] Update running annual total
-
-### 8. Next Month Planning
-- [ ] Season changes (start/end of sports)
-- [ ] Major events to prepare for
-- [ ] Model updates planned
-- [ ] Bankroll reallocation strategy
-
-### Monthly Report
-Save to: `reports/monthly/[YEAR]-[MONTH].md`
 ```
 
 ---
@@ -231,21 +177,20 @@ Save to: `reports/monthly/[YEAR]-[MONTH].md`
 ## Incident: Data Pipeline Failure
 
 ### Immediate Actions
-1. Check API status pages for data sources
-2. Review error logs: `tail -100 logs/sports_betting.log | grep ERROR`
-3. Attempt manual data refresh with verbose logging
-4. If API is down, use cached data with staleness warning
+1. Check sportsipy connectivity: `python -c "from pipelines.ncaab_data_fetcher import NCAABDataFetcher; print('OK')"`
+2. Check odds API status: `python -c "from pipelines.odds_providers import TheOddsAPIProvider; p = TheOddsAPIProvider(); print(p.is_available)"`
+3. If API down: use `--mode manual` with CSV odds file
+4. If sportsipy down: use cached parquet in `data/raw/ncaab/`
 
 ### Resolution Steps
 1. Identify root cause (API down, rate limit, code bug)
-2. If rate limit: implement backoff, reduce frequency
-3. If API down: switch to backup source if available
+2. If rate limit: increase `--delay` parameter
+3. If API down: switch to ESPN provider (`--mode espn`)
 4. If code bug: fix, test, deploy
 
 ### Post-Incident
 - [ ] Document incident in logs
 - [ ] Update runbook if new failure mode
-- [ ] Consider adding monitoring/alerting
 ```
 
 ### Model Performance Degradation
@@ -253,30 +198,30 @@ Save to: `reports/monthly/[YEAR]-[MONTH].md`
 ```markdown
 ## Incident: Model CLV Dropping
 
-### Detection
-- Weekly CLV < 0% for 2+ consecutive weeks
-- OR 30-day rolling CLV drops below 0.5%
+### Detection (via generate_report.py --health)
+- CRITICAL: CLV < 0 for 7+ consecutive days
+- WARNING: 5+ consecutive losses
 
 ### Immediate Actions
 1. Reduce bet sizing by 50%
-2. Review recent bets for patterns
-3. Check for data quality issues
-4. Compare model predictions to sharp lines (Pinnacle)
+2. Review `python scripts/generate_report.py --clv` for trends
+3. Check data quality: `python scripts/verify_schema.py`
 
 ### Investigation
-1. Is the market becoming more efficient?
-2. Did a key feature become stale or unreliable?
-3. Regime change in the sport (rule changes, etc.)?
-4. Overfitting becoming apparent?
+1. Market becoming more efficient?
+2. Data source issues (stale/missing data)?
+3. Regime change (rule changes, conference realignment)?
+4. Overfitting? Re-run Gatekeeper validation
 
 ### Resolution
-1. If data issue: fix pipeline, retrain if needed
-2. If market efficiency: reduce edge thresholds, find new edges
-3. If overfitting: simplify model, increase regularization
-4. If fundamental change: rebuild model with new data
+1. If data issue: fix pipeline, `python scripts/fetch_historical_data.py --force`
+2. If efficiency: tighten edge thresholds (`--min-edge 0.03`)
+3. If overfitting: retrain with `python scripts/train_ncaab_elo.py`
+4. Re-validate: `python scripts/run_gatekeeper_validation.py`
 
 ### Recovery Criteria
-- Return to 0.5%+ CLV over 50+ bets
+- Return to >0.5% CLV over 50+ bets
+- Model passes Gatekeeper with PASS decision
 - Then gradually restore normal sizing
 ```
 
@@ -295,12 +240,6 @@ Save to: `reports/monthly/[YEAR]-[MONTH].md`
 2. If prop limits: focus on main markets
 3. If main market limits: use for line shopping only
 4. Consider adding new sportsbook accounts
-
-### Prevention
-- Vary bet timing (don't always bet at same time)
-- Mix in some recreational bets
-- Don't max bet every play
-- Use multiple accounts per book (if legally allowed via family)
 ```
 
 ---
@@ -320,159 +259,16 @@ Save to: `reports/monthly/[YEAR]-[MONTH].md`
 ### Required Review (Before Resuming)
 1. [ ] Wait minimum 48 hours (cooling off)
 2. [ ] Calculate exact loss amount and timeline
-3. [ ] Review every losing bet for errors/patterns
-4. [ ] Check for tilt-induced overbetting
-5. [ ] Verify models still have positive expectation
+3. [ ] Review every losing bet for patterns
+4. [ ] Run: `python scripts/generate_report.py --all`
+5. [ ] Re-validate model: `python scripts/run_gatekeeper_validation.py`
 6. [ ] Review bankroll management compliance
-7. [ ] Consult with trusted advisor if available
 
 ### Resume Criteria
 - [ ] Clear explanation for losses identified
-- [ ] Model still shows positive backtest CLV
-- [ ] Emotional state stable
+- [ ] Model still passes Gatekeeper (PASS)
 - [ ] Revised plan documented
 - [ ] Reduced sizing (50% of normal) for 2 weeks
-
-### Documentation
-Create incident report: `reports/incidents/[DATE]-monthly-stop.md`
-```
-
----
-
-## Automation Scripts
-
-### Cron Schedule (Linux/Mac)
-
-```bash
-# Edit crontab: crontab -e
-
-# Daily data refresh (6am CT = 12:00 UTC)
-0 12 * * * cd ~/sports_betting && python scripts/daily_run.py --refresh >> logs/cron.log 2>&1
-
-# Evening reconciliation (11pm CT = 05:00 UTC next day)
-0 5 * * * cd ~/sports_betting && python scripts/daily_run.py --reconcile >> logs/cron.log 2>&1
-
-# Weekly backup (Sunday 3am CT)
-0 9 * * 0 cd ~/sports_betting && ./scripts/backup.sh >> logs/backup.log 2>&1
-```
-
-### Windows Task Scheduler
-
-Create scheduled tasks for same operations using Task Scheduler GUI or PowerShell.
-
----
-
-## Quick Reference
-
-### Key Thresholds
-
-| Metric | Threshold | Action |
-|--------|-----------|--------|
-| Minimum edge (spread/total) | 2% | Below = no bet |
-| Minimum edge (ML/prop) | 3% | Below = no bet |
-| Maximum single bet | 3% bankroll | Hard cap |
-| Daily exposure limit | 10% bankroll | Stop betting |
-| Weekly loss trigger | 15% bankroll | Reduce sizing 50% |
-| Monthly loss trigger | 25% bankroll | Full stop, review |
-| CLV target | >1% | Below = investigate |
-
-### Emergency Contacts
-
-- Gambling helpline: 1-800-522-4700
-- [Add personal emergency contacts]
-
-### Key File Locations
-
-| File | Location |
-|------|----------|
-| Database | `data/betting.db` |
-| Logs | `logs/` |
-| Config | `config/constants.py` |
-| Reports | `reports/` |
-| Backups | `backups/` |
-
----
-
-## Seasonal Operations
-
-### Season Start Checklist
-
-**NCAAB Season (November)**:
-
-```markdown
-## NCAAB Season Start - [YEAR]
-
-### 2-3 Weeks Before Season
-- [ ] Collect offseason roster changes (transfers, NBA draft losses)
-- [ ] Apply seasonal regression to Elo ratings (33% regression to mean)
-- [ ] Update conference memberships for realignment
-- [ ] Backtest model on last 3 seasons with walk-forward
-- [ ] Set K-factor for new season (default: 20-24)
-
-### 1 Week Before
-- [ ] Verify data pipeline works (scrape preseason games if available)
-- [ ] Test prediction generation on exhibition games
-- [ ] Set up sportsbook accounts if needed
-- [ ] Review ADRs for any changes to strategy
-
-### Season Start
-- [ ] Begin paper betting for first 10-15 games
-- [ ] Track CLV daily
-- [ ] Flag any model misbehavior early
-- [ ] Go live after meeting criteria (50+ bets, positive CLV)
-```
-
-**MLB Season (April)**:
-
-```markdown
-## MLB Season Start - [YEAR]
-
-### March (Spring Training)
-- [ ] Update pitcher stats with spring training data
-- [ ] Set platoon splits from previous season + spring
-- [ ] Verify ballpark factors haven't changed
-- [ ] Test weather API integration
-
-### Opening Week
-- [ ] Start with F5 lines only (more stable early season)
-- [ ] Avoid full-game totals until 2-3 weeks in
-- [ ] Focus on established starters (avoid rookies early)
-- [ ] Increase bet sizing gradually over first month
-```
-
-### Season End Procedures
-
-**End of NCAAB Regular Season (March)**:
-
-```markdown
-## NCAAB Tournament Preparation
-
-### Pre-Tournament
-- [ ] Update models with conference tournament results
-- [ ] Create tournament-specific features (seeding, recent performance)
-- [ ] Review historical upset patterns
-- [ ] Adjust for tournament variance (single elimination)
-
-### Tournament Betting Strategy
-- [ ] Reduce position sizes (more variance)
-- [ ] Focus on extreme mismatches (avoid coin flips)
-- [ ] Track "March Madness" specific CLV separately
-```
-
-**End of MLB Season (September)**:
-
-```markdown
-## MLB Postseason Transition
-
-### Regular Season Wrap-up
-- [ ] Export final stats for offseason analysis
-- [ ] Calculate full-season ROI and CLV
-- [ ] Document learnings in memory: `betting/models/mlb-season-review`
-
-### Postseason
-- [ ] STOP automated betting (playoff rosters/bullpen usage changes)
-- [ ] Manual analysis only for postseason bets
-- [ ] Much lower volume, higher research per bet
 ```
 
 ---
@@ -484,188 +280,167 @@ Create scheduled tasks for same operations using Task Scheduler GUI or PowerShel
 ```markdown
 ## Model Deployment: [MODEL-VERSION]
 
-### Pre-Deployment (Development)
-- [ ] Complete model development and hyperparameter tuning
-- [ ] Backtest on ≥3 seasons with walk-forward validation
-- [ ] Verify backtest CLV > 1.0% on 500+ bets
-- [ ] Document in ADR if fundamental change
-- [ ] Create model version record in database
+### Pre-Deployment
+- [ ] Train model: `python scripts/train_ncaab_elo.py --validate`
+- [ ] Backtest: `python scripts/backtest_ncaab_elo.py --test-season 2025`
+- [ ] Validate: `python scripts/run_gatekeeper_validation.py`
+- [ ] Must get GateDecision.PASS
 
 ### Paper Betting Phase
-- [ ] Deploy to paper betting pipeline
-- [ ] Run in parallel with existing model (if replacing)
-- [ ] Track predictions but don't place real bets
-- [ ] Minimum 50 paper bets OR 14 days
-- [ ] Calculate paper CLV
+- [ ] Run daily pipeline for 14+ days
+- [ ] Track 50+ paper bets
+- [ ] Calculate paper CLV (must be >0.5%)
 
 ### Go-Live Decision
 - [ ] Paper CLV > 0.5%
 - [ ] Backtest and paper metrics align
 - [ ] No major bugs discovered
-- [ ] Documented in `docs/DECISIONS.md` or memory
+- [ ] Documented in `docs/DECISIONS.md`
 
-### Production Deployment
-- [ ] Update production config to use new model
-- [ ] Gradual rollout: 25% → 50% → 100% of bets
-- [ ] Monitor first 25 live bets closely
-- [ ] Compare live vs paper CLV
-
-### Post-Deployment
-- [ ] Monitor for 100 bets or 30 days
-- [ ] If CLV drops <0%, roll back immediately
-- [ ] Document performance in `betting/models` memory namespace
-- [ ] Retire old model after successful 30-day period
-```
-
-### Model Rollback Procedure
-
-```markdown
-## Emergency Model Rollback
-
-### Triggers
-- CLV drops below 0% for 50+ consecutive bets
-- Critical bug discovered in production
-- Model predictions consistently unreasonable
-
-### Rollback Steps
-1. [ ] STOP using new model immediately
-2. [ ] Revert to previous stable model version
-3. [ ] Document incident: `reports/incidents/model-rollback-[DATE].md`
-4. [ ] Investigate root cause
-5. [ ] Fix in development environment
-6. [ ] Re-run full deployment procedure
-
-### Communication
-- Update `DECISIONS.md` with rollback decision
-- Store incident summary in `betting/bugs` memory namespace
-- Tag code version with failure notes in git
+### Model Rollback
+If CLV drops below 0% for 50+ consecutive bets:
+1. STOP using new model
+2. Revert to previous `.pkl` from `data/processed/`
+3. Document incident
+4. Investigate root cause
 ```
 
 ---
 
-## Troubleshooting
+## Automation
 
-### Common Issues
+### Windows Task Scheduler
 
-**Issue**: Predictions seem too extreme (>15 point spreads)
-**Solution**:
+```powershell
+# Morning predictions (6am CT)
+schtasks /create /sc daily /tn "NCAAB Morning" /tr "C:\Users\msenf\sports-betting\venv\Scripts\python.exe C:\Users\msenf\sports-betting\scripts\daily_predictions.py --date today" /st 06:00
 
-1. Check for data errors (wrong team IDs, flipped home/away)
-2. Verify Elo ratings haven't diverged (max diff should be <500)
-3. Apply seasonal regression if early in season
-4. Check logs for feature calculation errors
+# Evening settlement (11pm CT)
+schtasks /create /sc daily /tn "NCAAB Evening" /tr "C:\Users\msenf\sports-betting\venv\Scripts\python.exe C:\Users\msenf\sports-betting\scripts\settle_paper_bets.py --date today" /st 23:00
+```
 
-**Issue**: Cannot fetch odds from sportsbook API
-**Solution**:
-
-1. Check API status page
-2. Verify API key hasn't expired
-3. Check rate limits (may need to slow requests)
-4. Fall back to manual odds entry if needed
-
-**Issue**: Bet tracking database locked
-**Solution**:
-
-1. Check for long-running queries: `sqlite3 data/betting.db ".timeout 1000"`
-2. Close any open database connections
-3. Restart application
-4. If persistent, copy to backup and rebuild database
-
-**Issue**: CLV calculation returns NaN
-**Solution**:
-
-1. Verify closing line was captured (not NULL)
-2. Check odds format (ensure American odds, not decimal)
-3. Verify odds aren't edge cases (0, extreme values)
-4. Review `betting/clv.py` calculation logic
-
----
-
-## Appendix: Command Reference
-
-### Standalone Scripts
+### Cron Schedule (Linux/Mac)
 
 ```bash
-# Run full daily workflow
-python scripts/daily_run.py --all
+# Morning predictions (6am CT = 12:00 UTC)
+0 12 * * * cd ~/sports-betting && venv/bin/python scripts/daily_predictions.py --date today >> logs/cron.log 2>&1
 
-# Just data refresh
-python scripts/daily_run.py --refresh
+# Evening settlement (11pm CT = 05:00 UTC next day)
+0 5 * * * cd ~/sports-betting && venv/bin/python scripts/settle_paper_bets.py --date today >> logs/cron.log 2>&1
 
-# Just predictions
-python scripts/daily_run.py --predict
+# Weekly report (Sunday 10pm CT)
+0 4 * * 1 cd ~/sports-betting && venv/bin/python scripts/generate_report.py --all >> logs/cron.log 2>&1
+```
 
-# Just reconciliation
-python scripts/daily_run.py --reconcile
+---
 
-# Backtest specific model
-python scripts/backtest_runner.py --model elo --sport ncaab --seasons 2020-2025
+## Quick Reference
 
-# Generate weekly report
-python -c "from tracking.reports import weekly_report; weekly_report()"
+### Key Thresholds
 
-# Generate monthly report
-python -c "from tracking.reports import monthly_report; monthly_report()"
+| Metric | Threshold | Action |
+|--------|-----------|--------|
+| Minimum edge (spread/total) | 2% | Below = no bet |
+| Minimum edge (ML/prop) | 3% | Below = no bet |
+| Maximum single bet | 3% bankroll ($150) | Hard cap |
+| Daily exposure limit | 10% bankroll ($500) | Stop betting |
+| Weekly loss trigger | 15% bankroll ($750) | Reduce sizing 50% |
+| Monthly loss trigger | 25% bankroll ($1,250) | Full stop, review |
+| CLV target | >1% | Below = investigate |
+| Odds API credits | 500/month | Warning at 80%, cutoff at 90% |
 
-# Check documentation health
-python tracking/doc_metrics.py
+### Key File Locations
+
+| File | Location |
+|------|----------|
+| Database | `data/betting.db` |
+| Trained model | `data/processed/ncaab_elo_model.pkl` |
+| Model metadata | `data/processed/ncaab_elo_model.meta.json` |
+| Ratings CSV | `data/processed/ncaab_elo_ratings_current.csv` |
+| Backtest results | `data/backtests/ncaab_elo_backtest_*.parquet` |
+| Validation reports | `data/validation/*_gatekeeper_report.json` |
+| API credit tracking | `data/odds_api_usage.json` |
+| Raw game data | `data/raw/ncaab/ncaab_games_*.parquet` |
+| Config | `config/constants.py`, `config/settings.py` |
+| Codemaps | `docs/CODEMAPS/` |
+
+### Command Reference
+
+```bash
+# Full pipeline
+python scripts/fetch_historical_data.py             # Phase 1: fetch data
+python scripts/train_ncaab_elo.py --validate         # Phase 1: train model
+python scripts/backtest_ncaab_elo.py                 # Phase 3: backtest
+python scripts/run_gatekeeper_validation.py          # Phase 3: validate
+python scripts/daily_predictions.py --date today     # Phase 4: predict
+python scripts/record_paper_bets.py --date today     # Phase 5: record
+python scripts/settle_paper_bets.py --date today     # Phase 5: settle
+python scripts/generate_report.py --all              # Phase 6: report
+
+# Reports
+python scripts/generate_report.py --daily            # Today's bets
+python scripts/generate_report.py --weekly           # Rolling week
+python scripts/generate_report.py --clv              # 30-day CLV analysis
+python scripts/generate_report.py --health           # Model drift alerts
+python scripts/generate_report.py --odds-health      # Provider health
+
+# Tests
+pytest tests/ -v                                     # All tests
+pytest tests/ -k "validator" -v                      # Validator tests
+pytest tests/ --cov=backtesting --cov=models -v      # With coverage
 ```
 
 ### Database Queries
 
 ```sql
--- Check recent bets
+-- Recent bets
 SELECT game_date, selection, odds_placed, result, clv
-FROM bets
-WHERE game_date >= date('now', '-7 days')
+FROM bets WHERE game_date >= date('now', '-7 days')
 ORDER BY game_date DESC;
 
--- Calculate average CLV by sport
+-- CLV by sport
 SELECT sport, COUNT(*) as bets, AVG(clv) as avg_clv, AVG(profit_loss) as avg_pnl
-FROM bets
-WHERE result IS NOT NULL
-GROUP BY sport;
+FROM bets WHERE result IS NOT NULL GROUP BY sport;
 
--- Find best performing sportsbook
-SELECT sportsbook, COUNT(*) as bets, SUM(profit_loss) as total_pnl, AVG(clv) as avg_clv
-FROM bets
-WHERE result IS NOT NULL
-GROUP BY sportsbook
-ORDER BY avg_clv DESC;
-
--- Check bankroll history
+-- Bankroll history
 SELECT date, ending_balance, daily_pnl, avg_clv
-FROM bankroll_log
-ORDER BY date DESC
-LIMIT 30;
+FROM bankroll_log ORDER BY date DESC LIMIT 30;
+
+-- Odds snapshot coverage
+SELECT sportsbook, COUNT(*) as count, MAX(captured_at) as latest
+FROM odds_snapshots GROUP BY sportsbook;
 ```
 
-### Git Workflow
+### Emergency Contacts
 
-```bash
-# Before making changes
-git status
-git pull origin main
-
-# After implementing feature
-git add .
-git commit -m "Add: MLB pitcher matchup model
-
-- Implemented platoon split adjustments
-- Added Statcast pitch quality metrics
-- Backtest shows 1.2% CLV over 500 bets"
-
-# Create feature branch for major work
-git checkout -b feature/mlb-f5-model
-# ... develop ...
-git push -u origin feature/mlb-f5-model
-# Create PR via gh CLI
-gh pr create --title "MLB F5 Model" --body "..."
-```
+- Gambling helpline: 1-800-522-4700
 
 ---
 
-**Last Updated**: 2026-01-24
-**Maintained By**: Operations Team
-**Review Cycle**: Monthly
-**Next Review**: 2026-02-24
+## Seasonal Operations
+
+### NCAAB Season Start (November)
+
+```markdown
+### 2-3 Weeks Before Season
+- [ ] Fetch fresh data: `python scripts/fetch_historical_data.py --force`
+- [ ] Retrain model: `python scripts/train_ncaab_elo.py --validate`
+- [ ] Backtest: `python scripts/backtest_ncaab_elo.py`
+- [ ] Validate: `python scripts/run_gatekeeper_validation.py`
+- [ ] Verify Odds API key active and credits reset
+
+### Season Start
+- [ ] Begin daily pipeline (paper mode)
+- [ ] Track CLV daily for 2+ weeks
+- [ ] Go live after 50+ paper bets with positive CLV
+```
+
+### March Madness Preparation
+
+```markdown
+### Pre-Tournament
+- [ ] Update model with conference tournament results
+- [ ] Verify tournament K-factor (32) active in config
+- [ ] Reduce position sizes (more variance in single elimination)
+- [ ] Focus on extreme mismatches, avoid coin flips
+```

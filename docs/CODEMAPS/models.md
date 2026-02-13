@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-02-12
 **Entry Point:** `models/__init__.py` (empty)
-**Test Coverage:** `tests/test_elo.py`
+**Test Coverage:** `tests/test_elo.py`, `tests/test_model_persistence.py`
 
 ## Architecture
 
@@ -10,6 +10,7 @@
 models/
   __init__.py                          # Empty package marker
   elo.py                               # Base Elo rating system (pure functions + class)
+  model_persistence.py                 # Save, load, export trained models with metadata
   sport_specific/
     __init__.py                        # Empty
     ncaab/
@@ -24,6 +25,42 @@ models/
 ```
 
 ## Key Modules
+
+### model_persistence.py
+
+Save, load, and export trained models with metadata tracking.
+Supports pickle serialization, CSV export, and database export.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `ModelMetadata` | dataclass | Metadata: model_name, sport, training_date, seasons_used, game_count, team_count, config_snapshot, notes |
+| `SavedModel` | dataclass | Container wrapping model + metadata |
+| `save_model(model, path, metadata)` | function | Pickle model + JSON metadata sidecar |
+| `load_model(path)` | function | Load model with backwards compatibility for raw pickles |
+| `export_ratings_csv(model, path, sport)` | function | Export ratings to CSV for human review |
+| `export_ratings_db(model, db, sport, season, rating_type)` | function | Insert/update team_ratings table via UPSERT |
+
+**File Outputs:**
+
+- `.pkl` - Pickled `SavedModel` (model + metadata)
+- `.meta.json` - JSON sidecar for easy inspection
+
+**Usage Pattern:**
+
+```python
+from models.model_persistence import save_model, load_model, ModelMetadata
+
+# Save
+metadata = ModelMetadata(model_name="ncaab_elo_v1", sport="ncaab", ...)
+save_model(model, "data/processed/ncaab_elo_model.pkl", metadata)
+
+# Load
+saved = load_model("data/processed/ncaab_elo_model.pkl")
+model = saved.model
+print(saved.metadata.training_date)
+```
+
+**Dependencies:** pickle, json, pandas, pathlib
 
 ### elo.py
 
@@ -55,10 +92,6 @@ Base Elo rating system providing both pure functions and a stateful class for ma
 | `reset()` | Clear all ratings and history |
 | `to_dict()` / `from_dict()` | Serialization for persistence |
 
-**Attributes:** k_factor, initial_rating, home_advantage, mov_cap,
-regression_factor, min_rating, max_rating, points_per_elo,
-ratings (dict), game_history (list)
-
 **Dependencies:** config.constants.ELO
 
 ### sport_specific/ncaab/team_ratings.py
@@ -82,36 +115,15 @@ NCAAB-specific Elo model extending EloRatingSystem with basketball-specific feat
 | `apply_season_regression()` | Regression + reset games_played |
 | `to_dict()` / `from_dict()` | Full state serialization |
 
-**Module-Level Constants:**
-
-| Constant | Type | Purpose |
-|----------|------|---------|
-| `CONFERENCE_ADJUSTMENTS` | dict | Elo adjustments by conference (Big Ten: +50, SWAC: -25) |
-| `SEED_TO_ELO` | dict | Tournament seed -> expected Elo rating mapping |
-
-**Utility Functions:**
-
-- `load_team_conferences(filepath)` - Load conference mappings from CSV
-- `initialize_from_previous_season(model, previous_ratings)` - Initialize with regressed prior ratings
-
 **NCAAB-Specific Defaults (from config.constants.ELO):**
 
-- K-factor: 20
-- Home advantage: 100 Elo points (~4 points spread)
-- MOV cap: 25 points
-- Regression factor: 0.50 (50% regression between seasons)
-- Tournament K-factor: 32 (higher for tournament games)
-- Early season: first 5 games at 70% K
+- K-factor: 20, Home advantage: 100 Elo points (~4 points spread)
+- MOV cap: 25 points, Regression factor: 0.50
+- Tournament K-factor: 32, Early season: first 5 games at 70% K
 
 ### Future Sport Models (placeholders)
 
-The following directories contain only empty `__init__.py` files:
-
-- `models/sport_specific/ncaaf/` - NCAA Football (future)
-- `models/sport_specific/nfl/` - NFL (future)
-- `models/sport_specific/mlb/` - MLB (future)
-
-All sport-specific constants are already defined in `config/constants.py` (EloConfig, MLBConstants, NFLConstants).
+Empty `__init__.py` files for: ncaaf/, nfl/, mlb/
 
 ## Data Flow
 
@@ -124,18 +136,24 @@ models/elo.py (base system + pure functions)
         v
 models/sport_specific/ncaab/team_ratings.py (NCAAB extensions)
         |
-        v
-backtesting/ (walk-forward validation of predictions)
+        +------> models/model_persistence.py (save/load/export)
+        |                |
+        |                +-> data/processed/ncaab_elo_model.pkl
+        |                +-> data/processed/ncaab_elo_ratings_current.csv
+        |                +-> team_ratings table (SQLite)
         |
-        v
-betting/ (EV calculation, Kelly sizing from model probabilities)
+        +------> backtesting/ (walk-forward validation of predictions)
+        |
+        +------> betting/ (EV calculation, Kelly sizing from model probabilities)
 ```
 
 ## External Dependencies
 
 | Package | Used In | Purpose |
 |---------|---------|---------|
-| pandas | team_ratings.py | DataFrame export, CSV loading |
+| pandas | team_ratings.py, model_persistence.py | DataFrame export, CSV loading |
+| pickle | model_persistence.py | Model serialization |
+| json | model_persistence.py | Metadata sidecar files |
 | math | elo.py | log() for MOV multiplier |
 | config.constants | elo.py, team_ratings.py | ELO configuration parameters |
 
@@ -144,4 +162,5 @@ betting/ (EV calculation, Kelly sizing from model probabilities)
 - [config.md](config.md) - EloConfig provides all tunable parameters
 - [backtesting.md](backtesting.md) - Walk-forward validation tests model predictions
 - [pipelines.md](pipelines.md) - ncaab_data_fetcher provides game data for model training
-- [tests.md](tests.md) - test_elo.py covers base Elo and NCAAB model
+- [scripts.md](scripts.md) - train_ncaab_elo.py, backtest_ncaab_elo.py, settle_paper_bets.py use model_persistence
+- [tests.md](tests.md) - test_elo.py covers base Elo and NCAAB model; test_model_persistence.py covers save/load/export
