@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from pipelines.closing_odds_collector import ClosingOdds
+from pipelines.espn_core_odds_provider import ESPNCoreOddsProvider
 from pipelines.odds_providers import (
     ESPNOddsProvider,
     ManualOddsProvider,
@@ -207,7 +208,7 @@ class CreditBudget:
 
 
 # Valid modes for odds retrieval
-VALID_MODES = {"auto", "manual", "api", "espn", "scraper", "agent"}
+VALID_MODES = {"auto", "manual", "api", "espn_core", "espn", "scraper", "agent"}
 
 
 class OddsOrchestrator:
@@ -252,9 +253,10 @@ class OddsOrchestrator:
     ) -> None:
         """Register the standard provider chain.
 
-        Order: TheOddsAPI -> ESPN -> Scraper -> Manual
+        Order: TheOddsAPI -> ESPN Core API -> ESPN Site API -> Scraper -> Manual
         """
         self.add_provider(TheOddsAPIProvider(api_key=api_key))
+        self.add_provider(ESPNCoreOddsProvider())
         self.add_provider(ESPNOddsProvider())
         self.add_provider(ScraperOddsProvider())
         if csv_path:
@@ -266,6 +268,7 @@ class OddsOrchestrator:
         """Get the provider matching a specific mode."""
         mode_to_name = {
             "api": "the_odds_api",
+            "espn_core": "espn_core_api",
             "espn": "espn",
             "scraper": "selenium_scraper",
             "manual": "manual_csv",

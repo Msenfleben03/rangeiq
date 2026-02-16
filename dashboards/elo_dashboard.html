@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCAAB Elo Ratings Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #0a0e14;
+    --bg-secondary: #12171e;
+    --bg-card: #161d27;
+    --bg-card-alt: #1a2230;
+    --bg-hover: #1e2a3a;
+    --bg-input: #0f1419;
+    --border: #243040;
+    --border-light: #2d3f55;
+    --text-primary: #e8edf4;
+    --text-secondary: #8899ad;
+    --text-muted: #5a6b7f;
+    --accent-blue: #4da6ff;
+    --accent-green: #34d399;
+    --accent-orange: #f59e0b;
+    --accent-red: #ef4444;
+    --accent-purple: #a78bfa;
+    --accent-cyan: #22d3ee;
+    --accent-pink: #f472b6;
+    --gradient-green: linear-gradient(135deg, #065f46, #059669);
+    --gradient-blue: linear-gradient(135deg, #1e3a5f, #2563eb);
+    --gradient-orange: linear-gradient(135deg, #78350f, #d97706);
+    --gradient-red: linear-gradient(135deg, #7f1d1d, #dc2626);
+    --gradient-purple: linear-gradient(135deg, #4c1d95, #7c3aed);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(180deg, #141c28, #0f1520);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--accent-blue);
+    color: #000;
+    padding: 2px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+  }
+  .badge-quarantine {
+    background: var(--accent-orange);
+    color: #000;
+  }
+  .header-meta {
+    color: var(--text-muted);
+    font-size: 13px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .header-meta span { display: flex; align-items: center; gap: 4px; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    padding: 20px 32px;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+  .stat-card:nth-child(1)::before { background: var(--accent-blue); }
+  .stat-card:nth-child(2)::before { background: var(--accent-cyan); }
+  .stat-card:nth-child(3)::before { background: var(--accent-purple); }
+  .stat-card:nth-child(4)::before { background: var(--accent-green); }
+  .stat-card:nth-child(5)::before { background: var(--accent-red); }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+  }
+  .stat-detail {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Tab navigation */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    padding: 0 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+  .tab {
+    padding: 13px 22px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+    letter-spacing: 0.2px;
+  }
+  .tab:hover { color: var(--text-secondary); }
+  .tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent-blue);
+    font-weight: 600;
+  }
+
+  /* Content panels */
+  .panel { display: none; padding: 24px 32px; }
+  .panel.active { display: block; }
+
+  /* Chart containers */
+  .chart-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    margin-bottom: 20px;
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .chart-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+  .chart-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 14px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .control-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+  }
+  select, input[type="text"] {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    min-width: 160px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  select:hover, input[type="text"]:hover { border-color: var(--border-light); }
+  select:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(77,166,255,0.1);
+  }
+
+  /* Toggle buttons */
+  .toggle-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .toggle-btn {
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-input);
+    border: none;
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+    transition: all 0.15s;
+    letter-spacing: 0.2px;
+  }
+  .toggle-btn:last-child { border-right: none; }
+  .toggle-btn.active {
+    background: var(--accent-blue);
+    color: #000;
+    font-weight: 700;
+  }
+  .toggle-btn:hover:not(.active) { background: var(--bg-hover); color: var(--text-secondary); }
+
+  /* Two/Three column layout */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  /* Table */
+  .table-wrapper {
+    max-height: 560px;
+    overflow-y: auto;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .table-wrapper::-webkit-scrollbar { width: 6px; }
+  .table-wrapper::-webkit-scrollbar-track { background: var(--bg-card); }
+  .table-wrapper::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    padding: 11px 14px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    border-bottom: 2px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  thead th:hover { color: var(--accent-blue); }
+  thead th.sorted { color: var(--accent-blue); }
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(36,48,64,0.5);
+    font-variant-numeric: tabular-nums;
+  }
+  tbody tr { transition: background 0.1s; }
+  tbody tr:hover { background: var(--bg-hover); }
+  .rank-cell { color: var(--text-muted); font-size: 12px; font-weight: 600; }
+  .team-cell { font-weight: 600; }
+  .elo-cell { font-weight: 700; }
+  .elo-high { color: var(--accent-green); }
+  .elo-mid { color: var(--accent-blue); }
+  .elo-avg { color: var(--accent-orange); }
+  .elo-low { color: var(--accent-red); }
+
+  /* Percentile bar */
+  .pct-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pct-bar-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(36,48,64,0.5);
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 50px;
+  }
+  .pct-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+  .pct-value {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 35px;
+    text-align: right;
+  }
+
+  /* Search */
+  .search-box {
+    position: relative;
+    margin-bottom: 14px;
+    max-width: 400px;
+  }
+  .search-box input {
+    width: 100%;
+    padding: 10px 14px 10px 38px;
+    font-size: 13px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Tier badges */
+  .tier {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tier-elite { background: rgba(52,211,153,0.12); color: var(--accent-green); border: 1px solid rgba(52,211,153,0.25); }
+  .tier-strong { background: rgba(77,166,255,0.12); color: var(--accent-blue); border: 1px solid rgba(77,166,255,0.25); }
+  .tier-average { background: rgba(245,158,11,0.12); color: var(--accent-orange); border: 1px solid rgba(245,158,11,0.25); }
+  .tier-below { background: rgba(239,68,68,0.12); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.25); }
+
+  /* Conference pills */
+  .conf-pill {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(77,166,255,0.08);
+    color: var(--text-secondary);
+    border: 1px solid rgba(77,166,255,0.15);
+    white-space: nowrap;
+  }
+
+  /* Positive/negative values */
+  .val-pos { color: var(--accent-green); }
+  .val-neg { color: var(--accent-red); }
+
+  /* Conference cards grid */
+  .conf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .conf-card {
+    background: var(--bg-card-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    transition: transform 0.15s, border-color 0.15s;
+    cursor: default;
+  }
+  .conf-card:hover {
+    transform: translateY(-1px);
+    border-color: var(--border-light);
+  }
+  .conf-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .conf-card-name { font-size: 14px; font-weight: 700; }
+  .conf-card-teams { font-size: 12px; color: var(--text-muted); }
+  .conf-card-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .conf-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .conf-stat-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+
+  @media (max-width: 1100px) {
+    .stats-bar { grid-template-columns: repeat(3, 1fr); }
+    .three-col { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 768px) {
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .header { flex-direction: column; gap: 8px; }
+    .tab { padding: 10px 14px; font-size: 12px; }
+    .panel { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>NCAAB Elo Ratings</h1>
+    <span class="badge">v1</span>
+    <span class="badge badge-quarantine">QUARANTINE</span>
+  </div>
+  <div class="header-meta">
+    <span>1,061 teams</span>
+    <span>35,719 games</span>
+    <span>2020&ndash;2025</span>
+  </div>
+</div>
+
+<div class="stats-bar" id="statsBar"></div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="distribution">Distribution</div>
+  <div class="tab" data-tab="scatter">Scatter Plot</div>
+  <div class="tab" data-tab="rankings">Rankings</div>
+  <div class="tab" data-tab="conferences">Conferences</div>
+  <div class="tab" data-tab="trajectories">Trajectories</div>
+</div>
+
+<!-- Distribution Panel -->
+<div class="panel active" id="panel-distribution">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Elo Rating Distribution</div>
+        <div class="chart-subtitle">All 1,061 teams rated across 6 seasons (2020&ndash;2025)</div>
+      </div>
+      <div class="controls">
+        <div class="toggle-group">
+          <button class="toggle-btn active" onclick="setHistBins(30)">30 bins</button>
+          <button class="toggle-btn" onclick="setHistBins(50)">50 bins</button>
+          <button class="toggle-btn" onclick="setHistBins(80)">80 bins</button>
+        </div>
+      </div>
+    </div>
+    <div id="histChart" style="height:420px;"></div>
+  </div>
+  <div class="two-col">
+    <div class="chart-container">
+      <div class="chart-title">Tier Breakdown</div>
+      <div class="chart-subtitle">Teams grouped by Elo rating tier</div>
+      <div id="tierChart" style="height:300px;"></div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Rating Statistics</div>
+      <div class="chart-subtitle">Key distribution metrics</div>
+      <div id="boxChart" style="height:300px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Scatter Panel -->
+<div class="panel" id="panel-scatter">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Team Comparison Plot</div>
+        <div class="chart-subtitle">Plot any two metrics against each other &middot; 357 teams with 2025 stats</div>
+      </div>
+      <div class="controls">
+        <div class="control-group">
+          <span class="control-label">X Axis</span>
+          <select id="xAxis" onchange="updateScatter()"></select>
+        </div>
+        <div class="control-group">
+          <span class="control-label">Y Axis</span>
+          <select id="yAxis" onchange="updateScatter()"></select>
+        </div>
+        <div class="control-group">
+          <span class="control-label">Color By</span>
+          <select id="colorBy" onchange="updateScatter()">
+            <option value="elo_tier">Elo Tier</option>
+            <option value="conference">Conference</option>
+            <option value="elo_rating">Elo Rating</option>
+            <option value="win_pct">Win %</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <span class="control-label">Trend</span>
+          <div class="toggle-group">
+            <button class="toggle-btn" id="trendOff" onclick="setTrendLine(false)">Off</button>
+            <button class="toggle-btn active" id="trendOn" onclick="setTrendLine(true)">On</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="scatterChart" style="height:520px;"></div>
+  </div>
+</div>
+
+<!-- Rankings Panel -->
+<div class="panel" id="panel-rankings">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Team Rankings</div>
+        <div class="chart-subtitle">357 teams ranked by Elo rating with percentile positions</div>
+      </div>
+      <div class="controls">
+        <div class="control-group">
+          <span class="control-label">Conference</span>
+          <select id="confFilter" onchange="filterByConf()">
+            <option value="all">All Conferences</option>
+          </select>
+        </div>
+        <div class="toggle-group">
+          <button class="toggle-btn active" onclick="setTableView('chart')">Chart</button>
+          <button class="toggle-btn" onclick="setTableView('table')">Table</button>
+        </div>
+      </div>
+    </div>
+    <div class="search-box">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="teamSearch" placeholder="Search teams..." oninput="filterTable()">
+    </div>
+    <div id="rankingsChart" style="height:550px;"></div>
+    <div id="rankingsTable" style="display:none;">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortTable(0)">#</th>
+              <th onclick="sortTable(1)">Team</th>
+              <th onclick="sortTable(2)">Conference</th>
+              <th onclick="sortTable(3)">Elo</th>
+              <th onclick="sortTable(4)">Tier</th>
+              <th onclick="sortTable(5)">Percentile</th>
+              <th onclick="sortTable(6)">Record</th>
+              <th onclick="sortTable(7)">Win %</th>
+              <th onclick="sortTable(8)">PPG</th>
+              <th onclick="sortTable(9)">Opp PPG</th>
+              <th onclick="sortTable(10)">Margin</th>
+            </tr>
+          </thead>
+          <tbody id="rankingsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Conferences Panel -->
+<div class="panel" id="panel-conferences">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Conference Comparison</div>
+        <div class="chart-subtitle">Average Elo rating by conference &middot; 2025 season</div>
+      </div>
+    </div>
+    <div id="confBarChart" style="height:500px;"></div>
+  </div>
+  <div class="chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Conference Cards</div>
+        <div class="chart-subtitle">Detailed stats for each conference</div>
+      </div>
+    </div>
+    <div class="conf-grid" id="confCards"></div>
+  </div>
+</div>
+
+<!-- Trajectories Panel -->
+<div class="panel" id="panel-trajectories">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Elo Rating Trajectories</div>
+        <div class="chart-subtitle">Rating progression across all seasons for top-rated teams</div>
+      </div>
+    </div>
+    <div id="trajChart" style="height:540px;"></div>
+  </div>
+</div>
+
+<script>
+// === DATA ===
+let TEAM_STATS, ALL_TEAMS, CONFERENCES, TRAJECTORIES;
+let showTrendLine = true;
+
+async function loadData() {
+  const resp = await fetch('../data/processed/dashboard_bundle.json?' + Date.now());
+  const d = await resp.json();
+  TEAM_STATS = d.team_stats;
+  ALL_TEAMS = d.all_teams;
+  CONFERENCES = d.conferences;
+  TRAJECTORIES = d.trajectories;
+  initDashboard();
+}
+
+// === PLOTLY THEME ===
+const PL = {
+  paper_bgcolor: '#161d27',
+  plot_bgcolor: '#161d27',
+  font: { color: '#e8edf4', family: 'Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif', size: 12 },
+  margin: { t: 10, r: 24, b: 50, l: 60 },
+  xaxis: { gridcolor: 'rgba(36,48,64,0.6)', zerolinecolor: 'rgba(36,48,64,0.8)', tickfont: { size: 11, color: '#8899ad' } },
+  yaxis: { gridcolor: 'rgba(36,48,64,0.6)', zerolinecolor: 'rgba(36,48,64,0.8)', tickfont: { size: 11, color: '#8899ad' } },
+  hoverlabel: { bgcolor: '#1e2a3a', bordercolor: '#4da6ff', font: { color: '#e8edf4', size: 13 } },
+};
+const PC = { responsive: true, displayModeBar: false };
+
+// === TIERS ===
+function getTier(elo) {
+  if (elo >= 1700) return { name: 'Elite', cls: 'tier-elite', color: '#34d399' };
+  if (elo >= 1550) return { name: 'Strong', cls: 'tier-strong', color: '#4da6ff' };
+  if (elo >= 1400) return { name: 'Average', cls: 'tier-average', color: '#f59e0b' };
+  return { name: 'Below Avg', cls: 'tier-below', color: '#ef4444' };
+}
+function eloClass(elo) {
+  if (elo >= 1700) return 'elo-high';
+  if (elo >= 1550) return 'elo-mid';
+  if (elo >= 1400) return 'elo-avg';
+  return 'elo-low';
+}
+function pctColor(p) {
+  if (p >= 90) return '#34d399';
+  if (p >= 70) return '#4da6ff';
+  if (p >= 40) return '#f59e0b';
+  return '#ef4444';
+}
+
+// === METRICS ===
+const METRICS = {
+  elo_rating:  { label: 'Elo Rating', fmt: v => v.toFixed(0) },
+  win_pct:     { label: 'Win %', fmt: v => (v*100).toFixed(1)+'%' },
+  ppg:         { label: 'Points Per Game', fmt: v => v.toFixed(1) },
+  papg:        { label: 'Opp Points Per Game', fmt: v => v.toFixed(1) },
+  margin:      { label: 'Scoring Margin', fmt: v => (v>0?'+':'')+v.toFixed(1) },
+  games:       { label: 'Games Played', fmt: v => v.toFixed(0) },
+  wins:        { label: 'Wins', fmt: v => v.toFixed(0) },
+  losses:      { label: 'Losses', fmt: v => v.toFixed(0) },
+  percentile:  { label: 'Percentile', fmt: v => v.toFixed(1) },
+};
+
+// === INIT ===
+function initDashboard() {
+  renderStatsBar();
+  renderHistogram(30);
+  renderTierChart();
+  renderBoxPlot();
+  initScatterSelects();
+  populateConfFilter();
+  updateScatter();
+  renderRankingsChart();
+  renderRankingsTable();
+  renderConfBar();
+  renderConfCards();
+  renderTrajectories();
+}
+
+// === STATS BAR ===
+function renderStatsBar() {
+  const ratings = ALL_TEAMS.map(t => t.elo_rating);
+  const mean = ratings.reduce((a,b) => a+b, 0) / ratings.length;
+  const sorted = [...ratings].sort((a,b) => a-b);
+  const median = sorted[Math.floor(sorted.length/2)];
+  const std = Math.sqrt(ratings.reduce((s,v) => s + (v-mean)**2, 0) / ratings.length);
+  const tiers = { elite:0, strong:0, avg:0, below:0 };
+  ratings.forEach(r => { if(r>=1700) tiers.elite++; else if(r>=1550) tiers.strong++; else if(r>=1400) tiers.avg++; else tiers.below++; });
+
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Teams Rated</div>
+      <div class="stat-value">${ratings.length.toLocaleString()}</div>
+      <div class="stat-detail">across 6 seasons</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Mean / Median</div>
+      <div class="stat-value">${mean.toFixed(0)}</div>
+      <div class="stat-detail">median: ${median.toFixed(0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Std Deviation</div>
+      <div class="stat-value">${std.toFixed(0)}</div>
+      <div class="stat-detail">range: ${sorted[0].toFixed(0)}&ndash;${sorted[sorted.length-1].toFixed(0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Elite (1700+)</div>
+      <div class="stat-value" style="color:var(--accent-green)">${tiers.elite}</div>
+      <div class="stat-detail">${(100*tiers.elite/ratings.length).toFixed(1)}% of teams</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Below Avg (&lt;1400)</div>
+      <div class="stat-value" style="color:var(--accent-red)">${tiers.below}</div>
+      <div class="stat-detail">${(100*tiers.below/ratings.length).toFixed(1)}% of teams</div>
+    </div>`;
+}
+
+// === HISTOGRAM ===
+function renderHistogram(bins) {
+  const ratings = ALL_TEAMS.map(t => t.elo_rating);
+  Plotly.newPlot('histChart', [{
+    x: ratings, type: 'histogram', nbinsx: bins,
+    marker: { color: ratings.map(r => getTier(r).color), line: { color: '#0a0e14', width: 1 } },
+    hovertemplate: 'Elo: %{x:.0f}<br>Count: %{y}<extra></extra>',
+  }], {
+    ...PL,
+    xaxis: { ...PL.xaxis, title: { text: 'Elo Rating', font: { size: 13 } } },
+    yaxis: { ...PL.yaxis, title: { text: 'Number of Teams', font: { size: 13 } } },
+    bargap: 0.05,
+    shapes: [
+      { type:'line', x0:1500, x1:1500, y0:0, y1:1, yref:'paper', line:{color:'#4da6ff',width:2,dash:'dot'} },
+      { type:'line', x0:1700, x1:1700, y0:0, y1:1, yref:'paper', line:{color:'#34d399',width:1,dash:'dash'} },
+      { type:'line', x0:1400, x1:1400, y0:0, y1:1, yref:'paper', line:{color:'#ef4444',width:1,dash:'dash'} },
+    ],
+    annotations: [
+      { x:1500, y:1, yref:'paper', text:'Mean (1500)', showarrow:false, font:{color:'#4da6ff',size:11}, yanchor:'bottom' },
+      { x:1700, y:0.95, yref:'paper', text:'Elite', showarrow:false, font:{color:'#34d399',size:11} },
+      { x:1400, y:0.95, yref:'paper', text:'Below Avg', showarrow:false, font:{color:'#ef4444',size:11} },
+    ]
+  }, PC);
+}
+
+function setHistBins(n) {
+  document.querySelectorAll('#panel-distribution .toggle-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderHistogram(n);
+}
+
+// === TIER CHART ===
+function renderTierChart() {
+  const tiers = { Elite:0, Strong:0, Average:0, 'Below Avg':0 };
+  const colors = ['#34d399','#4da6ff','#f59e0b','#ef4444'];
+  ALL_TEAMS.forEach(t => { tiers[getTier(t.elo_rating).name]++; });
+  Plotly.newPlot('tierChart', [{
+    values: Object.values(tiers), labels: Object.keys(tiers),
+    type: 'pie', hole: 0.6,
+    marker: { colors, line: { color: '#161d27', width: 2 } },
+    textinfo: 'label+percent', textfont: { color: '#e8edf4', size: 12 },
+    hovertemplate: '%{label}<br>%{value} teams (%{percent})<extra></extra>',
+  }], {
+    ...PL, margin: { t:10, r:10, b:10, l:10 }, showlegend: false,
+    annotations: [{ text:`${ALL_TEAMS.length}`, font:{size:24,color:'#e8edf4',weight:700}, showarrow:false }],
+  }, PC);
+}
+
+// === BOX PLOT ===
+function renderBoxPlot() {
+  Plotly.newPlot('boxChart', [{
+    y: ALL_TEAMS.map(t => t.elo_rating), type: 'box', name: 'Elo',
+    marker: { color: '#4da6ff', outliercolor: '#ef4444' },
+    line: { color: '#4da6ff' }, fillcolor: 'rgba(77,166,255,0.1)',
+    boxpoints: 'outliers',
+  }], {
+    ...PL, margin: { t:10, r:30, b:10, l:60 },
+    yaxis: { ...PL.yaxis, title: { text:'Elo Rating', font:{size:13} } },
+  }, PC);
+}
+
+// === SCATTER ===
+function initScatterSelects() {
+  const xSel = document.getElementById('xAxis');
+  const ySel = document.getElementById('yAxis');
+  Object.entries(METRICS).forEach(([k,v]) => {
+    xSel.add(new Option(v.label, k));
+    ySel.add(new Option(v.label, k));
+  });
+  xSel.value = 'win_pct';
+  ySel.value = 'elo_rating';
+}
+
+function updateScatter() {
+  const xKey = document.getElementById('xAxis').value;
+  const yKey = document.getElementById('yAxis').value;
+  const colorKey = document.getElementById('colorBy').value;
+
+  const xs = TEAM_STATS.map(t => t[xKey]);
+  const ys = TEAM_STATS.map(t => t[yKey]);
+  const texts = TEAM_STATS.map(t =>
+    `<b>${t.team_id}</b> (${t.conference})<br>${METRICS[xKey].label}: ${METRICS[xKey].fmt(t[xKey])}<br>${METRICS[yKey].label}: ${METRICS[yKey].fmt(t[yKey])}<br>Record: ${t.wins}-${t.losses}<br>Percentile: P${t.percentile.toFixed(0)}`
+  );
+
+  let colors, colorbar, showlegend = false;
+  const traces = [];
+
+  if (colorKey === 'elo_tier') {
+    // Group by tier for legend
+    const tierGroups = {};
+    TEAM_STATS.forEach((t, i) => {
+      const tier = getTier(t.elo_rating);
+      if (!tierGroups[tier.name]) tierGroups[tier.name] = { x:[], y:[], text:[], color: tier.color };
+      tierGroups[tier.name].x.push(xs[i]);
+      tierGroups[tier.name].y.push(ys[i]);
+      tierGroups[tier.name].text.push(texts[i]);
+    });
+    for (const [name, g] of Object.entries(tierGroups)) {
+      traces.push({
+        x: g.x, y: g.y, text: g.text, name,
+        mode: 'markers', type: 'scatter',
+        marker: { size: 9, color: g.color, line: { color: '#0a0e14', width: 1 }, opacity: 0.85 },
+        hovertemplate: '%{text}<extra></extra>',
+      });
+    }
+    showlegend = true;
+  } else if (colorKey === 'conference') {
+    // Top 8 conferences + Other
+    const topConfs = CONFERENCES.slice(0, 8).map(c => c.name);
+    const confGroups = {};
+    const confColors = ['#4da6ff','#34d399','#f59e0b','#ef4444','#a78bfa','#22d3ee','#f472b6','#e8edf4'];
+    TEAM_STATS.forEach((t, i) => {
+      const conf = topConfs.includes(t.conference) ? t.conference : 'Other';
+      if (!confGroups[conf]) confGroups[conf] = { x:[], y:[], text:[], color: confColors[topConfs.indexOf(t.conference)] || '#5a6b7f' };
+      confGroups[conf].x.push(xs[i]);
+      confGroups[conf].y.push(ys[i]);
+      confGroups[conf].text.push(texts[i]);
+    });
+    for (const [name, g] of Object.entries(confGroups)) {
+      traces.push({
+        x: g.x, y: g.y, text: g.text, name: name.replace(' Conference',''),
+        mode: 'markers', type: 'scatter',
+        marker: { size: 9, color: g.color, line: { color: '#0a0e14', width: 1 }, opacity: name === 'Other' ? 0.3 : 0.85 },
+        hovertemplate: '%{text}<extra></extra>',
+      });
+    }
+    showlegend = true;
+  } else {
+    colors = TEAM_STATS.map(t => t[colorKey]);
+    colorbar = { title: { text: METRICS[colorKey]?.label || colorKey, font:{size:11} }, tickfont:{size:10} };
+    traces.push({
+      x: xs, y: ys, text: texts, mode: 'markers', type: 'scatter',
+      marker: { size: 9, color: colors, colorscale: 'Viridis', colorbar, line: { color: '#0a0e14', width: 1 }, opacity: 0.85 },
+      hovertemplate: '%{text}<extra></extra>',
+    });
+  }
+
+  // Trend line
+  if (showTrendLine && xs.length > 2) {
+    const n = xs.length;
+    const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+    let num=0, den=0;
+    for(let i=0;i<n;i++){ num+=(xs[i]-mx)*(ys[i]-my); den+=(xs[i]-mx)**2; }
+    if (den > 0) {
+      const slope = num/den, intercept = my - slope*mx;
+      const xmin = Math.min(...xs), xmax = Math.max(...xs);
+      traces.push({
+        x: [xmin, xmax], y: [slope*xmin+intercept, slope*xmax+intercept],
+        mode: 'lines', type: 'scatter', name: 'Trend',
+        line: { color: 'rgba(255,255,255,0.3)', width: 2, dash: 'dash' },
+        hoverinfo: 'skip', showlegend: false,
+      });
+    }
+  }
+
+  // Format axes — force linear type so tickformat applies
+  const xCfg = { ...PL.xaxis, type: 'linear', title: { text: METRICS[xKey].label, font:{size:13} } };
+  const yCfg = { ...PL.yaxis, type: 'linear', title: { text: METRICS[yKey].label, font:{size:13} } };
+  if (xKey === 'win_pct') { xCfg.tickformat = '.0%'; xCfg.range = [0, 1.05]; }
+  if (yKey === 'win_pct') { yCfg.tickformat = '.0%'; yCfg.range = [0, 1.05]; }
+  if (xKey === 'percentile') { xCfg.ticksuffix = '%'; xCfg.range = [0, 105]; }
+  if (yKey === 'percentile') { yCfg.ticksuffix = '%'; yCfg.range = [0, 105]; }
+
+  Plotly.newPlot('scatterChart', traces, {
+    ...PL, xaxis: xCfg, yaxis: yCfg, showlegend,
+    legend: { font:{size:11, color:'#8899ad'}, bgcolor:'rgba(22,29,39,0.9)', bordercolor:'#243040', borderwidth:1, orientation:'h', x:0.5, xanchor:'center', y:1.08 },
+  }, PC);
+}
+
+function setTrendLine(on) {
+  showTrendLine = on;
+  document.getElementById('trendOn').classList.toggle('active', on);
+  document.getElementById('trendOff').classList.toggle('active', !on);
+  updateScatter();
+}
+
+// === CONFERENCE FILTER ===
+function populateConfFilter() {
+  const sel = document.getElementById('confFilter');
+  const confs = [...new Set(TEAM_STATS.map(t => t.conference))].filter(c => c !== 'Other').sort();
+  confs.forEach(c => sel.add(new Option(c.replace(' Conference',''), c)));
+}
+
+let activeConfFilter = 'all';
+function filterByConf() {
+  activeConfFilter = document.getElementById('confFilter').value;
+  renderRankingsChart();
+  renderRankingsTable();
+  filterTable();
+}
+
+function getFilteredTeams() {
+  if (activeConfFilter === 'all') return TEAM_STATS;
+  return TEAM_STATS.filter(t => t.conference === activeConfFilter);
+}
+
+// === RANKINGS CHART ===
+function renderRankingsChart() {
+  const teams = getFilteredTeams().slice(0, 40);
+  Plotly.newPlot('rankingsChart', [{
+    y: teams.map(t => t.team_id),
+    x: teams.map(t => t.elo_rating),
+    type: 'bar', orientation: 'h',
+    marker: { color: teams.map(t => getTier(t.elo_rating).color), line: { color: '#0a0e14', width: 1 } },
+    text: teams.map(t => ` ${t.elo_rating.toFixed(0)}  ${t.wins}-${t.losses}  P${t.percentile.toFixed(0)}`),
+    textposition: 'outside', textfont: { color: '#8899ad', size: 11 },
+    hovertemplate: '<b>%{y}</b><br>Elo: %{x:.0f}<br>P%{customdata:.0f}<extra></extra>',
+    customdata: teams.map(t => t.percentile),
+  }], {
+    ...PL,
+    margin: { t:10, r:100, b:40, l:70 },
+    xaxis: { ...PL.xaxis, title: { text:'Elo Rating', font:{size:13} }, range:[Math.min(...teams.map(t=>t.elo_rating))-50, null] },
+    yaxis: { ...PL.yaxis, autorange:'reversed', tickfont:{size:11} },
+    height: 550,
+  }, PC);
+}
+
+// === RANKINGS TABLE ===
+function renderRankingsTable() {
+  const teams = getFilteredTeams();
+  const body = document.getElementById('rankingsBody');
+  body.innerHTML = teams.map((t, i) => {
+    const tier = getTier(t.elo_rating);
+    const pc = pctColor(t.percentile);
+    const confShort = t.conference.replace(' Conference','');
+    return `<tr data-team="${t.team_id.toLowerCase()}" data-conf="${t.conference}">
+      <td class="rank-cell">${t.rank}</td>
+      <td class="team-cell">${t.team_id}</td>
+      <td><span class="conf-pill">${confShort}</span></td>
+      <td class="elo-cell ${eloClass(t.elo_rating)}">${t.elo_rating.toFixed(0)}</td>
+      <td><span class="tier ${tier.cls}">${tier.name}</span></td>
+      <td>
+        <div class="pct-bar">
+          <div class="pct-bar-track"><div class="pct-bar-fill" style="width:${t.percentile}%;background:${pc}"></div></div>
+          <span class="pct-value" style="color:${pc}">${t.percentile.toFixed(0)}</span>
+        </div>
+      </td>
+      <td>${t.wins}-${t.losses}</td>
+      <td>${(t.win_pct*100).toFixed(1)}%</td>
+      <td>${t.ppg.toFixed(1)}</td>
+      <td>${t.papg.toFixed(1)}</td>
+      <td class="${t.margin>0?'val-pos':'val-neg'}">${t.margin>0?'+':''}${t.margin.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setTableView(mode) {
+  document.querySelectorAll('#panel-rankings .toggle-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('rankingsChart').style.display = mode==='chart' ? 'block' : 'none';
+  document.getElementById('rankingsTable').style.display = mode==='table' ? 'block' : 'none';
+}
+
+function filterTable() {
+  const q = document.getElementById('teamSearch').value.toLowerCase();
+  document.querySelectorAll('#rankingsBody tr').forEach(row => {
+    const matchTeam = row.dataset.team.includes(q);
+    const matchConf = activeConfFilter === 'all' || row.dataset.conf === activeConfFilter;
+    row.style.display = (matchTeam && matchConf) ? '' : 'none';
+  });
+}
+
+let sortCol = 3, sortAsc = false;
+function sortTable(col) {
+  if (sortCol === col) sortAsc = !sortAsc;
+  else { sortCol = col; sortAsc = col <= 2; }
+  const body = document.getElementById('rankingsBody');
+  const rows = Array.from(body.rows);
+  rows.sort((a,b) => {
+    let va = a.cells[col].textContent.trim(), vb = b.cells[col].textContent.trim();
+    const na = parseFloat(va.replace('%','').replace('+','')), nb = parseFloat(vb.replace('%','').replace('+',''));
+    if (!isNaN(na) && !isNaN(nb)) return sortAsc ? na-nb : nb-na;
+    return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  rows.forEach(r => body.appendChild(r));
+}
+
+// === CONFERENCES ===
+function renderConfBar() {
+  // Filter out "Other" and sort by avg_elo
+  const confs = CONFERENCES.filter(c => c.name !== 'Other' && c.teams >= 5).sort((a,b) => b.avg_elo - a.avg_elo);
+  const colors = confs.map(c => {
+    if (c.avg_elo >= 1600) return '#34d399';
+    if (c.avg_elo >= 1520) return '#4da6ff';
+    if (c.avg_elo >= 1450) return '#f59e0b';
+    return '#ef4444';
+  });
+
+  Plotly.newPlot('confBarChart', [{
+    y: confs.map(c => c.name.replace(' Conference','')),
+    x: confs.map(c => c.avg_elo),
+    type: 'bar', orientation: 'h',
+    marker: { color: colors, line: { color: '#0a0e14', width: 1 } },
+    text: confs.map(c => `${c.avg_elo.toFixed(0)}  (${c.teams} teams)`),
+    textposition: 'outside', textfont: { color: '#8899ad', size: 11 },
+    hovertemplate: '<b>%{y}</b><br>Avg Elo: %{x:.0f}<br>Teams: %{customdata}<extra></extra>',
+    customdata: confs.map(c => c.teams),
+    error_x: {
+      type: 'data',
+      symmetric: false,
+      array: confs.map(c => c.max_elo - c.avg_elo),
+      arrayminus: confs.map(c => c.avg_elo - c.min_elo),
+      color: 'rgba(255,255,255,0.15)',
+      thickness: 1.5,
+      width: 4,
+    }
+  }], {
+    ...PL,
+    margin: { t:10, r:110, b:40, l:160 },
+    xaxis: { ...PL.xaxis, title: { text:'Average Elo Rating', font:{size:13} }, range:[1300, null] },
+    yaxis: { ...PL.yaxis, autorange:'reversed', tickfont:{size:11} },
+    height: 500,
+  }, PC);
+}
+
+function renderConfCards() {
+  const container = document.getElementById('confCards');
+  const confs = CONFERENCES.filter(c => c.name !== 'Other' && c.teams >= 3).sort((a,b) => b.avg_elo - a.avg_elo);
+  container.innerHTML = confs.map(c => {
+    const tierColor = c.avg_elo >= 1600 ? 'var(--accent-green)' : c.avg_elo >= 1500 ? 'var(--accent-blue)' : c.avg_elo >= 1420 ? 'var(--accent-orange)' : 'var(--accent-red)';
+    return `<div class="conf-card">
+      <div class="conf-card-header">
+        <div>
+          <div class="conf-card-name">${c.name.replace(' Conference','')}</div>
+          <div class="conf-card-teams">${c.teams} teams</div>
+        </div>
+        <div style="font-size:20px;font-weight:800;color:${tierColor}">${c.avg_elo.toFixed(0)}</div>
+      </div>
+      <div class="conf-card-stats">
+        <div>
+          <div class="conf-stat-label">Elo Range</div>
+          <div class="conf-stat-value">${c.min_elo.toFixed(0)}&ndash;${c.max_elo.toFixed(0)}</div>
+        </div>
+        <div>
+          <div class="conf-stat-label">Avg PPG</div>
+          <div class="conf-stat-value">${c.avg_ppg}</div>
+        </div>
+        <div>
+          <div class="conf-stat-label">Avg Margin</div>
+          <div class="conf-stat-value ${c.avg_margin>0?'val-pos':'val-neg'}">${c.avg_margin>0?'+':''}${c.avg_margin}</div>
+        </div>
+        <div>
+          <div class="conf-stat-label">Win %</div>
+          <div class="conf-stat-value">${(c.win_pct*100).toFixed(1)}%</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// === TRAJECTORIES ===
+function renderTrajectories() {
+  const teams = {};
+  TRAJECTORIES.forEach(p => {
+    if (!teams[p.team]) teams[p.team] = { x:[], y:[] };
+    teams[p.team].x.push(p.game);
+    teams[p.team].y.push(p.rating);
+  });
+
+  const palette = ['#4da6ff','#34d399','#f59e0b','#ef4444','#a78bfa','#22d3ee','#e8edf4',
+    '#f472b6','#60a5fa','#6ee7b7','#fbbf24','#fca5a5','#c4b5fd','#67e8f9','#fb923c',
+    '#f9a8d4','#93c5fd','#86efac','#fde68a','#fecaca'];
+
+  const traces = Object.entries(teams).map(([team, data], i) => ({
+    x: data.x, y: data.y, name: team,
+    type: 'scatter', mode: 'lines',
+    line: { color: palette[i % palette.length], width: 2.5 },
+    hovertemplate: `<b>${team}</b><br>Game: %{x}<br>Elo: %{y:.0f}<extra></extra>`,
+  }));
+
+  Plotly.newPlot('trajChart', traces, {
+    ...PL,
+    xaxis: { ...PL.xaxis, title: { text:'Game Number (chronological)', font:{size:13} }, nticks:12, tickangle:0 },
+    yaxis: { ...PL.yaxis, title: { text:'Elo Rating', font:{size:13} } },
+    legend: { font:{size:11,color:'#8899ad'}, bgcolor:'rgba(22,29,39,0.9)', bordercolor:'#243040', borderwidth:1, x:0.01, y:0.99, orientation:'v' },
+    shapes: [
+      { type:'line', x0:0, x1:1, xref:'paper', y0:1500, y1:1500, line:{color:'rgba(77,166,255,0.3)',width:1,dash:'dot'} }
+    ],
+    annotations: [
+      { x:1, xref:'paper', y:1500, text:'Mean (1500)', showarrow:false, font:{color:'#5a6b7f',size:10}, xanchor:'right' }
+    ]
+  }, PC);
+}
+
+// === TAB NAVIGATION ===
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    window.dispatchEvent(new Event('resize'));
+  });
+});
+
+// === LOAD ===
+loadData();
+</script>
+</body>
+</html>

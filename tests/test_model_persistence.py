@@ -69,14 +69,15 @@ def tmp_db(tmp_path):
     conn.execute(
         """CREATE TABLE team_ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            sport TEXT NOT NULL,
             team_id TEXT NOT NULL,
-            team_name TEXT NOT NULL,
+            sport TEXT NOT NULL,
             season INTEGER NOT NULL,
             rating_type TEXT NOT NULL,
             rating_value REAL NOT NULL,
-            UNIQUE(sport, team_id, season, rating_type)
+            as_of_date DATE NOT NULL,
+            as_of_game_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(team_id, season, rating_type, as_of_date)
         )"""
     )
     conn.commit()

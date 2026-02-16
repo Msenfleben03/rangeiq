@@ -9,10 +9,13 @@ def american_to_decimal(american: int) -> float:
     """Convert American odds to decimal odds.
 
     Args:
-        american: American odds (e.g., -110, +150)
+        american: American odds (e.g., -110, +150). Must be non-zero.
 
     Returns:
         Decimal odds
+
+    Raises:
+        ValueError: If american is 0 (invalid odds).
 
     Examples:
         >>> american_to_decimal(-110)
@@ -20,6 +23,8 @@ def american_to_decimal(american: int) -> float:
         >>> american_to_decimal(+150)
         2.5
     """
+    if american == 0:
+        raise ValueError("American odds cannot be 0")
     if american > 0:
         return (american / 100) + 1
     return (100 / abs(american)) + 1
@@ -29,10 +34,13 @@ def american_to_implied_prob(american: int) -> float:
     """Convert American odds to implied probability.
 
     Args:
-        american: American odds
+        american: American odds. Must be non-zero.
 
     Returns:
         Implied probability (0 to 1)
+
+    Raises:
+        ValueError: If american is 0 (invalid odds).
 
     Examples:
         >>> american_to_implied_prob(-110)
@@ -40,6 +48,8 @@ def american_to_implied_prob(american: int) -> float:
         >>> american_to_implied_prob(+150)
         0.4
     """
+    if american == 0:
+        raise ValueError("American odds cannot be 0")
     if american > 0:
         return 100 / (american + 100)
     return abs(american) / (abs(american) + 100)

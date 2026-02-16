@@ -168,22 +168,22 @@ def export_ratings_db(
     Returns:
         Number of ratings inserted/updated.
     """
+    from datetime import date as date_type
+
     count = 0
-    conferences = getattr(model, "conferences", {})
+    today = date_type.today().isoformat()
 
     with db.get_cursor() as cursor:
         for team_id, rating_value in model.ratings.items():
-            team_name = conferences.get(team_id, team_id)
             cursor.execute(
                 """INSERT INTO team_ratings
-                    (sport, team_id, team_name, season, rating_type, rating_value)
+                    (team_id, sport, season, rating_type, rating_value, as_of_date)
                 VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(sport, team_id, season, rating_type)
+                ON CONFLICT(team_id, season, rating_type, as_of_date)
                 DO UPDATE SET
-                    rating_value = excluded.rating_value,
-                    updated_at = CURRENT_TIMESTAMP
+                    rating_value = excluded.rating_value
                 """,
-                (sport, team_id, team_name, season, rating_type, rating_value),
+                (team_id, sport, season, rating_type, rating_value, today),
             )
             count += 1
 

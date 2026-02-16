@@ -112,9 +112,10 @@ class BettingThresholds:
     """Thresholds for bet qualification."""
 
     # Minimum edge required to place bet (model_prob - implied_prob)
-    MIN_EDGE_SPREAD: float = 0.02  # 2% edge minimum
-    MIN_EDGE_TOTAL: float = 0.02
-    MIN_EDGE_MONEYLINE: float = 0.03  # Higher for ML due to larger variance
+    # 5% validated via 2025 backtest: Sharpe 0.62, CLV 1.67%, flat ROI 6.15%
+    MIN_EDGE_SPREAD: float = 0.05  # 5% edge minimum
+    MIN_EDGE_TOTAL: float = 0.05
+    MIN_EDGE_MONEYLINE: float = 0.05
     MIN_EDGE_PROP: float = 0.03
 
     # CLV targets

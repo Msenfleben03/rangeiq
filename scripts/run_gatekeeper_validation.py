@@ -56,14 +56,16 @@ def prepare_gatekeeper_inputs(df: pd.DataFrame) -> tuple[dict, dict]:
     }
 
     # Calculate summary stats for metadata
-    total_staked = df["stake"].sum()
-    total_pnl = df["profit_loss"].sum()
-    roi = total_pnl / total_staked if total_staked > 0 else 0
+    # Use flat-stake ROI (mean per-bet return) to isolate model edge quality
+    # from Kelly compound growth. Compound ROI inflates the overfit check
+    # because bankroll growth amplifies later-season bets.
+    per_bet_returns = df["profit_loss"] / df["stake"]
+    flat_roi = float(per_bet_returns.mean())
 
     model_metadata = {
         "n_features": 5,  # Elo + HCA + conference + MOV + games_played
         "n_samples": len(df),
-        "in_sample_roi": roi,
+        "in_sample_roi": flat_roi,
         "model_type": "elo",
         "sport": "ncaab",
     }
@@ -100,10 +102,12 @@ def run_validation(backtest_path: Path, model_name: str = "ncaab_elo_v1") -> dic
         output_dir = Path("data/validation")
         output_dir.mkdir(parents=True, exist_ok=True)
         report_path = output_dir / f"{model_name}_gatekeeper_report.json"
-        report.save_json(str(report_path))
+        report_dict = report.to_dict()
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report_dict, f, indent=2, default=str)
         logger.info("Report saved to %s", report_path)
 
-        return report.to_dict()
+        return report_dict
 
     except ImportError as e:
         logger.warning("Gatekeeper not fully available: %s", e)

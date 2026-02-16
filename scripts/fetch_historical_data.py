@@ -24,7 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import pandas as pd
 
 from config.settings import RAW_DATA_DIR, NCAAB_SEASONS_START, NCAAB_SEASONS_END
-from pipelines.ncaab_data_fetcher import NCAABDataFetcher
+from pipelines.espn_ncaab_fetcher import ESPNDataFetcher
 
 logging.basicConfig(
     level=logging.INFO,
@@ -138,7 +138,7 @@ def fetch_all_seasons(
     output_dir = RAW_DATA_DIR / "ncaab"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fetcher = NCAABDataFetcher(output_dir=str(output_dir))
+    fetcher = ESPNDataFetcher(output_dir=str(output_dir))
 
     # Check for existing data (checkpoint/resume)
     if force:

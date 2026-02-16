@@ -69,7 +69,7 @@ def sample_bets_df():
     return pd.DataFrame(
         {
             "game_id": [f"game_{i}" for i in range(10)],
-            "bet_time": pd.date_range("2024-01-01 10:00:00", periods=10, freq="H"),
+            "bet_time": pd.date_range("2024-01-01 10:00:00", periods=10, freq="h"),
             "line": [-3.5, -7.0, +2.5, -1.0, +3.0, -5.5, +1.5, -4.0, +6.0, -2.5],
             "odds_placed": [-110, -105, +100, -115, -108, -110, +105, -110, -112, -110],
             "odds_closing": [-112, -108, -102, -118, -110, -108, +102, -112, -115, -108],

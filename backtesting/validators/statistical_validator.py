@@ -325,9 +325,13 @@ class StatisticalValidator:
         """
         n = len(values)
         mean = np.mean(values)
+
+        if n <= 1:
+            return (float(mean), float(mean))
+
         se = np.std(values, ddof=1) / np.sqrt(n)
 
-        if se == 0:
+        if se == 0 or np.isnan(se):
             return (mean, mean)
 
         alpha = 1 - self.confidence_level
