@@ -1,6 +1,6 @@
 # Sports Betting Project - Codemap Index
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-14
 **Project Root:** `C:\Users\msenf\sports-betting`
 **Language:** Python 3.11+
 **Testing:** pytest
@@ -50,11 +50,11 @@
 | betting/ | [betting.md](betting.md) | 3 | Odds conversion, EV/CLV calculations, Kelly criterion, arbitrage detection |
 | config/ | [config.md](config.md) | 3 | Global settings, sport-specific constants, sportsbook configuration, OddsConfig |
 | models/ | [models.md](models.md) | 9 | Elo rating system (base + sport-specific), model persistence (save/load/export) |
-| pipelines/ | [pipelines.md](pipelines.md) | 8 | Data fetching (NCAAB, Polymarket, Kalshi), odds providers (4 strategies), orchestrator |
+| pipelines/ | [pipelines.md](pipelines.md) | 11 | Data fetching (ESPN NCAAB, unified), odds providers (5 strategies incl. ESPN Core), orchestrator |
 | tracking/ | [tracking.md](tracking.md) | 8 | SQLite database, ORM, bet logger, performance reports, forecasting DB, cost tracking |
 | features/ | [features.md](features.md) | 2 | Feature engineering and selection (placeholder modules) |
-| tests/ | [tests.md](tests.md) | 15 | pytest suite: 458 tests covering validators, models, betting, tracking, pipelines |
-| scripts/ | [scripts.md](scripts.md) | 12 | Full 6-phase paper betting pipeline + utilities |
+| tests/ | [tests.md](tests.md) | 17 | pytest suite: 533 tests covering validators, models, betting, tracking, pipelines |
+| scripts/ | [scripts.md](scripts.md) | 14 | Full 6-phase paper betting pipeline + odds backfill + utilities |
 
 ## Data Flow — Paper Betting Pipeline
 
@@ -123,6 +123,16 @@ models/model_persistence.py
 pipelines/odds_providers.py
   <- pipelines/odds_orchestrator.py
 
+pipelines/espn_core_odds_provider.py
+  <- pipelines/odds_orchestrator.py
+  <- pipelines/unified_fetcher.py
+  <- scripts/backfill_historical_odds.py
+
+pipelines/espn_ncaab_fetcher.py
+  <- pipelines/unified_fetcher.py
+  <- scripts/fetch_historical_data.py
+  <- scripts/fetch_season_data.py
+
 pipelines/odds_orchestrator.py
   <- scripts/daily_predictions.py, settle_paper_bets.py
 
@@ -150,8 +160,8 @@ backtesting/validators/*.py
 3. **Pipeline Pattern** - Raw Model -> Temporal -> Statistical -> Overfit -> Betting -> Gatekeeper
 4. **CLV-First Design** - Closing Line Value is the primary metric throughout
 5. **Zero-Cost Enforcement** - All data sources must be free; paid APIs are blocked
-6. **Strategy Pattern (Odds)** - 4 interchangeable providers behind OddsProvider ABC
-7. **Fallback Chain** - OddsOrchestrator auto-cascades: API -> ESPN -> Scraper -> Cache
+6. **Strategy Pattern (Odds)** - 5 interchangeable providers behind OddsProvider ABC
+7. **Fallback Chain** - OddsOrchestrator auto-cascades: API -> ESPN Core -> ESPN Site -> Scraper -> Cache
 8. **Credit Budget** - The Odds API credits tracked in `data/odds_api_usage.json` (500/month)
 
 ## Quick Reference

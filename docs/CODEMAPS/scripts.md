@@ -1,14 +1,17 @@
 # Scripts Module Codemap
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-14
 
 ## Architecture
 
 ```text
 scripts/
   # === Phase 1: Data & Training ===
-  fetch_historical_data.py       # Download 5 seasons of NCAAB data via sportsipy
+  fetch_historical_data.py       # Download 6 seasons of NCAAB data via ESPN API
+  fetch_season_data.py           # Unified scores + odds CLI (incremental/nightly modes)
   train_ncaab_elo.py             # Train Elo model on historical parquet data
+  # === Phase 2: Odds Backfill ===
+  backfill_historical_odds.py    # ESPN Core API odds backfill (checkpoint/resume)
   # === Phase 3: Backtesting & Validation ===
   backtest_ncaab_elo.py          # Walk-forward backtest with simulated odds + Kelly
   run_gatekeeper_validation.py   # Full 5-dimension Gatekeeper validation
@@ -30,7 +33,7 @@ scripts/
 
 ### fetch_historical_data.py
 
-Downloads 5 seasons (2020-2025) of NCAAB game data via sportsipy with checkpoint/resume support.
+Downloads 6 seasons (2020-2025) of NCAAB game data via ESPN API with checkpoint/resume support.
 
 **Usage:**
 
@@ -49,7 +52,30 @@ python scripts/fetch_historical_data.py --force  # Re-download all
 | `fetch_all_seasons(start, end, force, delay)` | Main entry: fetch with rate limiting |
 
 **Outputs:** `data/raw/ncaab/ncaab_games_{year}.parquet`
-**Dependencies:** pandas, sportsipy, config.settings (RAW_DATA_DIR, NCAAB_SEASONS_*)
+**Dependencies:** pandas, pipelines.espn_ncaab_fetcher (ESPNDataFetcher), config.settings
+
+### fetch_season_data.py
+
+CLI entry point for the unified fetcher — scores + odds in a single pass.
+Supports incremental updates, nightly mode, and scores-only mode.
+
+**Usage:**
+
+```bash
+python scripts/fetch_season_data.py --season 2025
+python scripts/fetch_season_data.py --season 2025 --incremental
+python scripts/fetch_season_data.py --nightly
+python scripts/fetch_season_data.py --season 2025 --no-odds
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `main()` | CLI argument parsing and fetcher invocation |
+
+**Outputs:** Enriched parquet (scores + odds) + raw odds parquet
+**Dependencies:** pipelines.unified_fetcher (UnifiedNCAABFetcher)
 
 ### train_ncaab_elo.py
 
@@ -79,7 +105,34 @@ python scripts/train_ncaab_elo.py --validate  # Print top 25 + sanity checks
 - `data/processed/ncaab_elo_ratings_current.csv` (human-readable)
 - `team_ratings` table entries via database
 
-**Dependencies:** pandas, config.constants (ELO), models.model_persistence, models.sport_specific.ncaab.team_ratings, tracking.database
+**Dependencies:** pandas, config.constants (ELO), models.model_persistence,
+models.sport_specific.ncaab.team_ratings, tracking.database
+
+## Phase 2: Odds Backfill
+
+### backfill_historical_odds.py
+
+Backfills historical odds data from ESPN Core API with checkpoint/resume support.
+Processes events in batches with configurable delays.
+
+**Usage:**
+
+```bash
+python scripts/backfill_historical_odds.py --season 2025
+python scripts/backfill_historical_odds.py --season 2025 --resume
+python scripts/backfill_historical_odds.py --season 2025 --batch-size 100
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `backfill_season(season, resume, batch_size)` | Main entry: process events with checkpointing |
+| `save_checkpoint(state)` | Persist progress for resume |
+| `load_checkpoint(season)` | Resume from last checkpoint |
+
+**Outputs:** Odds data saved to `data/odds/` directory
+**Dependencies:** pipelines.espn_core_odds_provider (ESPNCoreOddsFetcher)
 
 ## Phase 3: Backtesting & Validation
 
@@ -153,7 +206,7 @@ python scripts/daily_predictions.py --date today --mode manual --odds-file odds.
 | Function | Purpose |
 |----------|---------|
 | `parse_date(date_str)` | Parse "today", "tomorrow", or YYYY-MM-DD |
-| `fetch_todays_games(target_date)` | Fetch games via sportsipy |
+| `fetch_todays_games(target_date)` | Fetch games via ESPN API |
 | `generate_predictions(model, games, orchestrator, ...)` | Predictions + odds + edge + Kelly recommendations |
 | `display_predictions(df)` | Pretty-print prediction table with bet recs |
 
@@ -184,7 +237,8 @@ python scripts/record_paper_bets.py --import-csv bets.csv
 
 ### settle_paper_bets.py
 
-Evening workflow: fetches game results, determines outcomes, calculates P/L and CLV, updates database, refreshes model ratings.
+Evening workflow: fetches game results, determines outcomes, calculates P/L
+and CLV, updates database, refreshes model ratings.
 
 **Usage:**
 
@@ -197,11 +251,12 @@ python scripts/settle_paper_bets.py --date yesterday
 
 | Function | Purpose |
 |----------|---------|
-| `fetch_game_results(target_date)` | Get scores via sportsipy |
+| `fetch_game_results(target_date)` | Get scores via ESPN API |
 | `determine_bet_outcome(bet, game_result)` | Win/loss/push for moneyline, spread, total |
 | `settle_bets(db, date, orchestrator, model)` | Main: settle pending bets + update ratings |
 
-**Dependencies:** betting.odds_converter, models.model_persistence, pipelines.odds_orchestrator, tracking.database, tracking.logger
+**Dependencies:** betting.odds_converter, models.model_persistence,
+pipelines.odds_orchestrator, tracking.database, tracking.logger
 
 ## Phase 6: Reporting
 
@@ -235,7 +290,8 @@ python scripts/generate_report.py --all
 
 ### validate_ncaab_elo.py
 
-Runs the NCAAB Elo model through the full 5-dimension validation pipeline (legacy — superseded by `run_gatekeeper_validation.py`).
+Runs the NCAAB Elo model through the full 5-dimension validation pipeline
+(legacy — superseded by `run_gatekeeper_validation.py`).
 
 **Dependencies:** backtesting.validators (Gatekeeper), models.sport_specific.ncaab.team_ratings
 

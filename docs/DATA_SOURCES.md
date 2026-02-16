@@ -2,13 +2,146 @@
 
 ## Overview
 
-This document describes all data sources used in the sports betting model development project, including API details, rate limits, data quality notes, and known issues.
+This document describes all data sources used in the sports betting model development
+project, including API details, rate limits, data quality notes, and known issues.
 
 ---
 
 ## Sports Data Sources
 
-### sportsipy (NCAAB, NFL, MLB, NHL)
+### ESPN Hidden API (NCAAB) — PRIMARY
+
+**Module:** `pipelines/espn_ncaab_fetcher.py`
+**Source:** ESPN undocumented JSON API
+**Cost:** Free (no API key required)
+
+#### Base URL
+
+```text
+http://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball
+```
+
+#### Endpoints
+
+| Endpoint | Purpose | Notes |
+|----------|---------|-------|
+| `/teams?limit=500` | All 362 D-I teams | Single request |
+| `/teams/{id}/schedule?season={year}` | Team schedule + scores | Per-team, per-season |
+
+#### Usage
+
+```python
+from pipelines.espn_ncaab_fetcher import ESPNDataFetcher
+
+fetcher = ESPNDataFetcher(output_dir="data/raw/ncaab")
+df = fetcher.fetch_season_data(season=2025, delay=0.3)
+# Returns DataFrame: game_id, team_id, opponent_id, points_for, points_against, date, location
+```
+
+#### Data Quality
+
+| Metric | Rating | Notes |
+|--------|--------|-------|
+| Completeness | ⭐⭐⭐⭐⭐ | 362 teams, all completed games |
+| Timeliness | ⭐⭐⭐⭐⭐ | Updates same day |
+| Accuracy | ⭐⭐⭐⭐⭐ | Official ESPN data |
+| Historical depth | ⭐⭐⭐⭐ | 2002+ available |
+
+#### Known Issues
+
+- Score format is `{'value': 71.0, 'displayValue': '71'}` — not a simple int
+- Conference names not extracted from schedule events (team-level only)
+- Schedule endpoint omits status field (all returned events are completed)
+- No documented rate limits, but use 0.3s delay between requests
+
+#### Performance
+
+- ~2 minutes per season (362 teams, 0.3s delay)
+- Produces identical parquet schema to sportsipy fetcher
+
+---
+
+### ESPN Core API (Odds) — FREE HISTORICAL ODDS
+
+**Module:** `pipelines/espn_core_odds_provider.py`
+**Source:** ESPN Core API (undocumented)
+**Cost:** Free (no API key required)
+
+#### Base URL
+
+```text
+https://sports.core.api.espn.com/v2/sports/basketball/leagues/mens-college-basketball
+```
+
+#### Endpoints
+
+| Endpoint | Purpose | Notes |
+|----------|---------|-------|
+| `/events/{id}/competitions/{id}/odds` | List odds providers for a game | Returns `$ref` links |
+| `$ref` link (provider-specific) | Detailed odds data | Open, close, current lines |
+
+#### Usage
+
+```python
+from pipelines.espn_core_odds_provider import ESPNCoreOddsFetcher, ESPNCoreOddsProvider
+
+# Low-level fetcher
+fetcher = ESPNCoreOddsFetcher()
+snapshot = fetcher.fetch_odds_for_event("401524123")
+
+# OddsProvider-compatible wrapper (for orchestrator)
+provider = ESPNCoreOddsProvider()
+odds = provider.fetch_game_odds("ncaab", "Duke", "UNC", "401524123")
+```
+
+#### Provider IDs
+
+| ID | Provider | Seasons | Notes |
+|----|----------|---------|-------|
+| 58 | ESPN BET | 2025 | Primary for 2024-25 season |
+| 100 | DraftKings | 2026 | Primary for 2025-26 season |
+| 59 | ESPN BET Live | 2025-2026 | Alternative |
+
+**Not working for NCAAB:** 41, 38, 45, 47, 48, 52, 2000 (all return 404 for completed games)
+
+#### Data Quality
+
+| Metric | Rating | Notes |
+|--------|--------|-------|
+| Completeness | ⭐⭐⭐⭐ | ~85% of games (small conference/non-D1 return empty) |
+| Timeliness | ⭐⭐⭐⭐⭐ | Real-time updates |
+| Accuracy | ⭐⭐⭐⭐⭐ | Official ESPN/sportsbook data |
+| Historical depth | ⭐⭐⭐⭐ | Confirmed working for completed games |
+
+#### Rate Limits
+
+| Limit | Value | Notes |
+|-------|-------|-------|
+| Max requests/sec | 2 | Self-imposed for politeness |
+| Requests per game | ~3 | 1 list + 2 provider refs |
+| Full backfill estimate | ~15 hours | ~35,700 events across 6 seasons |
+
+#### Data Structure
+
+`OddsSnapshot` frozen dataclass with 29 fields including:
+
+- Open/close/current spread, total, moneyline
+- Provider info, game details, timestamps
+- Home/away favorite indicators
+
+#### Known Issues
+
+- URL pattern requires `/leagues/` segment: `basketball/leagues/mens-college-basketball`
+- Small conference and non-D1 games often return empty odds
+- Provider availability varies by season (ESPN BET for 2025, DraftKings for 2026)
+
+---
+
+### sportsipy (NCAAB, NFL, MLB, NHL) — BROKEN
+
+**Status:** BROKEN as of 2026-02-13. Returns 0 teams for all seasons (2020-2025).
+sports-reference.com responds 200 OK but the HTML parser cannot extract data.
+**Replacement:** Use ESPN Hidden API (`pipelines/espn_ncaab_fetcher.py`) instead.
 
 **Package:** `sportsipy` / `sportsreference`
 **Source:** Sports Reference websites (sports-reference.com family)
@@ -405,10 +538,10 @@ MLB_PARKS = {
 
 | Sport | Primary Source | Backup Source | Odds Source |
 |-------|---------------|---------------|-------------|
-| NCAAB | sportsipy | sports-reference (direct) | The Odds API |
+| NCAAB | ESPN Hidden API | sportsipy (broken) | The Odds API |
 | MLB | pybaseball | Baseball Reference | The Odds API |
 | NFL | nfl-data-py | Pro Football Reference | The Odds API |
-| NCAAF | cfbd (API) | sportsipy | The Odds API |
+| NCAAF | cfbd (API) | ESPN Hidden API | The Odds API |
 
 ---
 

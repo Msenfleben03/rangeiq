@@ -2,7 +2,8 @@
 
 ## Overview
 
-This document defines all data fields, their sources, and usage across sports betting models. Keep updated as new features are engineered.
+This document defines all data fields, their sources, and usage across sports betting
+models. Keep updated as new features are engineered.
 
 ---
 
@@ -395,17 +396,15 @@ This document defines all data fields, their sources, and usage across sports be
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rating_id` | int | Unique rating identifier |
-| `updated_at` | datetime | Last update timestamp |
-| `sport` | string | Sport type |
-| `team_id` | string | Team identifier |
-| `team_name` | string | Team display name |
+| `id` | int | Unique rating identifier (auto-increment) |
+| `team_id` | string | Team identifier (e.g., ESPN abbreviation) |
+| `sport` | string | Sport type (ncaab, mlb, nfl) |
 | `season` | int | Season year |
 | `rating_type` | string | elo, glicko, offensive_eff, defensive_eff |
 | `rating_value` | float | Rating value |
-| `rating_rank` | int | Rank among all teams |
-| `games_used` | int | Games used for this rating |
-| `last_game_id` | string | Most recent game included |
+| `as_of_date` | date | When this rating was calculated |
+| `as_of_game_id` | string | Last game included in this rating |
+| `created_at` | datetime | Row creation timestamp |
 
 ---
 

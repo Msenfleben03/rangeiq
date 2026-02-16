@@ -1,22 +1,26 @@
 # Pipelines Module Codemap
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-14
 **Entry Point:** `pipelines/__init__.py` (empty)
-**Test Coverage:** `tests/test_forecasting_db.py` (indirect), `tests/test_odds_providers.py`
+**Test Coverage:** `tests/test_odds_providers.py`, `tests/test_espn_core_odds_provider.py`,
+`tests/test_unified_fetcher.py`, `tests/test_forecasting_db.py` (indirect)
 
 ## Architecture
 
 ```text
 pipelines/
   __init__.py                  # Empty package marker
-  # === Odds Retrieval (Strategy Pattern) ===
-  odds_providers.py            # 4 providers: Manual, TheOddsAPI, ESPN, Scraper
-  odds_orchestrator.py         # Fallback chain, caching, credit budget, DB persistence
   # === Data Fetching ===
-  ncaab_data_fetcher.py        # NCAAB game data via sportsipy
+  espn_ncaab_fetcher.py        # ESPN Site API: 362 teams, scores (replaced sportsipy)
+  unified_fetcher.py           # Scores + odds in one pass (incremental/nightly modes)
+  ncaab_data_fetcher.py        # NCAAB game data via sportsipy (BROKEN — use espn_ncaab_fetcher)
   polymarket_fetcher.py        # Polymarket prediction market data (CLOB + Gamma APIs)
   kalshi_fetcher.py            # Kalshi prediction market data (CFTC-regulated)
   batch_fetcher.py             # Async parallel data retrieval (aiohttp)
+  # === Odds Retrieval (Strategy Pattern) ===
+  odds_providers.py            # 4 providers: Manual, TheOddsAPI, ESPN Site, Scraper
+  espn_core_odds_provider.py   # ESPN Core API: free historical odds (open/close/current)
+  odds_orchestrator.py         # Fallback chain, caching, credit budget, DB persistence
   # === CLV & Arbitrage ===
   closing_odds_collector.py    # Selenium-based closing odds scraper for CLV
   arb_scanner.py               # CLI wrapper for betting.arb_detector
@@ -55,9 +59,10 @@ Strategy-pattern architecture with 4 interchangeable odds data sources sharing a
 
 ### odds_orchestrator.py
 
-Manages odds retrieval across providers with automatic fallback, response caching, credit budget tracking, and database persistence.
+Manages odds retrieval across providers with automatic fallback, response caching,
+credit budget tracking, and database persistence.
 
-**Fallback Chain (auto mode):** TheOddsAPI -> ESPN -> Selenium Scraper -> Cached Data -> None
+**Fallback Chain (auto mode):** TheOddsAPI -> ESPN Core API -> ESPN Site -> Selenium Scraper -> Cached Data -> None
 
 | Export | Type | Purpose |
 |--------|------|---------|
@@ -84,25 +89,86 @@ Manages odds retrieval across providers with automatic fallback, response cachin
 - Warning at 80%, cutoff at 90% of 500 monthly credits
 - Skips API provider when over budget
 
-**Dependencies:** pipelines.odds_providers (all 4 providers), pipelines.closing_odds_collector (ClosingOdds)
+**Dependencies:** pipelines.odds_providers (all 4 providers),
+pipelines.espn_core_odds_provider, pipelines.closing_odds_collector (ClosingOdds)
+
+### espn_core_odds_provider.py
+
+ESPN Core API odds provider — free, no auth, historical odds (open/close/current) for completed games.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `ESPNCoreOddsFetcher` | class | Low-level ESPN Core API client for odds data |
+| `ESPNCoreOddsProvider` | class | OddsProvider-compatible wrapper for orchestrator |
+| `OddsSnapshot` | frozen dataclass | 29-field container: open/close/current per market |
+
+**API:** `https://sports.core.api.espn.com/v2/sports/basketball/leagues/mens-college-basketball`
+**Endpoint:** `/events/{eventId}/competitions/{eventId}/odds` -> list of `$ref` links
+**Auth:** None required (completely free)
+**Rate:** 2 req/sec, ~3 requests per game (1 list + 2 provider refs)
+
+**Provider IDs:**
+
+| ID | Provider | Seasons |
+|----|----------|---------|
+| 58 | ESPN BET | 2025 |
+| 100 | DraftKings | 2026 |
+| 59 | ESPN BET Live | 2025-2026 |
+
+**Coverage:** ~85% of games have odds (small conference/non-D1 return empty)
+**Tests:** 54 tests in `tests/test_espn_core_odds_provider.py`
+**Dependencies:** requests, dataclasses
 
 ## Data Fetching
 
-### ncaab_data_fetcher.py
+### espn_ncaab_fetcher.py
+
+Primary NCAAB data source — fetches game data from ESPN's undocumented Site API
+(JSON, no scraping). Replaced sportsipy which is broken as of 2026-02-13.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `ESPNDataFetcher` | class | Fetches 362 D-I teams + schedules + scores from ESPN |
+
+**Key Methods:**
+
+- `fetch_teams()` - All 362 D-I teams in a single API call
+- `fetch_team_schedule(team_id, season)` - Team schedule with scores
+- `fetch_season_data(season, delay)` - Full season data with deduplication
+- `fetch_games_by_date(target_date)` - Games for daily predictions
+
+**API:** `http://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball`
+**Dependencies:** requests, pandas
+**Output:** Saves raw data to `data/raw/ncaab/` (parquet, identical schema to sportsipy)
+
+### unified_fetcher.py
+
+Scores + odds in one pass — eliminates separate backfill step. Supports incremental, nightly, and scores-only modes.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `UnifiedNCAABFetcher` | class | Single-pass scores + odds fetcher with skip lists |
+
+**Key Methods:**
+
+- `fetch_season(season, incremental, include_odds)` - Main entry point
+- `_fetch_odds_for_game(game)` - ESPN Core API odds lookup with skip list
+- `save_enriched_parquet(df, season)` - Scores + best-provider odds
+- `save_raw_odds_parquet(odds, season)` - All providers raw odds data
+
+**Modes:** `--incremental` (only new games), `--nightly` (current season auto), `--no-odds` (fast scores only)
+**Skip list:** `data/odds/skip_lists/no_odds_{season}.txt` (avoids re-fetching known-empty games)
+**Dependencies:** espn_ncaab_fetcher (ESPNDataFetcher), espn_core_odds_provider (ESPNCoreOddsProvider)
+**Tests:** 21 tests in `tests/test_unified_fetcher.py`
+
+### ncaab_data_fetcher.py (LEGACY)
 
 Fetches NCAA Men's Basketball data using the sportsipy library.
+**Status:** BROKEN as of 2026-02-13. Use `espn_ncaab_fetcher.py` instead.
 
 | Export | Type | Purpose |
 |--------|------|---------|
 | `NCAABDataFetcher` | class | Fetches teams, schedules, game results by season |
-
-**Key Methods:**
-
-- `fetch_teams(season)` - All team info for a season -> DataFrame
-- `fetch_schedule(team_id, season)` - Team schedule and results
-- `fetch_boxscores(date)` - Game boxscores for a specific date
-- `fetch_season_data(season, delay)` - Full season data with rate limiting
-- `fetch_games_by_date(target_date)` - Games for daily predictions
 
 **Dependencies:** sportsipy (sportsipy.ncaab.teams, schedule, boxscore), pandas
 **Output:** Saves raw data to `data/raw/ncaab/`
@@ -167,6 +233,10 @@ CLI wrapper and pipeline integration point for arbitrage detection.
 ```text
 External APIs / Web Scraping
          |
+         +-- espn_ncaab_fetcher.py --> data/raw/ncaab/ (parquet files)
+         |
+         +-- espn_core_odds_provider.py --> OddsSnapshot (open/close/current)
+         |       |
          +-- odds_providers.py (4 strategies)
          |       |
          |       +-- odds_orchestrator.py (fallback chain + cache + credit budget)
@@ -175,7 +245,10 @@ External APIs / Web Scraping
          |               +-- scripts/daily_predictions.py (consume)
          |               +-- scripts/settle_paper_bets.py (closing odds)
          |
-         +-- ncaab_data_fetcher.py --> data/raw/ncaab/ (parquet files)
+         +-- unified_fetcher.py --> enriched parquet (scores + odds) + raw odds parquet
+         |       |
+         |       +-- espn_ncaab_fetcher.py (scores)
+         |       +-- espn_core_odds_provider.py (odds)
          |
          +-- polymarket_fetcher.py --> tracking/forecasting_db.py (SQLite)
          |
@@ -192,8 +265,9 @@ External APIs / Web Scraping
 
 | Package | Used In | Required | Purpose |
 |---------|---------|----------|---------|
-| requests | odds_providers.py, polymarket_fetcher.py, kalshi_fetcher.py | Yes | HTTP requests |
-| sportsipy | ncaab_data_fetcher.py | Yes | NCAAB data (Teams, Schedule, Boxscores) |
+| requests | espn_ncaab_fetcher.py, espn_core_odds_provider.py, odds_providers.py, polymarket_fetcher.py, kalshi_fetcher.py | Yes | HTTP requests |
+| pandas | espn_ncaab_fetcher.py, unified_fetcher.py | Yes | DataFrame processing |
+| sportsipy | ncaab_data_fetcher.py | No (BROKEN) | Legacy NCAAB data (replaced by ESPN fetcher) |
 | py-clob-client | polymarket_fetcher.py | Optional | Polymarket CLOB API client |
 | aiohttp | batch_fetcher.py | Optional | Async HTTP for parallel fetching |
 | selenium | closing_odds_collector.py, odds_providers.py (ScraperOddsProvider) | Optional | Headless Chrome for odds scraping |
@@ -203,5 +277,5 @@ External APIs / Web Scraping
 - [betting.md](betting.md) - arb_detector consumed by arb_scanner; odds_converter used by providers
 - [tracking.md](tracking.md) - Fetched data persisted to SQLite via database.py and forecasting_db.py
 - [config.md](config.md) - ODDS_CONFIG, RATE_LIMITS, PAID_APIS_BLOCKED
-- [models.md](models.md) - ncaab_data_fetcher provides training data for Elo models
+- [models.md](models.md) - espn_ncaab_fetcher provides training data for Elo models
 - [scripts.md](scripts.md) - daily_predictions.py and settle_paper_bets.py use OddsOrchestrator

@@ -2,7 +2,8 @@
 
 ## Overview
 
-Build profitable projection models for NCAA Football, NCAA Basketball, NFL, and MLB achieving positive ROI through systematic Closing Line Value (CLV) capture with zero startup costs.
+Build profitable projection models for NCAA Football, NCAA Basketball, NFL, and MLB
+achieving positive ROI through systematic Closing Line Value (CLV) capture with zero startup costs.
 
 ## Tech Stack
 
@@ -17,11 +18,13 @@ Build profitable projection models for NCAA Football, NCAA Basketball, NFL, and 
 
 ### Overview
 
-A comprehensive 5-dimension validation framework ensures no model reaches production without rigorous testing. The framework catches data leakage, insufficient evidence, overfitting, and unrealistic betting assumptions.
+A comprehensive 5-dimension validation framework ensures no model reaches production without
+rigorous testing. The framework catches data leakage, insufficient evidence, overfitting,
+and unrealistic betting assumptions.
 
 ### Validation Pipeline
 
-```
+```text
 Raw Model -> [TEMPORAL] -> [STATISTICAL] -> [OVERFIT] -> [BETTING] -> [GATEKEEPER] -> PASS/QUARANTINE
 ```
 
@@ -161,7 +164,7 @@ pytest tests/ -k "validator" -v  # All validator tests
 
 ## Project Structure
 
-```
+```text
 sports_betting/
 ├── CLAUDE.md                 # This file - Claude Code context
 ├── README.md                 # Project overview
@@ -222,9 +225,17 @@ sports_betting/
 │       └── gatekeeper.py            # Final validation gate
 │
 ├── pipelines/
-│   ├── polymarket_fetcher.py # Polymarket API client
-│   ├── kalshi_fetcher.py     # Kalshi API client (CFTC-regulated)
-│   └── arb_scanner.py        # Cross-book arbitrage detection
+│   ├── espn_ncaab_fetcher.py      # ESPN Site API fetcher (primary NCAAB scores)
+│   ├── espn_core_odds_provider.py # ESPN Core API odds (free, historical)
+│   ├── unified_fetcher.py         # Scores + odds in one pass
+│   ├── odds_providers.py          # Odds retrieval (4 providers)
+│   ├── odds_orchestrator.py       # Odds fallback: API → ESPN Core → ESPN → Scraper → Cache
+│   ├── polymarket_fetcher.py      # Polymarket API client
+│   ├── kalshi_fetcher.py          # Kalshi API client (CFTC-regulated)
+│   └── arb_scanner.py             # Cross-book arbitrage detection
+│
+├── dashboards/
+│   └── elo_dashboard.html         # Interactive Elo ratings dashboard (5 tabs)
 │
 ├── tests/
 │   ├── test_models.py
@@ -233,11 +244,22 @@ sports_betting/
 │   ├── test_statistical_validator.py
 │   ├── test_overfit_validator.py
 │   ├── test_betting_validator.py
-│   └── test_gatekeeper.py
+│   ├── test_gatekeeper.py
+│   ├── test_espn_core_odds_provider.py
+│   └── test_unified_fetcher.py
 │
 ├── scripts/
-│   ├── setup_database.py     # Initialize SQLite
-│   └── daily_run.py          # Daily prediction script
+│   ├── setup_database.py              # Initialize SQLite
+│   ├── fetch_historical_data.py       # Fetch NCAAB seasons (ESPN API)
+│   ├── fetch_season_data.py           # Unified scores + odds fetcher CLI
+│   ├── backfill_historical_odds.py    # ESPN Core API odds backfill (checkpoint/resume)
+│   ├── train_ncaab_elo.py             # Train Elo model on historical data
+│   ├── backtest_ncaab_elo.py          # Walk-forward backtest
+│   ├── run_gatekeeper_validation.py   # 5-dim validation pipeline
+│   ├── daily_predictions.py           # Generate daily predictions
+│   ├── record_paper_bets.py           # Log paper bet decisions
+│   ├── settle_paper_bets.py           # Settle completed bets
+│   └── generate_report.py            # Performance reports
 │
 └── docs/
     ├── DATA_DICTIONARY.md    # Field definitions
@@ -252,8 +274,8 @@ sports_betting/
 
 | Phase | Dates | Focus | Status |
 |-------|-------|-------|--------|
-| 1-2 | Jan 24 - Feb 6 | NCAAB foundation | In Progress |
-| 3-4 | Feb 7 - Feb 20 | NCAAB paper betting + MLB build | Upcoming |
+| 1-2 | Jan 24 - Feb 6 | NCAAB foundation | Complete |
+| 3-4 | Feb 7 - Feb 20 | NCAAB paper betting + MLB build | In Progress |
 | 5-6 | Feb 21 - Mar 6 | March Madness prep | Upcoming |
 | 7-8 | Mar 7 - Mar 20 | Live testing (small stakes) | Upcoming |
 | 9-10 | Mar 21 - Apr 3 | MLB deployment | Upcoming |
@@ -261,10 +283,19 @@ sports_betting/
 ### Current Sprint Focus
 
 - [x] Set up project structure and environment
-- [x] Implement NCAAB data pipeline (sportsipy)
+- [x] Implement NCAAB data pipeline (ESPN API — sportsipy broken)
 - [x] Build baseline NCAAB Elo model (models/elo.py, models/sport_specific/ncaab/team_ratings.py)
 - [x] Create SQLite database with schema (22 tables)
 - [x] Build 5-dimension validation framework (198 tests)
+- [x] Fetch 6 seasons of historical data (2020-2025, 35,719 games)
+- [x] Train Elo model (1,061 teams rated)
+- [x] Run walk-forward backtest (2025 season)
+- [x] Run Gatekeeper validation (QUARANTINE — needs real odds, conference data)
+- [x] Build ESPN Core API odds fetcher (free, historical, ~85% coverage)
+- [x] Build unified scores + odds fetcher (single-pass pipeline)
+- [x] Build interactive Elo ratings dashboard (5-tab HTML)
+- [ ] Complete historical odds backfill (2020-2025)
+- [ ] Re-backtest with real odds data
 - [ ] Begin paper betting tracking
 
 ### Prediction Markets Integration
@@ -345,7 +376,8 @@ db.record_revision(fc_id, new_probability=0.42,
 
 ### Core Principle: CLV > Win Rate
 
-**Closing Line Value is the PRIMARY success metric.** A bettor who consistently gets better odds than closing lines WILL profit long-term, even through losing streaks. Track CLV religiously.
+**Closing Line Value is the PRIMARY success metric.** A bettor who consistently gets better odds
+than closing lines WILL profit long-term, even through losing streaks. Track CLV religiously.
 
 ### Key Formulas
 
@@ -583,15 +615,16 @@ CREATE TABLE predictions (
 -- Team ratings
 CREATE TABLE team_ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    sport TEXT NOT NULL,
     team_id TEXT NOT NULL,
-    team_name TEXT NOT NULL,
+    sport TEXT NOT NULL,
     season INTEGER NOT NULL,
     rating_type TEXT NOT NULL,
     rating_value REAL NOT NULL,
+    as_of_date DATE NOT NULL,
+    as_of_game_id TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE(sport, team_id, season, rating_type)
+    UNIQUE(team_id, season, rating_type, as_of_date)
 );
 ```
 

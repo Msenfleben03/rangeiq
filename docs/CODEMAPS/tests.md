@@ -1,6 +1,6 @@
 # Tests Module Codemap
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-14
 **Framework:** pytest
 **Entry Point:** `tests/conftest.py` (shared fixtures)
 
@@ -24,7 +24,9 @@ tests/
   test_reports.py                  # Performance reporting tests
   test_settlement.py               # Bet settlement logic tests
   # === Pipeline Tests ===
-  test_odds_providers.py           # Odds provider strategy pattern tests
+  test_odds_providers.py           # Odds provider strategy pattern tests (46 tests)
+  test_espn_core_odds_provider.py  # ESPN Core API odds provider tests (54 tests)
+  test_unified_fetcher.py          # Unified scores+odds fetcher tests (21 tests)
   # === Integration Tests ===
   test_backtesting.py              # Walk-forward validator, metrics, simulation tests
   test_forecasting_db.py           # Forecasting database interface tests
@@ -46,10 +48,12 @@ tests/
 | `test_reports.py` | tracking/reports.py | 10 | daily_report, weekly_report, clv_analysis, model_health_check |
 | `test_settlement.py` | scripts/settle_paper_bets.py | 9 | determine_bet_outcome for ML/spread/total, CLV calc, P/L |
 | `test_odds_providers.py` | pipelines/odds_providers.py | 46 | ManualOddsProvider, TheOddsAPIProvider, ESPNOddsProvider mocking |
+| `test_espn_core_odds_provider.py` | pipelines/espn_core_odds_provider.py | 54 | ESPN Core API odds fetcher, OddsSnapshot, provider integration |
+| `test_unified_fetcher.py` | pipelines/unified_fetcher.py | 21 | Unified fetcher modes, skip lists, enriched parquet output |
 | `test_backtesting.py` | backtesting/ (metrics, simulation, walk_forward) | 51 | Metrics calculation, simulation config, walk-forward splits |
 | `test_forecasting_db.py` | tracking/forecasting_db.py | 20 | Forecast CRUD, revisions, calibration, Brier scores |
 | `test_setup.py` | environment | 24 | Package imports, database connectivity |
-| **TOTAL** | | **458** | Full validation + paper betting + models + integration |
+| **TOTAL** | | **533** | Full validation + paper betting + models + pipelines + integration |
 
 ## Shared Fixtures (conftest.py)
 

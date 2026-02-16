@@ -2,7 +2,9 @@
 
 ## Purpose
 
-The pipelines module orchestrates automated workflows for data refresh, prediction generation, and bet placement. It coordinates between data sources, models, betting logic, and tracking systems to create end-to-end betting workflows.
+The pipelines module orchestrates automated workflows for data refresh, prediction
+generation, and bet placement. It coordinates between data sources, models, betting
+logic, and tracking systems to create end-to-end betting workflows.
 
 ## Quick Start
 
@@ -24,15 +26,94 @@ results = run_daily_workflow(
 
 ## Components
 
+### ESPN NCAAB Fetcher (`espn_ncaab_fetcher.py`)
+
+**Purpose**: Fetch NCAAB game data from ESPN's hidden JSON API
+
+**Steps**:
+
+1. Fetch all 362 D-I teams in a single request
+2. For each team, fetch schedule with scores
+3. Deduplicate and validate game data
+4. Save as parquet to `data/raw/ncaab/`
+
+**Usage**:
+
+```python
+from pipelines.espn_ncaab_fetcher import ESPNDataFetcher
+
+fetcher = ESPNDataFetcher(output_dir="data/raw/ncaab")
+df = fetcher.fetch_season_data(season=2025, delay=0.3)
+```
+
+**Note**: Replaced sportsipy (broken as of 2026-02-13). See `docs/DATA_SOURCES.md` for details.
+
+---
+
+### ESPN Core Odds Provider (`espn_core_odds_provider.py`)
+
+**Purpose**: Fetch free historical odds from ESPN Core API (open/close/current lines)
+
+**Steps**:
+
+1. Query events endpoint for available odds providers
+2. Fetch detailed odds from best available provider (ESPN BET, DraftKings)
+3. Parse into OddsSnapshot frozen dataclass (29 fields)
+4. Return spread, total, and moneyline data
+
+**Usage**:
+
+```python
+from pipelines.espn_core_odds_provider import ESPNCoreOddsFetcher, ESPNCoreOddsProvider
+
+# Direct fetcher
+fetcher = ESPNCoreOddsFetcher()
+snapshot = fetcher.fetch_odds_for_event("401524123")
+
+# OddsProvider-compatible (for orchestrator integration)
+provider = ESPNCoreOddsProvider()
+odds = provider.fetch_game_odds("ncaab", "Duke", "UNC", "401524123")
+```
+
+**Coverage**: ~85% of games (small conference/non-D1 return empty). No auth required.
+
+---
+
+### Unified Fetcher (`unified_fetcher.py`)
+
+**Purpose**: Fetch scores + odds in a single pass, eliminating separate backfill steps
+
+**Steps**:
+
+1. Fetch game scores via ESPN Site API (espn_ncaab_fetcher)
+2. For each game, fetch odds via ESPN Core API
+3. Track skip list for games with no available odds
+4. Save enriched parquet (scores + best odds) and raw odds parquet (all providers)
+
+**Usage**:
+
+```python
+from pipelines.unified_fetcher import UnifiedNCAABFetcher
+
+fetcher = UnifiedNCAABFetcher()
+df = fetcher.fetch_season(season=2025, incremental=True, include_odds=True)
+```
+
+**CLI**: `python scripts/fetch_season_data.py --season 2025 --incremental`
+
+**Modes**: `--incremental` (only new games), `--nightly` (current season auto), `--no-odds` (fast scores only)
+
+---
+
 ### Data Refresh Pipeline (`data_refresh.py`)
 
 **Purpose**: Daily data updates from all sources
 
 **Steps**:
 
-1. Fetch new games and results from sportsipy/nfl-data-py
+1. Fetch new games and results from ESPN API / nfl-data-py
 2. Update team standings and schedules
-3. Fetch current odds from sportsbooks
+3. Fetch current odds from sportsbooks (via OddsOrchestrator)
 4. Check injury reports
 5. Validate and clean data
 6. Store in database
@@ -169,5 +250,5 @@ pytest tests/test_pipelines.py::test_daily_workflow -v --timeout=300
 ---
 
 **Maintained by**: Platform Engineering Team
-**Last Updated**: 2026-01-24
+**Last Updated**: 2026-02-13
 **Status**: ✅ Active - Core Infrastructure
