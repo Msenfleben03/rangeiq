@@ -3,6 +3,7 @@
 Handles SQLite database creation, connection, and schema management
 for tracking bets, predictions, and team ratings.
 """
+
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -200,15 +201,19 @@ class BettingDatabase:
             bet_data: Dictionary containing bet information
 
         Returns:
-            ID of inserted bet
+            ID of inserted bet, or -1 if duplicate (IntegrityError).
         """
         columns = ", ".join(bet_data.keys())
         placeholders = ", ".join(["?" for _ in bet_data])
         query = f"INSERT INTO bets ({columns}) VALUES ({placeholders})"  # nosec B608
 
-        with self.get_cursor() as cursor:
-            cursor.execute(query, tuple(bet_data.values()))
-            return cursor.lastrowid
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(query, tuple(bet_data.values()))
+                return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            logger.warning("Duplicate bet skipped: %s", bet_data.get("game_id", "unknown"))
+            return -1
 
     def update_bet_result(
         self, bet_id: int, result: str, profit_loss: float, clv: Optional[float] = None

@@ -1,0 +1,380 @@
+"""Generate merged dashboard data bundle for NCAA D1 Basketball dashboard.
+
+Merges three data sources into a single JSON file:
+1. Elo ratings (current, from trained model)
+2. Barttorvik T-Rank efficiency ratings (latest available snapshot)
+3. Game stats (2026 season W-L, PPG, PAPG, margin)
+
+Output: data/processed/ncaab_dashboard_bundle.json
+
+Usage:
+    python scripts/generate_dashboard_data.py
+    python scripts/generate_dashboard_data.py --season 2026
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+import pandas as pd
+
+from pipelines.team_name_mapping import build_espn_barttorvik_mapping
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Conference abbreviation -> full name lookup
+# ---------------------------------------------------------------------------
+
+CONFERENCE_FULL_NAMES: dict[str, str] = {
+    "A10": "Atlantic 10",
+    "ACC": "ACC",
+    "AE": "America East",
+    "ASun": "Atlantic Sun",
+    "Amer": "American Athletic",
+    "B10": "Big Ten",
+    "B12": "Big 12",
+    "BE": "Big East",
+    "BSky": "Big Sky",
+    "BSth": "Big South",
+    "BW": "Big West",
+    "CAA": "Colonial Athletic",
+    "CUSA": "Conference USA",
+    "Horz": "Horizon League",
+    "Ivy": "Ivy League",
+    "MAAC": "Metro Atlantic Athletic",
+    "MAC": "Mid-American",
+    "MEAC": "Mid-Eastern Athletic",
+    "MVC": "Missouri Valley",
+    "MWC": "Mountain West",
+    "NEC": "Northeast",
+    "OVC": "Ohio Valley",
+    "Pat": "Patriot League",
+    "SB": "Sun Belt",
+    "SC": "Southern",
+    "SEC": "SEC",
+    "SWAC": "Southwestern Athletic",
+    "Slnd": "Southland",
+    "Sum": "Summit League",
+    "WAC": "Western Athletic",
+    "WCC": "West Coast",
+}
+
+
+def load_elo_ratings(
+    path: Path = PROJECT_ROOT / "data" / "processed" / "ncaab_elo_ratings_current.csv",
+) -> pd.DataFrame:
+    """Load current Elo ratings CSV."""
+    if not path.exists():
+        logger.error("Elo ratings not found: %s", path)
+        return pd.DataFrame()
+
+    df = pd.read_csv(path)
+    logger.info("Loaded %d Elo ratings from %s", len(df), path.name)
+    return df
+
+
+def load_barttorvik_latest(
+    bart_dir: Path = PROJECT_ROOT / "data" / "external" / "barttorvik",
+) -> tuple[pd.DataFrame, str]:
+    """Load latest Barttorvik ratings snapshot.
+
+    Returns the most recent date's ratings from the newest season file.
+
+    Returns:
+        Tuple of (DataFrame with latest ratings per team, date string).
+    """
+    files = sorted(bart_dir.glob("barttorvik_ratings_*.parquet"))
+    if not files:
+        logger.warning("No Barttorvik data found in %s", bart_dir)
+        return pd.DataFrame(), ""
+
+    # Use the most recent season file
+    latest_file = files[-1]
+    df = pd.read_parquet(latest_file)
+
+    if df.empty or "date" not in df.columns:
+        return pd.DataFrame(), ""
+
+    df["date"] = pd.to_datetime(df["date"])
+    latest_date = df["date"].max()
+    latest = df[df["date"] == latest_date].copy()
+
+    # Compute NET rating (adj_o - adj_d)
+    if "adj_o" in latest.columns and "adj_d" in latest.columns:
+        latest["adj_net"] = latest["adj_o"] - latest["adj_d"]
+
+    date_str = latest_date.strftime("%Y-%m-%d")
+    season = latest_file.stem.split("_")[-1]
+    logger.info(
+        "Loaded %d Barttorvik teams from season %s (date: %s)",
+        len(latest),
+        season,
+        date_str,
+    )
+    return latest, date_str
+
+
+def load_game_stats(
+    season: int = 2026,
+    games_dir: Path = PROJECT_ROOT / "data" / "raw" / "ncaab",
+) -> pd.DataFrame:
+    """Aggregate per-team game stats for a season.
+
+    Returns DataFrame with: team_id, wins, losses, ppg, papg, margin, games.
+    """
+    path = games_dir / f"ncaab_games_{season}.parquet"
+    if not path.exists():
+        logger.warning("Game data not found: %s", path)
+        return pd.DataFrame()
+
+    df = pd.read_parquet(path)
+    if df.empty:
+        return pd.DataFrame()
+
+    # Aggregate per team
+    stats = (
+        df.groupby("team_id")
+        .agg(
+            games=("result", "count"),
+            wins=("result", lambda x: (x == "W").sum()),
+            losses=("result", lambda x: (x == "L").sum()),
+            ppg=("points_for", "mean"),
+            papg=("points_against", "mean"),
+        )
+        .reset_index()
+    )
+    stats["margin"] = stats["ppg"] - stats["papg"]
+    stats["win_pct"] = stats["wins"] / stats["games"].clip(lower=1)
+
+    # Round numeric columns
+    for col in ("ppg", "papg", "margin", "win_pct"):
+        stats[col] = stats[col].round(1)
+
+    logger.info("Computed game stats for %d teams (season %d)", len(stats), season)
+    return stats
+
+
+def classify_tier(elo: float | None) -> str:
+    """Classify team into tier based on Elo rating."""
+    if elo is None or pd.isna(elo):
+        return "Unrated"
+    if elo >= 1700:
+        return "Elite"
+    if elo >= 1550:
+        return "Strong"
+    if elo >= 1400:
+        return "Average"
+    return "Below Avg"
+
+
+def build_opponent_name_map(
+    games_dir: Path = PROJECT_ROOT / "data" / "raw" / "ncaab",
+) -> dict[str, str]:
+    """Build ESPN team_id -> full team name mapping from game data."""
+    name_map: dict[str, str] = {}
+    for f in sorted(games_dir.glob("ncaab_games_*.parquet")):
+        df = pd.read_parquet(f)
+        for _, row in df.iterrows():
+            oid = row.get("opponent_id")
+            oname = row.get("opponent_name")
+            if oid and oname and isinstance(oname, str):
+                # Strip mascot: keep everything before last 1-2 words
+                name_map[oid] = oname
+    return name_map
+
+
+def generate_bundle(season: int = 2026) -> dict:
+    """Generate the complete dashboard data bundle."""
+    # Load data sources
+    elo_df = load_elo_ratings()
+    bart_df, bart_date = load_barttorvik_latest()
+    game_stats = load_game_stats(season)
+
+    # Filter Elo to only teams active in the current season
+    active_team_ids = set(game_stats["team_id"]) if not game_stats.empty else set()
+    if active_team_ids:
+        elo_df = elo_df[elo_df["team_id"].isin(active_team_ids)].copy()
+        elo_df = elo_df.sort_values("elo_rating", ascending=False).reset_index(drop=True)
+        elo_df["rank"] = range(1, len(elo_df) + 1)
+        logger.info("Filtered to %d active teams for season %d", len(elo_df), season)
+
+    # Build ESPN -> Barttorvik name mapping
+    espn_to_bart = build_espn_barttorvik_mapping()
+    # Build ESPN ID -> full name mapping
+    full_names = build_opponent_name_map()
+
+    # Index Barttorvik by team name for fast lookup
+    bart_lookup: dict[str, dict] = {}
+    if not bart_df.empty:
+        for _, row in bart_df.iterrows():
+            bart_lookup[row["team"]] = row.to_dict()
+
+    # Index game stats by team_id
+    stats_lookup: dict[str, dict] = {}
+    if not game_stats.empty:
+        for _, row in game_stats.iterrows():
+            stats_lookup[row["team_id"]] = row.to_dict()
+
+    # Build team records
+    teams = []
+    conf_teams: dict[str, list] = {}
+
+    for _, elo_row in elo_df.iterrows():
+        tid = elo_row["team_id"]
+        elo_val = round(elo_row["elo_rating"], 1)
+        elo_rank = int(elo_row["rank"])
+
+        # Get Barttorvik data via mapping
+        bart_name = espn_to_bart.get(tid)
+        bart_data = bart_lookup.get(bart_name, {}) if bart_name else {}
+
+        # Get game stats
+        gstats = stats_lookup.get(tid, {})
+
+        # Conference from Barttorvik (ESPN conf is always empty)
+        conf = bart_data.get("conf", "")
+        conf_full = CONFERENCE_FULL_NAMES.get(conf, conf)
+
+        # Full team name: prefer Barttorvik name (cleaner), fallback to ESPN stripped
+        raw_name = full_names.get(tid, tid)
+        if bart_name:
+            team_name = bart_name
+        else:
+            team_name = raw_name
+
+        team = {
+            "id": tid,
+            "name": team_name,
+            "bart_name": bart_name or "",
+            "conf": conf,
+            "conf_full": conf_full,
+            "elo": elo_val,
+            "elo_rank": elo_rank,
+            "bart_rank": _safe_int(bart_data.get("rank")),
+            "adj_o": _safe_round(bart_data.get("adj_o")),
+            "adj_d": _safe_round(bart_data.get("adj_d")),
+            "adj_net": _safe_round(bart_data.get("adj_net")),
+            "barthag": _safe_round(bart_data.get("barthag"), 4),
+            "adj_tempo": _safe_round(bart_data.get("adj_tempo")),
+            "wab": _safe_round(bart_data.get("wab")),
+            "wins": int(gstats.get("wins", 0)),
+            "losses": int(gstats.get("losses", 0)),
+            "win_pct": _safe_round(gstats.get("win_pct"), 3),
+            "ppg": _safe_round(gstats.get("ppg")),
+            "papg": _safe_round(gstats.get("papg")),
+            "margin": _safe_round(gstats.get("margin")),
+            "games": int(gstats.get("games", 0)),
+            "tier": classify_tier(elo_val),
+        }
+        teams.append(team)
+
+        # Track conference membership
+        if conf:
+            conf_teams.setdefault(conf, []).append(team)
+
+    # Build conference summaries
+    conferences = []
+    for abbr in sorted(conf_teams.keys()):
+        members = conf_teams[abbr]
+        elos = [t["elo"] for t in members]
+        nets = [t["adj_net"] for t in members if t["adj_net"] is not None]
+        barthags = [t["barthag"] for t in members if t["barthag"] is not None]
+
+        conferences.append(
+            {
+                "abbr": abbr,
+                "name": CONFERENCE_FULL_NAMES.get(abbr, abbr),
+                "teams": len(members),
+                "avg_elo": round(sum(elos) / len(elos), 1) if elos else None,
+                "avg_adj_net": round(sum(nets) / len(nets), 1) if nets else None,
+                "avg_barthag": round(sum(barthags) / len(barthags), 4) if barthags else None,
+                "best_team": min(members, key=lambda t: t["elo_rank"])["id"],
+                "worst_team": max(members, key=lambda t: t["elo_rank"])["id"],
+            }
+        )
+
+    # Sort conferences by avg_elo desc
+    conferences.sort(key=lambda c: c["avg_elo"] or 0, reverse=True)
+
+    bart_coverage = sum(1 for t in teams if t["bart_name"])
+    elo_date = datetime.now().strftime("%Y-%m-%d")
+
+    bundle = {
+        "generated_at": datetime.now().isoformat(),
+        "season": season,
+        "teams": teams,
+        "conferences": conferences,
+        "conference_lookup": CONFERENCE_FULL_NAMES,
+        "meta": {
+            "total_teams": len(teams),
+            "barttorvik_coverage": bart_coverage,
+            "elo_model_date": elo_date,
+            "barttorvik_date": bart_date,
+            "barttorvik_season": "2024-25 (end-of-season)",
+        },
+    }
+
+    return bundle
+
+
+def _safe_round(val, decimals: int = 1):
+    """Round a value safely, returning None for NaN/None."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    return round(float(val), decimals)
+
+
+def _safe_int(val):
+    """Convert to int safely, returning None for NaN/None."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    return int(val)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate NCAA D1 dashboard data")
+    parser.add_argument("--season", type=int, default=2026, help="Season (default: 2026)")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=str(PROJECT_ROOT / "data" / "processed" / "ncaab_dashboard_bundle.json"),
+        help="Output JSON path",
+    )
+    args = parser.parse_args()
+
+    bundle = generate_bundle(args.season)
+
+    if bundle["meta"]["total_teams"] == 0:
+        logger.error("Dashboard bundle has 0 teams — aborting")
+        sys.exit(1)
+
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(bundle, f, indent=2, default=str)
+
+    meta = bundle["meta"]
+    print(f"\nDashboard data generated: {out_path}")
+    print(f"  Teams: {meta['total_teams']}")
+    print(f"  Barttorvik coverage: {meta['barttorvik_coverage']}")
+    print(f"  Elo date: {meta['elo_model_date']}")
+    print(f"  Barttorvik date: {meta['barttorvik_date']}")
+    print(f"  Conferences: {len(bundle['conferences'])}")
+
+
+if __name__ == "__main__":
+    main()

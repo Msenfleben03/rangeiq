@@ -218,6 +218,9 @@ def main() -> None:
         print(
             f"\n  Total: {total_games:,} games, {total_odds:,} with odds ({overall_coverage:.0f}%)"
         )
+    elif not results:
+        logger.error("No games fetched across all seasons")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
