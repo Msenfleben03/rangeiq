@@ -14,7 +14,7 @@
     Designed to run via Windows Task Scheduler at 11:00 PM ET nightly.
 
 .PARAMETER Force
-    Skip checkpoint resume — run all steps from scratch.
+    Skip checkpoint resume -- run all steps from scratch.
 
 .PARAMETER DryRun
     Preview all steps without executing any Python scripts.
@@ -99,7 +99,7 @@ if ($SkipHealthCheck) {
 if (-not $DryRun) {
     $locked = Acquire-PipelineLock
     if (-not $locked) {
-        Write-Log "ERROR" "Cannot acquire pipeline lock — exiting"
+        Write-Log "ERROR" "Cannot acquire pipeline lock -- exiting"
         exit 2
     }
 }
@@ -145,14 +145,14 @@ foreach ($stepName in $steps.Keys) {
     if ($state.steps.ContainsKey($stepName)) {
         $existing = $state.steps[$stepName]
         if ($existing.status -eq "completed") {
-            Write-Log "INFO" "Step [$stepName] already completed (checkpoint) — skipping"
+            Write-Log "INFO" "Step [$stepName] already completed (checkpoint) -- skipping"
             continue
         }
     }
 
     # Skip remaining steps if a critical step failed
     if ($hasCriticalFailure) {
-        Write-Log "WARN" "Skipping [$stepName] — critical failure in earlier step"
+        Write-Log "WARN" "Skipping [$stepName] -- critical failure in earlier step"
         $state.steps[$stepName] = @{
             status    = "skipped"
             exit_code = -1
@@ -197,13 +197,13 @@ foreach ($stepName in $steps.Keys) {
 
         if ($stepConfig.critical) {
             $hasCriticalFailure = $true
-            Write-Log "ERROR" "CRITICAL step [$stepName] failed — aborting pipeline"
+            Write-Log "ERROR" "CRITICAL step [$stepName] failed -- aborting pipeline"
             Send-PipelineNotification `
                 -Title "Nightly Pipeline FAILED" `
                 -Message "Critical step '$stepName' failed: $errorMsg" `
                 -Level "error"
         } else {
-            Write-Log "WARN" "Non-critical step [$stepName] failed — continuing"
+            Write-Log "WARN" "Non-critical step [$stepName] failed -- continuing"
         }
     }
 

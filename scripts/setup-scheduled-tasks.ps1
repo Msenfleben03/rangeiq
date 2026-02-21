@@ -5,9 +5,9 @@
 
 .DESCRIPTION
     Manages three scheduled tasks:
-    - SportsBetting-Nightly   (11:00 PM ET) — data refresh + model retrain
-    - SportsBetting-Morning   (10:00 AM ET) — predictions + record bets
-    - SportsBetting-Settlement (11:30 PM ET) — settle today's bets
+    - SportsBetting-Nightly   (11:00 PM ET) -- data refresh + model retrain
+    - SportsBetting-Morning   (10:00 AM ET) -- predictions + record bets
+    - SportsBetting-Settlement (11:30 PM ET) -- settle today's bets
 
 .PARAMETER Action
     One of: register, unregister, status
@@ -65,7 +65,7 @@ function Register-Tasks {
         # Check if task already exists
         $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
         if ($existing) {
-            Write-Host "  Task '$taskName' already exists — unregistering first" -ForegroundColor Yellow
+            Write-Host "  Task '$taskName' already exists -- unregistering first" -ForegroundColor Yellow
             Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
         }
 
@@ -100,9 +100,9 @@ function Register-Tasks {
                 -Settings $settings `
                 -RunLevel Highest | Out-Null
 
-            Write-Host "  [OK] $taskName — daily at $($task.TriggerTime)" -ForegroundColor Green
+            Write-Host "  [OK] $taskName -- daily at $($task.TriggerTime)" -ForegroundColor Green
         } catch {
-            Write-Host "  [FAIL] $taskName — $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  [FAIL] $taskName -- $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "         Try running as Administrator" -ForegroundColor Yellow
         }
     }
@@ -122,7 +122,7 @@ function Unregister-Tasks {
                 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
                 Write-Host "  [OK] Removed $taskName" -ForegroundColor Green
             } catch {
-                Write-Host "  [FAIL] $taskName — $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "  [FAIL] $taskName -- $($_.Exception.Message)" -ForegroundColor Red
             }
         } else {
             Write-Host "  [SKIP] $taskName not found" -ForegroundColor Yellow

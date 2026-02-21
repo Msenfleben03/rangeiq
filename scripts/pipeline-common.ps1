@@ -1,4 +1,4 @@
-# pipeline-common.ps1 — Shared functions for pipeline orchestrators.
+# pipeline-common.ps1 -- Shared functions for pipeline orchestrators.
 # Dot-source this file: . "$PSScriptRoot\pipeline-common.ps1"
 
 $Script:ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path
@@ -206,7 +206,7 @@ function Invoke-PipelineStep {
     $scriptPath = Join-Path $Script:ProjectRoot "scripts" $Script
 
     for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
-        Write-Log "INFO" "Step [$StepName] attempt $attempt/$MaxRetries — $Script"
+        Write-Log "INFO" "Step [$StepName] attempt $attempt/$MaxRetries -- $Script"
 
         $startTime = Get-Date
         $stdoutFile = [System.IO.Path]::GetTempFileName()
@@ -287,7 +287,7 @@ function Acquire-PipelineLock {
             Write-Log "WARN" "Removing stale lock file (${age}min old)"
             Remove-Item $Script:LockFile -Force
         } else {
-            Write-Log "ERROR" "Pipeline lock active (${age}min old) — another run in progress?"
+            Write-Log "ERROR" "Pipeline lock active (${age}min old) -- another run in progress?"
             return $false
         }
     }

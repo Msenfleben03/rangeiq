@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Morning betting pipeline — settle + predict.
+    Morning betting pipeline -- settle + predict.
 
 .DESCRIPTION
     Runs the daily paper betting workflow:
@@ -63,7 +63,7 @@ Write-Log "INFO" "Morning betting starting (DryRun=$DryRun, SettleOnly=$SettleOn
 if (-not $DryRun) {
     $locked = Acquire-PipelineLock
     if (-not $locked) {
-        Write-Log "ERROR" "Cannot acquire pipeline lock — exiting"
+        Write-Log "ERROR" "Cannot acquire pipeline lock -- exiting"
         exit 2
     }
 }
@@ -108,7 +108,7 @@ if (-not $SkipSettle) {
             attempt   = $settleResult.attempt
             error     = "Settlement failed (non-critical)"
         }
-        Write-Log "WARN" "Settlement failed — continuing to predictions"
+        Write-Log "WARN" "Settlement failed -- continuing to predictions"
         # Settlement is non-critical: log but don't abort
     }
 
@@ -142,7 +142,7 @@ print(count)
             $existingBets = [int]$countResult.Trim()
 
             if ($existingBets -gt 0) {
-                Write-Log "INFO" "Found $existingBets existing bets for $checkDate — skipping predictions (use -Force to override)"
+                Write-Log "INFO" "Found $existingBets existing bets for $checkDate -- skipping predictions (use -Force to override)"
                 $skipPredictions = $true
                 $state.steps["predictions"] = @{
                     status    = "skipped"
@@ -152,7 +152,7 @@ print(count)
                 }
             }
         } catch {
-            Write-Log "WARN" "Idempotency check failed: $_ — proceeding with predictions"
+            Write-Log "WARN" "Idempotency check failed: $_ -- proceeding with predictions"
         }
     }
 
