@@ -196,9 +196,11 @@ sports_betting/
 │           └── [future]
 │
 ├── features/
-│   ├── engineering.py        # Feature creation utilities
+│   ├── engineering.py        # Safe rolling, decay, opponent-quality, rest days
 │   ├── selection.py          # Feature importance, selection
 │   └── sport_specific/
+│       └── ncaab/
+│           └── advanced_features.py  # NCABBFeatureEngine (vol, OQ-margin, rest, decay)
 │
 ├── betting/
 │   ├── kelly.py              # Kelly criterion calculations
@@ -228,6 +230,8 @@ sports_betting/
 │   ├── espn_ncaab_fetcher.py      # ESPN Site API fetcher (primary NCAAB scores)
 │   ├── espn_core_odds_provider.py # ESPN Core API odds (free, historical)
 │   ├── unified_fetcher.py         # Scores + odds in one pass
+│   ├── barttorvik_fetcher.py      # Barttorvik T-Rank ratings (cbbdata API, Parquet)
+│   ├── team_name_mapping.py       # ESPN <-> Barttorvik team name mapping (359 teams)
 │   ├── odds_providers.py          # Odds retrieval (4 providers)
 │   ├── odds_orchestrator.py       # Odds fallback: API → ESPN Core → ESPN → Scraper → Cache
 │   ├── polymarket_fetcher.py      # Polymarket API client
@@ -235,18 +239,24 @@ sports_betting/
 │   └── arb_scanner.py             # Cross-book arbitrage detection
 │
 ├── dashboards/
-│   └── elo_dashboard.html         # Interactive Elo ratings dashboard (5 tabs)
+│   └── ncaab_dashboard.html       # Unified NCAAB dashboard (9 tabs: Rankings, Scatter, Conference, Compare, Distributions, Lookup, Trajectories, Betting)
 │
 ├── tests/
 │   ├── test_models.py
 │   ├── test_betting.py
+│   ├── test_feature_engineering.py   # 30 tests for feature engine
+│   ├── test_barttorvik_fetcher.py    # 18 tests for Barttorvik pipeline
+│   ├── test_team_name_mapping.py     # 11 tests for ESPN<->Barttorvik mapping
 │   ├── test_temporal_validator.py
 │   ├── test_statistical_validator.py
 │   ├── test_overfit_validator.py
 │   ├── test_betting_validator.py
 │   ├── test_gatekeeper.py
 │   ├── test_espn_core_odds_provider.py
-│   └── test_unified_fetcher.py
+│   ├── test_unified_fetcher.py
+│   ├── test_tune_barttorvik.py         # 14 tests for weight tuning grid search
+│   └── test_daily_run.py              # 26 tests for paper betting pipeline
+│
 │
 ├── scripts/
 │   ├── setup_database.py              # Initialize SQLite
@@ -254,16 +264,40 @@ sports_betting/
 │   ├── fetch_season_data.py           # Unified scores + odds fetcher CLI
 │   ├── backfill_historical_odds.py    # ESPN Core API odds backfill (checkpoint/resume)
 │   ├── train_ncaab_elo.py             # Train Elo model on historical data
-│   ├── backtest_ncaab_elo.py          # Walk-forward backtest
+│   ├── backtest_ncaab_elo.py          # Walk-forward backtest + feature wrapper
+│   ├── ab_compare_features.py         # A/B comparison framework (paired t-test)
 │   ├── run_gatekeeper_validation.py   # 5-dim validation pipeline
-│   ├── daily_predictions.py           # Generate daily predictions
+│   ├── fetch_barttorvik_data.py       # Fetch Barttorvik T-Rank ratings (all seasons)
+│   ├── tune_barttorvik_weights.py      # Grid search for Barttorvik coefficients
+│   ├── incremental_backtest.py        # Walk-forward: train [2020..N-1], test N
+│   ├── daily_predictions.py           # ESPN Scoreboard API + Barttorvik predictions
+│   ├── daily_run.py                   # Paper betting orchestrator (predict→record→settle→report)
 │   ├── record_paper_bets.py           # Log paper bet decisions
 │   ├── settle_paper_bets.py           # Settle completed bets
-│   └── generate_report.py            # Performance reports
+│   ├── generate_report.py            # Performance reports
+│   ├── generate_dashboard_data.py     # Merge Elo + Barttorvik + stats → dashboard JSON
+│   └── test_cbbdata_api.py            # CBBData API exploratory testing
 │
 └── docs/
-    ├── DATA_DICTIONARY.md    # Field definitions
-    └── DECISIONS.md          # Architecture decisions
+    ├── DATA_DICTIONARY.md             # Field definitions
+    ├── DECISIONS.md                   # Architecture decisions (17 ADRs)
+    ├── ADVANCED_FEATURES_RESEARCH.md  # Feature research report
+    ├── CBBDATA_API_RESEARCH.md        # CBBData REST API research
+    ├── CBBDATA_QUICKSTART.md          # CBBData API quick start guide
+    ├── BARTTORVIK_SUMMARY.md          # Barttorvik integration summary
+    ├── ESPN_BPI_API_RESEARCH.md       # ESPN BPI API research
+    ├── KENPOM_EFFICIENCY_RESEARCH.md  # KenPom/Barttorvik data options
+    └── CODEMAPS/                      # Module-level architecture docs
+        ├── CODEMAP.md                 # Index / overview
+        ├── backtesting.md
+        ├── betting.md
+        ├── config.md
+        ├── features.md
+        ├── models.md
+        ├── pipelines.md
+        ├── scripts.md
+        ├── tests.md
+        └── tracking.md
 ```
 
 ---
@@ -294,9 +328,25 @@ sports_betting/
 - [x] Build ESPN Core API odds fetcher (free, historical, ~85% coverage)
 - [x] Build unified scores + odds fetcher (single-pass pipeline)
 - [x] Build interactive Elo ratings dashboard (5-tab HTML)
-- [ ] Complete historical odds backfill (2020-2025)
-- [ ] Re-backtest with real odds data
-- [ ] Begin paper betting tracking
+- [x] Complete historical odds backfill (2020-2025, 91.6% coverage, 318K records)
+- [x] Re-backtest with real odds data (6 seasons, pooled p=0.0002, ROI 6.54%)
+- [x] Advanced feature research (5 features evaluated, 4 implemented)
+- [x] A/B test advanced features (5/6 seasons improved, one-sided p=0.064)
+- [x] Research KenPom alternatives (Barttorvik cbbdata API — free, daily ratings)
+- [x] Build Barttorvik fetcher pipeline (347K ratings cached, 6 seasons)
+- [x] Build ESPN <-> Barttorvik team name mapping (359 teams)
+- [x] Integrate Barttorvik efficiency ratings into backtest
+- [x] Grid search Barttorvik weights (quick: 12 combos, best w=1.5/nc=0.003/bc=0.15, ROI +24.2%)
+- [x] Incremental retraining (5-fold walk-forward, pooled ROI +17.86%, p<0.0001)
+- [x] Build paper betting system (daily_run.py orchestrator, ESPN Scoreboard API)
+- [x] Full grid search (80 combos, 6 seasons, best w=1.5/nc=0.005/bc=0.20, ROI +24.0%, p=2.5e-6)
+- [x] Fixed stale Elo ratings (retrained with 2026 data, 5,039 games)
+- [x] Fixed DB schema mismatches (game_date, profit_loss, confidence columns)
+- [x] Built NCAAB dashboard (7-tab HTML, Elo + Barttorvik + game stats)
+- [x] Built dashboard data pipeline (generate_dashboard_data.py → JSON bundle)
+- [x] Dry-run paper betting verified (5 picks, 7.9-13.4% edges)
+- [ ] Begin live paper betting tracking (daily_run.py)
+- [ ] Backfill 2026 odds (0% coverage currently)
 
 ### Prediction Markets Integration
 
@@ -675,18 +725,29 @@ except APIRateLimitError:
 # ===============================================================
 # ENVIRONMENT SETUP
 # ===============================================================
-conda activate sports_betting
 cd ~/sports_betting
+source venv/Scripts/activate  # Windows: venv\Scripts\activate
 
 # ===============================================================
-# DAILY WORKFLOW
+# DAILY WORKFLOW (Paper Betting)
 # ===============================================================
-python scripts/daily_run.py --sport ncaab
+python scripts/daily_run.py --dry-run       # Preview picks (no DB writes)
+python scripts/daily_run.py                  # Full run: predict → record → settle → report
+python scripts/daily_run.py --settle-only    # Settle yesterday's bets only
+python scripts/daily_run.py --report-only    # Weekly performance report
+
+# ===============================================================
+# NIGHTLY REFRESH
+# ===============================================================
+python scripts/fetch_season_data.py --season 2026 --incremental --no-odds
+python scripts/train_ncaab_elo.py --end 2026
+python scripts/daily_run.py
 
 # ===============================================================
 # RUN BACKTESTS
 # ===============================================================
-python scripts/backtest_runner.py --sport ncaab --seasons 2020-2025
+python scripts/backtest_ncaab_elo.py --barttorvik --test-season 2025
+python scripts/incremental_backtest.py --barttorvik
 
 # ===============================================================
 # VALIDATE MODEL BEFORE DEPLOYMENT
@@ -698,6 +759,12 @@ python -c "from backtesting.validators import Gatekeeper; print('Validators load
 # PERFORMANCE REPORT
 # ===============================================================
 python -c "from tracking.reports import weekly_report; weekly_report()"
+
+# ===============================================================
+# DASHBOARD
+# ===============================================================
+python scripts/generate_dashboard_data.py    # Regenerate data bundle
+python -m http.server 8765                   # Serve at localhost:8765
 
 # ===============================================================
 # DATABASE ACCESS

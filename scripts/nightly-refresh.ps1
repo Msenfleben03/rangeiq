@@ -9,6 +9,7 @@
     3. Retrain Elo model with new data
     4. Scrape Barttorvik daily snapshot
     5. Generate dashboard data bundle
+    6. Deploy dashboard to Vercel
 
     Supports checkpointing, retry, and notification on failure.
     Designed to run via Windows Task Scheduler at 11:00 PM ET nightly.
@@ -87,22 +88,32 @@ $steps = [ordered]@{
         critical  = $false
         timeout   = 60
     }
+    deploy_dashboard = @{
+        script    = "deploy_dashboard.py"
+        args      = @()
+        critical  = $false
+        timeout   = 90
+    }
 }
 
 # Skip health check if requested
 if ($SkipHealthCheck) {
     $steps.Remove("health_check")
     Write-Log "INFO" "Health check skipped (-SkipHealthCheck)"
-}
 
-# Acquire lock
-if (-not $DryRun) {
-    $locked = Acquire-PipelineLock
-    if (-not $locked) {
-        Write-Log "ERROR" "Cannot acquire pipeline lock -- exiting"
-        exit 2
+    # When health check is skipped, acquire lock upfront
+    if (-not $DryRun) {
+        $locked = Acquire-PipelineLock
+        if (-not $locked) {
+            Write-Log "ERROR" "Cannot acquire pipeline lock -- exiting"
+            exit 2
+        }
     }
 }
+
+# NOTE: When health_check IS enabled, lock is acquired AFTER it passes (see main loop).
+# Acquiring before health_check caused a self-deadlock: health_check's stale_lock
+# detector saw the lock this pipeline created and returned critical, aborting everything.
 
 # Check for checkpoint to resume
 $checkpoint = $null
@@ -178,6 +189,17 @@ foreach ($stepName in $steps.Keys) {
             exit_code = 0
             attempt   = $result.attempt
             duration  = $result.duration
+        }
+
+        # Acquire lock AFTER health_check passes (avoids self-deadlock where
+        # health_check's stale_lock detector sees the lock we created).
+        if ($stepName -eq "health_check" -and -not $DryRun) {
+            $locked = Acquire-PipelineLock
+            if (-not $locked) {
+                Write-Log "ERROR" "Cannot acquire pipeline lock -- exiting"
+                Release-PipelineLock
+                exit 2
+            }
         }
     } else {
         $errorMsg = if ($result.stderr) {

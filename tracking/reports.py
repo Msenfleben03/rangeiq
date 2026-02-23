@@ -254,6 +254,109 @@ def model_health_check(db: BettingDatabase) -> dict[str, Any]:
     }
 
 
+def paper_betting_weekly_review(
+    db: BettingDatabase,
+    weeks: int = 1,
+) -> dict[str, Any]:
+    """Generate a comprehensive weekly review for paper betting.
+
+    Combines weekly performance, CLV analysis, model health, and
+    per-day breakdown into a single report dict.
+
+    Args:
+        db: BettingDatabase instance.
+        weeks: Number of weeks to include.
+
+    Returns:
+        Dict with comprehensive review metrics.
+    """
+    end_date = date.today()
+    start_date = end_date - timedelta(days=weeks * 7)
+
+    # Paper bets only (is_live = 0)
+    bets = db.execute_query(
+        """SELECT * FROM bets
+           WHERE game_date >= ? AND game_date <= ?
+           AND is_live = 0""",
+        (start_date.isoformat(), end_date.isoformat()),
+    )
+
+    settled = [b for b in bets if b.get("result") is not None]
+    pending = [b for b in bets if b.get("result") is None]
+
+    if not settled:
+        return {
+            "period": f"{start_date} to {end_date}",
+            "total_bets": len(bets),
+            "settled": 0,
+            "pending": len(pending),
+        }
+
+    total_pnl = sum(b["profit_loss"] for b in settled if b["profit_loss"] is not None)
+    total_staked = sum(b["stake"] for b in settled if b["stake"] is not None)
+    wins = sum(1 for b in settled if b["result"] == "win")
+    losses = sum(1 for b in settled if b["result"] == "loss")
+
+    clv_values = [b["clv"] for b in settled if b.get("clv") is not None]
+    edge_values = [b["model_edge"] for b in settled if b.get("model_edge") is not None]
+
+    # Per-day breakdown
+    daily_breakdown: dict[str, dict] = {}
+    for b in settled:
+        d = str(b["game_date"])
+        if d not in daily_breakdown:
+            daily_breakdown[d] = {"bets": 0, "wins": 0, "pnl": 0.0, "staked": 0.0}
+        daily_breakdown[d]["bets"] += 1
+        if b["result"] == "win":
+            daily_breakdown[d]["wins"] += 1
+        daily_breakdown[d]["pnl"] += b.get("profit_loss", 0) or 0
+        daily_breakdown[d]["staked"] += b.get("stake", 0) or 0
+
+    # Sharpe calculation
+    daily_pnl_values = [v["pnl"] for v in daily_breakdown.values()]
+    sharpe = 0.0
+    if len(daily_pnl_values) > 1:
+        import math
+
+        mean_pnl = sum(daily_pnl_values) / len(daily_pnl_values)
+        std_pnl = math.sqrt(
+            sum((x - mean_pnl) ** 2 for x in daily_pnl_values) / (len(daily_pnl_values) - 1)
+        )
+        if std_pnl > 0:
+            sharpe = (mean_pnl / std_pnl) * math.sqrt(150)
+
+    # Streak tracking
+    streak = 0
+    current_streak_type = None
+    for b in sorted(settled, key=lambda x: x.get("created_at", "")):
+        if b["result"] == current_streak_type:
+            streak += 1
+        else:
+            streak = 1
+            current_streak_type = b["result"]
+
+    return {
+        "period": f"{start_date} to {end_date}",
+        "total_bets": len(bets),
+        "settled": len(settled),
+        "pending": len(pending),
+        "wins": wins,
+        "losses": losses,
+        "win_rate": wins / len(settled) if settled else 0.0,
+        "total_pnl": total_pnl,
+        "total_staked": total_staked,
+        "roi": total_pnl / total_staked if total_staked > 0 else 0.0,
+        "avg_clv": sum(clv_values) / len(clv_values) if clv_values else 0.0,
+        "avg_edge": sum(edge_values) / len(edge_values) if edge_values else 0.0,
+        "sharpe": sharpe,
+        "betting_days": len(daily_breakdown),
+        "avg_bets_per_day": len(settled) / max(len(daily_breakdown), 1),
+        "current_streak": streak,
+        "current_streak_type": current_streak_type,
+        "daily_breakdown": daily_breakdown,
+    }
+
+
 def odds_system_health(db: BettingDatabase) -> dict[str, Any]:
     """Check odds retrieval system health.
 

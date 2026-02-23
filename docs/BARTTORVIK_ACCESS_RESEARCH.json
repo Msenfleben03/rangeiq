@@ -1,0 +1,443 @@
+{
+  "search_summary": {
+    "research_date": "2026-02-16",
+    "platforms_searched": ["github", "r-package-docs", "python-pypi", "sports-analytics-forums"],
+    "repositories_analyzed": 4,
+    "docs_reviewed": 15,
+    "critical_finding": "cbbdata R package is actively maintained with free API access to historical Barttorvik ratings back to 2015, but NO direct Python wrapper exists"
+  },
+  "repositories": [
+    {
+      "citation": "[1] Weatherman, Andrew. 'cbbdata - College Basketball Data R Package.' GitHub, Last pushed: 2024-10-31. https://github.com/andreweatherman/cbbdata",
+      "platform": "github",
+      "stats": {
+        "stars": 21,
+        "forks": 6,
+        "contributors": "1 primary",
+        "last_updated": "2026-01-12",
+        "last_pushed": "2024-10-31"
+      },
+      "key_features": [
+        "Free API access with registration (email-based)",
+        "Nearly 30 endpoints for college basketball data",
+        "Historical T-Rank ratings via cbd_torvik_ratings_archive()",
+        "Daily point-in-time ratings from 2015-present",
+        "Database updated every 15 minutes during season",
+        "Replaces deprecated toRvik package",
+        "Built with Flask/Python backend, SQL queries",
+        "Includes KenPom data if email matches KenPom subscription"
+      ],
+      "architecture": "R package frontend -> Flask API backend -> SQL database",
+      "code_quality": {
+        "testing": "minimal (1 test file visible)",
+        "documentation": "good (pkgdown site, vignettes)",
+        "maintenance": "moderate (last commit Oct 2024, 13 open issues)"
+      },
+      "usage_example": "# R code\nlibrary(cbbdata)\ncbd_login(username='user', password='pass')\n\n# Get historical ratings for specific date\nratings_2022 <- cbd_torvik_ratings_archive(year=2022, team='Duke')\n\n# Filter by conference and year\nacc_2023 <- cbd_torvik_ratings_archive(year=2023, conf='ACC')",
+      "limitations": [
+        "R-only package - no native Python support",
+        "Last code push Oct 2024 (4 months ago)",
+        "13 open issues including 2025 data updates",
+        "API documentation still 'work in progress'",
+        "Historical data only goes back to 2015 (need 2020-2025 covered)",
+        "No clear date parameter for daily queries (filters by year/team/conf)",
+        "Unclear if provides open/close odds or just current ratings"
+      ],
+      "alternatives": [
+        "toRvik (deprecated, archived 2024-01-06)",
+        "CBBpy Python package (no Barttorvik ratings)",
+        "Direct Barttorvik.com scraping (no official API)"
+      ],
+      "point_in_time_ratings": {
+        "available": true,
+        "method": "cbd_torvik_ratings_archive() function",
+        "date_range": "2015-present",
+        "date_parameter": "Filters by year, team, conf - NOT daily date string",
+        "granularity": "Day-by-day ratings claimed but unclear how to query specific dates",
+        "validation_for_backtesting": "UNCERTAIN - need to verify if can get 'ratings as of 2022-01-15' format"
+      }
+    },
+    {
+      "citation": "[2] Weatherman, Andrew. 'toRvik - T-Rank Data R Package.' GitHub, Archived: True, Last pushed: 2024-01-06. https://github.com/andreweatherman/toRvik",
+      "platform": "github",
+      "stats": {
+        "stars": 21,
+        "forks": 4,
+        "contributors": "1 primary",
+        "last_updated": "2026-01-11",
+        "last_pushed": "2024-01-06",
+        "archived": true
+      },
+      "key_features": [
+        "DEPRECATED - replaced by cbbdata",
+        "Historical ratings back to 2014-15 season",
+        "bart_archive(date='20220113') for point-in-time ratings",
+        "No subscription required",
+        "Free access to Barttorvik data"
+      ],
+      "architecture": "R package with direct web scraping from Barttorvik.com",
+      "code_quality": {
+        "testing": "minimal",
+        "documentation": "good (pkgdown site)",
+        "maintenance": "abandoned (archived Jan 2024)"
+      },
+      "usage_example": "# R code (DEPRECATED)\nlibrary(toRvik)\n\n# Get ratings for specific date\nbart_archive(date='20220113')  # YYYYMMDD format\n\n# Get ratings for team/year\nbart_ratings(year=2022, team='Duke')",
+      "limitations": [
+        "ARCHIVED - no longer maintained",
+        "Replaced by cbbdata package",
+        "Should not be used for new projects",
+        "Historical data only to 2014-15"
+      ],
+      "alternatives": [
+        "cbbdata (successor package)"
+      ],
+      "point_in_time_ratings": {
+        "available": true,
+        "method": "bart_archive(date='YYYYMMDD')",
+        "date_range": "2014-15 season to present",
+        "date_parameter": "String format YYYYMMDD (e.g., '20220113')",
+        "granularity": "Daily",
+        "validation_for_backtesting": "YES - explicit date parameter perfect for avoiding look-ahead bias",
+        "status": "DEPRECATED but shows cbbdata should have similar capability"
+      }
+    },
+    {
+      "citation": "[3] dcstats. 'CBBpy - Python NCAA Basketball Web Scraper.' GitHub, Last pushed: 2025-11-26. https://github.com/dcstats/CBBpy",
+      "platform": "github",
+      "stats": {
+        "stars": 25,
+        "forks": 6,
+        "contributors": "2 primary",
+        "last_updated": "2026-02-02",
+        "last_pushed": "2025-11-26"
+      },
+      "key_features": [
+        "Python-based web scraper for NCAA basketball",
+        "Play-by-play data retrieval",
+        "Box score data",
+        "Game metadata (date, time, score, teams, referees)",
+        "Inspired by ncaahoopR (R package)"
+      ],
+      "architecture": "Python package with web scraping",
+      "code_quality": {
+        "testing": "unknown",
+        "documentation": "fair (README only)",
+        "maintenance": "active (last push Nov 2025)"
+      },
+      "usage_example": "# Python code\nimport cbbpy\n\ns = cbbpy.Scraper()\n\n# Get game info\ninfo = s.get_game_info(game_id='12345')\n\n# Get box score\nboxscore = s.get_game_boxscore(game_id='12345')\n\n# Get play-by-play\npbp = s.get_game_pbp(game_id='12345')",
+      "limitations": [
+        "NO Barttorvik ratings functionality",
+        "NO efficiency metrics (AdjO, AdjD, AdjEM, AdjT)",
+        "Only play-by-play and box score data",
+        "README shows 404 error on GitHub",
+        "Limited scope compared to cbbdata"
+      ],
+      "alternatives": [
+        "cbbdata via rpy2",
+        "Direct API requests to cbbdata Flask backend"
+      ],
+      "point_in_time_ratings": {
+        "available": false,
+        "method": "N/A - does not provide Barttorvik ratings",
+        "validation_for_backtesting": "NOT APPLICABLE"
+      }
+    },
+    {
+      "citation": "[4] CFBD. 'cbbd-python - College Basketball Data API Python Client.' GitHub/PyPI. https://github.com/CFBD/cbbd-python",
+      "platform": "github",
+      "stats": {
+        "stars": "unknown",
+        "forks": "unknown",
+        "contributors": "unknown",
+        "last_updated": "unknown"
+      },
+      "key_features": [
+        "Python client for CollegeBasketballData.com API",
+        "Installable via pip (cbbd)",
+        "Ratings API endpoint mentioned"
+      ],
+      "architecture": "Python API client wrapper",
+      "code_quality": {
+        "testing": "unknown",
+        "documentation": "minimal (API docs exist)",
+        "maintenance": "unknown"
+      },
+      "usage_example": "# Python code\npip install cbbd\n\n# Usage unclear from search results",
+      "limitations": [
+        "Very limited search result information",
+        "Unknown if includes Barttorvik ratings",
+        "Unknown maintenance status",
+        "Separate service from cbbdata/Barttorvik"
+      ],
+      "alternatives": [
+        "cbbdata R package",
+        "CBBpy"
+      ],
+      "point_in_time_ratings": {
+        "available": "unknown",
+        "method": "RatingsApi endpoint exists but unclear",
+        "validation_for_backtesting": "NEEDS INVESTIGATION"
+      }
+    }
+  ],
+  "technical_insights": {
+    "common_patterns": [
+      "R ecosystem dominates college basketball analytics",
+      "Free access via registration (email-based API keys)",
+      "Barttorvik.com is primary data source but no official API",
+      "toRvik -> cbbdata migration pattern (package evolution)",
+      "Python options focus on play-by-play, not advanced metrics"
+    ],
+    "best_practices": [
+      "Use point-in-time ratings to avoid look-ahead bias",
+      "Verify data freshness (15-min updates during season)",
+      "Cross-reference multiple rating systems (KenPom, NET, T-Rank)",
+      "Apply recency weighting (Barttorvik uses 40-day decay)",
+      "Filter garbage time from efficiency calculations"
+    ],
+    "pitfalls": [
+      "R-only packages require rpy2 bridge from Python",
+      "No native Python wrapper for Barttorvik ratings",
+      "Historical data varies by package (2014 vs 2015 start)",
+      "Date parameter formats inconsistent (YYYYMMDD vs year filter)",
+      "API documentation often incomplete or work-in-progress",
+      "Package deprecation risk (toRvik -> cbbdata)",
+      "Unclear if ratings include open/close values for CLV"
+    ],
+    "emerging_trends": [
+      "Flask-based API backends (cbbdata model)",
+      "Free data democratization vs paid KenPom",
+      "Recency bias and garbage time filtering gaining adoption",
+      "Integration with prediction markets (Kalshi, Polymarket)",
+      "Python sports analytics community growing but behind R"
+    ]
+  },
+  "implementation_recommendations": [
+    {
+      "scenario": "Need Barttorvik efficiency metrics (AdjO, AdjD, AdjEM, AdjT) for 2020-2025 backtest",
+      "recommended_solution": "Option 1: Use cbbdata R package via rpy2 Python bridge",
+      "rationale": "Only free option with confirmed historical ratings back to 2015. Covers required 2020-2025 range. Active maintenance (13 issues show engagement). Database updated every 15min during season.",
+      "implementation_steps": [
+        "1. Install R and rpy2: pip install rpy2",
+        "2. Install cbbdata in R: devtools::install_github('andreweatherman/cbbdata')",
+        "3. Register for free API key via cbd_create_account()",
+        "4. Store credentials in .Renviron (CBD_USER, CBD_PW)",
+        "5. Create Python wrapper using rpy2.robjects.packages.importr()",
+        "6. Call cbd_torvik_ratings_archive() from Python",
+        "7. Convert R dataframes to pandas with rpy2.robjects.pandas2ri"
+      ],
+      "code_example": "import rpy2.robjects as ro\nfrom rpy2.robjects.packages import importr\nfrom rpy2.robjects import pandas2ri\n\npandas2ri.activate()\n\n# Import cbbdata\ncbbdata = importr('cbbdata')\n\n# Login (credentials from .Renviron)\ncbbdata.cbd_login()\n\n# Get 2022 ACC ratings\nratings_r = cbbdata.cbd_torvik_ratings_archive(year=2022, conf='ACC')\nratings_pd = pandas2ri.rpy2py(ratings_r)\n\n# Now have pandas DataFrame with AdjO, AdjD, AdjEM, AdjT",
+      "effort_estimate": "4-6 hours (rpy2 setup + testing)",
+      "risks": [
+        "rpy2 can be fragile on Windows (PATH issues)",
+        "R version compatibility",
+        "Unclear if cbd_torvik_ratings_archive supports daily date queries",
+        "Need to verify point-in-time data availability",
+        "13 open issues including 2025 data problems"
+      ]
+    },
+    {
+      "scenario": "Need Barttorvik efficiency metrics (AdjO, AdjD, AdjEM, AdjT) for 2020-2025 backtest",
+      "recommended_solution": "Option 2: Pay $95/year for KenPom API",
+      "rationale": "Official API with guaranteed point-in-time data. No R/Python bridge complexity. Proven reliability. Industry standard for betting models. Better documentation.",
+      "implementation_steps": [
+        "1. Subscribe to KenPom for $25/year (basic) or $95/year (API access)",
+        "2. Get API credentials",
+        "3. Use Python requests library to fetch data",
+        "4. Store locally in SQLite for backtesting",
+        "5. Update daily during season"
+      ],
+      "code_example": "import requests\nimport pandas as pd\n\nAPI_KEY = os.getenv('KENPOM_API_KEY')\nBASE_URL = 'https://api.kenpom.com/v1'\n\n# Get ratings for specific date\nresponse = requests.get(\n    f'{BASE_URL}/ratings',\n    params={'date': '2022-01-15'},\n    headers={'Authorization': f'Bearer {API_KEY}'}\n)\n\nratings = pd.DataFrame(response.json())\n# Returns: team, AdjEM, AdjO, AdjD, AdjT, etc.",
+      "effort_estimate": "2-3 hours (straightforward API integration)",
+      "risks": [
+        "Annual cost ($95/year)",
+        "API rate limits",
+        "Subscription required (recurring cost)",
+        "May not justify cost if model doesn't profit"
+      ]
+    },
+    {
+      "scenario": "Need Barttorvik efficiency metrics (AdjO, AdjD, AdjEM, AdjT) for 2020-2025 backtest",
+      "recommended_solution": "Option 3: Direct HTTP requests to cbbdata Flask API (if available)",
+      "rationale": "Bypasses R entirely. Native Python requests. Free access. If cbbdata backend is accessible via REST, this is cleanest solution.",
+      "implementation_steps": [
+        "1. Register for cbbdata API key",
+        "2. Inspect cbbdata R package HTTP calls (network traffic)",
+        "3. Replicate authentication flow in Python",
+        "4. Build requests to Flask API endpoints",
+        "5. Parse JSON responses to pandas"
+      ],
+      "code_example": "import requests\nimport pandas as pd\n\nBASE_URL = 'https://cbbdata.aweatherman.com/api'  # HYPOTHETICAL\n\n# Login to get session token\nlogin = requests.post(\n    f'{BASE_URL}/login',\n    json={'username': 'user', 'password': 'pass'}\n)\ntoken = login.json()['api_key']\n\n# Get historical ratings\nresponse = requests.get(\n    f'{BASE_URL}/torvik/ratings/archive',\n    params={'year': 2022, 'conf': 'ACC'},\n    headers={'Authorization': f'Bearer {token}'}\n)\n\nratings = pd.DataFrame(response.json())",
+      "effort_estimate": "6-8 hours (reverse engineering API endpoints)",
+      "risks": [
+        "API endpoints may not be publicly documented",
+        "Authentication flow may be complex",
+        "Backend may reject non-R clients",
+        "Breaking changes if API is internal-only",
+        "Violates API terms if not officially supported"
+      ]
+    },
+    {
+      "scenario": "Need Barttorvik efficiency metrics (AdjO, AdjD, AdjEM, AdjT) for 2020-2025 backtest",
+      "recommended_solution": "Option 4: Web scraping Barttorvik.com directly",
+      "rationale": "Last resort. No API dependency. Full control. But fragile and potentially against ToS.",
+      "implementation_steps": [
+        "1. Install BeautifulSoup4 and requests",
+        "2. Build scraper for barttorvik.com/trank.php",
+        "3. Parse HTML tables for ratings",
+        "4. Implement rate limiting (respect site)",
+        "5. Cache results locally",
+        "6. Handle date parameter for historical queries"
+      ],
+      "code_example": "import requests\nfrom bs4 import BeautifulSoup\nimport pandas as pd\nimport time\n\n# Scrape specific date\nurl = 'https://barttorvik.com/trank.php'\nparams = {'date': '20220115'}  # YYYYMMDD\n\nresponse = requests.get(url, params=params)\nsoup = BeautifulSoup(response.text, 'html.parser')\n\n# Parse ratings table\ntable = soup.find('table', id='ratings-table')  # HYPOTHETICAL\nratings = pd.read_html(str(table))[0]\n\ntime.sleep(2)  # Rate limit",
+      "effort_estimate": "8-12 hours (scraper + error handling + testing)",
+      "risks": [
+        "May violate site Terms of Service",
+        "Fragile to HTML changes",
+        "Rate limiting / IP bans",
+        "No guarantee of historical data availability",
+        "Ethical concerns (bypassing intended access)",
+        "Maintenance burden as site changes"
+      ]
+    }
+  ],
+  "barttorvik_vs_kenpom": {
+    "methodology_differences": {
+      "recency_bias": {
+        "barttorvik": "40-day decay (1% per day until 80 days, then 60% weight)",
+        "kenpom": "No recency weighting (equal weight all games)"
+      },
+      "garbage_time": {
+        "barttorvik": "Filters garbage time via GameScript",
+        "kenpom": "Includes all possessions"
+      },
+      "metrics": {
+        "both": "AdjEM, AdjO, AdjD, AdjT, Four Factors, Barthag"
+      }
+    },
+    "accuracy_comparison": {
+      "source": "CoogFans forum tracking (2019 data)",
+      "results": {
+        "NET": "95.8% accuracy (520 correct)",
+        "KenPom": "92.5% accuracy (510 correct)",
+        "Barttorvik": "92.5% accuracy (510 correct)",
+        "BPI": "92.5% accuracy (510 correct)"
+      },
+      "note": "Statistical tie between KenPom and Barttorvik"
+    },
+    "correlation": {
+      "quality": "High correlation (both use tempo-free efficiency)",
+      "top_teams": "Nearly identical 1-seeds and top-25 rankings",
+      "differences": "Mid-tier teams may diverge due to recency/garbage-time handling"
+    },
+    "cost": {
+      "barttorvik": "$0 (free via cbbdata R package)",
+      "kenpom_basic": "$25/year (web access only)",
+      "kenpom_api": "$95/year (API access)"
+    },
+    "recommendation": "Barttorvik is competitive with KenPom quality at $0 cost. Try free option first, upgrade to KenPom API only if Barttorvik data quality issues emerge."
+  },
+  "point_in_time_ratings_critical": {
+    "why_critical": "Sports betting backtesting REQUIRES ratings as they existed BEFORE each game to avoid look-ahead bias. Using end-of-season ratings creates artificially inflated model performance.",
+    "cbbdata_capability": {
+      "claimed": "Day-by-day ratings via cbd_torvik_ratings_archive()",
+      "documentation": "INCOMPLETE - unclear if date parameter exists",
+      "toRvik_precedent": "bart_archive(date='20220113') shows it SHOULD be possible",
+      "verification_needed": "CRITICAL - must test if cbd_torvik_ratings_archive() accepts date string or only year/team/conf filters"
+    },
+    "testing_protocol": [
+      "1. Install cbbdata R package",
+      "2. Register and login",
+      "3. Test: cbd_torvik_ratings_archive(year=2022) - should work",
+      "4. Test: cbd_torvik_ratings_archive(date='20220115') - UNKNOWN if supported",
+      "5. Inspect returned data for 'as_of_date' or timestamp column",
+      "6. If no date parameter, may need to fetch full year and filter client-side",
+      "7. Validate data freshness (ratings should change daily during season)"
+    ],
+    "fallback_if_no_date_param": [
+      "Fetch entire season data",
+      "Filter by date client-side in Python",
+      "Requires knowing how ratings evolve (daily snapshots vs game-by-game updates)"
+    ]
+  },
+  "python_integration_paths": {
+    "rpy2_pros": [
+      "Official R package support",
+      "Automatic updates as cbbdata improves",
+      "Access to all 30 endpoints",
+      "Free API access"
+    ],
+    "rpy2_cons": [
+      "Windows PATH issues common",
+      "R version dependencies",
+      "rpy2 version compatibility",
+      "Two-language debugging complexity",
+      "Conda/pip conflicts with R packages"
+    ],
+    "direct_api_pros": [
+      "Native Python (no R dependency)",
+      "Simpler debugging",
+      "Better control over requests",
+      "Easier containerization (Docker)"
+    ],
+    "direct_api_cons": [
+      "Unofficial (reverse engineering)",
+      "No documentation",
+      "May break with updates",
+      "Authentication flow unclear",
+      "Potentially violates API terms"
+    ],
+    "recommended_approach": "Start with rpy2, fall back to KenPom API if rpy2 issues persist beyond 1 day of debugging"
+  },
+  "community_insights": {
+    "popular_solutions": [
+      "cbbdata R package (replaced toRvik)",
+      "KenPom API for serious bettors",
+      "ESPN API for free play-by-play",
+      "Barttorvik.com web interface for manual analysis"
+    ],
+    "controversial_topics": [
+      "Recency bias: Does it help or hurt predictions?",
+      "Garbage time: Should it be filtered or included?",
+      "Free vs paid: Is KenPom worth $95/year?",
+      "R vs Python: Which is better for sports analytics?"
+    ],
+    "expert_opinions": [
+      "Barttorvik recency weighting may improve in-season predictions",
+      "KenPom historical consistency valuable for cross-season analysis",
+      "Point-in-time data non-negotiable for backtesting",
+      "Efficiency metrics (AdjEM) superior to Elo for college basketball",
+      "Four Factors (eFG%, TO%, OR%, FTR) critical for game-level modeling"
+    ]
+  },
+  "action_items": {
+    "immediate_next_steps": [
+      "1. Install R (4.0+) and rpy2 in sports-betting venv",
+      "2. Install cbbdata: devtools::install_github('andreweatherman/cbbdata')",
+      "3. Register for free API key: cbd_create_account()",
+      "4. Test cbd_torvik_ratings_archive() with year=2022 filter",
+      "5. CRITICAL: Verify if date='20220115' parameter works (like old bart_archive)",
+      "6. Document exact function signature and return schema",
+      "7. Build Python wrapper function using rpy2",
+      "8. Test on 100-game sample from 2022 season",
+      "9. Compare Barttorvik AdjEM to existing Elo predictions",
+      "10. Run Gatekeeper validation with new features"
+    ],
+    "decision_point": {
+      "condition": "If rpy2 setup exceeds 8 hours OR cbd_torvik_ratings_archive doesn't support daily dates",
+      "action": "Switch to KenPom API ($95/year) and move forward",
+      "rationale": "Time is money. $95 is 1.9% of $5000 bankroll. If it saves 10+ hours and provides better data quality, ROI is positive."
+    }
+  },
+  "final_recommendation": {
+    "primary_path": "cbbdata R package via rpy2 (2-day max effort)",
+    "backup_path": "KenPom API if rpy2 fails",
+    "do_not_use": [
+      "CBBpy (no efficiency metrics)",
+      "Web scraping (ethical + fragility issues)",
+      "toRvik (deprecated)"
+    ],
+    "expected_outcome": "Free access to Barttorvik AdjO, AdjD, AdjEM, AdjT for 2020-2025 seasons with point-in-time ratings suitable for backtesting",
+    "confidence_level": "MEDIUM - hinges on cbd_torvik_ratings_archive() supporting daily date queries (unverified)"
+  }
+}

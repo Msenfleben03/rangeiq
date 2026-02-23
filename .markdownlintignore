@@ -1,0 +1,24 @@
+# Research docs (generated, not worth fixing lint)
+docs/ADVANCED_FEATURES_RESEARCH.md
+docs/BARTTORVIK_SUMMARY.md
+docs/CBBDATA_API_RESEARCH.md
+docs/CBBDATA_QUICKSTART.md
+docs/ESPN_BPI_API_RESEARCH.md
+docs/HEADLESS_QUICKSTART.md
+docs/KENPOM_EFFICIENCY_RESEARCH.md
+docs/MEMORY_APPROACHES_RESEARCH.md
+docs/headless-claude-code-guide.md
+docs/kenpom_access_research.json
+docs/kenpom_efficiency_research.json
+docs/plans/
+
+# Decision log (established format)
+docs/DECISIONS.md
+
+# External/generated content
+ELO-visual-dashboard.txt
+historical-odds-resources-research.txt
+coverage.json
+
+# Claude config
+.claude/

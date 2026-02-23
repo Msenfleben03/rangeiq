@@ -76,7 +76,7 @@ MAX_RETRIES = 3  # Maximum retry attempts
 
 # Seasons to fetch for historical data
 NCAAB_SEASONS_START = 2020  # Start from 2019-20 season
-NCAAB_SEASONS_END = 2025  # Through 2024-25 season
+NCAAB_SEASONS_END = 2026  # Through 2025-26 season
 
 # =============================================================================
 # ZERO-COST DATA RETRIEVAL SLA DEFINITIONS
@@ -129,6 +129,17 @@ _FREE_TIER_APIS = [
 
 # The Odds API key (free tier: 500 credits/month)
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
+
+# CBBData / Barttorvik T-Rank API key (free, provides efficiency ratings)
+CBBDATA_API_KEY = os.environ.get("CBBDATA_API_KEY", "")
+
+# Barttorvik ratings cache directory
+BARTTORVIK_DATA_DIR = DATA_DIR / "external" / "barttorvik"
+
+# KenPom efficiency ratings (requires $25/yr subscription)
+KENPOM_EMAIL = os.environ.get("KENPOM_EMAIL", "")
+KENPOM_PASSWORD = os.environ.get("KENPOM_PASSWORD", "")
+KENPOM_DATA_DIR = DATA_DIR / "external" / "kenpom"
 
 # =============================================================================
 # FEATURE ENGINEERING

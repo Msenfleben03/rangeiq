@@ -7,6 +7,7 @@
 .env.local
 .env.*.local
 *.env
+.mcp.json
 secrets.yaml
 secrets.json
 credentials.json
@@ -252,6 +253,11 @@ scratch/
 experiments/
 sandbox/
 
+# Vercel
+.vercel/
+.vercel-build/
+
 # Personal notes (not for repo)
 NOTES.md
 TODO_PERSONAL.md
+docs/2026-02-17-kenpom.pdf

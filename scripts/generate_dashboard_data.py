@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+ELO_PICKLE_PATH = PROJECT_ROOT / "data" / "processed" / "ncaab_elo_model.pkl"
+TOP_N_TRAJECTORY_TEAMS = 20
+TRAJECTORY_SAMPLE_EVERY = 5
 
 # ---------------------------------------------------------------------------
 # Conference abbreviation -> full name lookup
@@ -71,6 +80,11 @@ CONFERENCE_FULL_NAMES: dict[str, str] = {
     "WAC": "Western Athletic",
     "WCC": "West Coast",
 }
+
+
+# ---------------------------------------------------------------------------
+# Data loaders
+# ---------------------------------------------------------------------------
 
 
 def load_elo_ratings(
@@ -167,6 +181,152 @@ def load_game_stats(
     return stats
 
 
+def load_elo_model(path: Path = ELO_PICKLE_PATH) -> object | None:
+    """Load the trained Elo model pickle.
+
+    The pickle contains a SavedModel dataclass with a `.model` attribute
+    (NCAABEloModel). Returns None if the file is missing or unpicklable.
+
+    Args:
+        path: Path to the .pkl model file.
+
+    Returns:
+        The SavedModel instance, or None on failure.
+    """
+    if not path.exists():
+        logger.warning("Elo model pickle not found: %s", path)
+        return None
+
+    try:
+        with open(path, "rb") as f:
+            saved = pickle.load(f)  # noqa: S301  # nosec B301
+        logger.info("Loaded Elo model pickle from %s", path)
+        return saved
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to load Elo model pickle: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Trajectory extraction
+# ---------------------------------------------------------------------------
+
+
+def load_trajectories(
+    pickle_path: Path = ELO_PICKLE_PATH,
+    top_n: int = TOP_N_TRAJECTORY_TEAMS,
+    sample_every: int = TRAJECTORY_SAMPLE_EVERY,
+) -> list[dict]:
+    """Extract Elo rating trajectories for the top N teams by current rating.
+
+    Walks through game_history on the loaded model, recording each top
+    team's rating after every game they appear in (home or away).
+    Samples every ``sample_every``-th game per team to keep data size
+    manageable.
+
+    Args:
+        pickle_path: Path to the ncaab_elo_model.pkl file.
+        top_n: Number of top-rated teams to include.
+        sample_every: Record one data point every this many games per team.
+
+    Returns:
+        List of dicts with keys: team, game_idx, rating.
+        Returns empty list if the pickle cannot be loaded.
+    """
+    saved = load_elo_model(pickle_path)
+    if saved is None:
+        return []
+
+    # Unwrap SavedModel -> NCAABEloModel
+    model = saved.model if hasattr(saved, "model") else saved
+
+    if not hasattr(model, "ratings") or not hasattr(model, "game_history"):
+        logger.warning("Elo model missing .ratings or .game_history attributes")
+        return []
+
+    # Identify top N teams by current rating
+    sorted_teams = sorted(model.ratings.items(), key=lambda kv: kv[1], reverse=True)
+    top_teams: set[str] = {team for team, _ in sorted_teams[:top_n]}
+    logger.info(
+        "Building trajectories for %d top teams from %d game history entries",
+        len(top_teams),
+        len(model.game_history),
+    )
+
+    # Walk game history; track per-team appearance count for sampling
+    appearances: dict[str, int] = {team: 0 for team in top_teams}
+    trajectory_rows: list[dict] = []
+
+    for game_idx, game in enumerate(model.game_history):
+        home = game.get("home_team", "")
+        away = game.get("away_team", "")
+
+        for team, rating_key in ((home, "home_rating_after"), (away, "away_rating_after")):
+            if team not in top_teams:
+                continue
+
+            rating_after = game.get(rating_key)
+            if rating_after is None:
+                continue
+
+            appearances[team] += 1
+            # Sample every N-th appearance (always include the first)
+            if appearances[team] == 1 or appearances[team] % sample_every == 0:
+                trajectory_rows.append(
+                    {
+                        "team": team,
+                        "game_idx": game_idx,
+                        "rating": round(float(rating_after), 1),
+                    }
+                )
+
+    logger.info("Trajectory data: %d sampled data points", len(trajectory_rows))
+    return trajectory_rows
+
+
+# ---------------------------------------------------------------------------
+# All-teams historical ratings
+# ---------------------------------------------------------------------------
+
+
+def load_all_team_ratings(
+    pickle_path: Path = ELO_PICKLE_PATH,
+) -> list[dict]:
+    """Extract all-team current Elo ratings from the model pickle.
+
+    Returns one record per team in model.ratings, covering all 1,107+
+    rated teams regardless of whether they played in the current season.
+
+    Args:
+        pickle_path: Path to the ncaab_elo_model.pkl file.
+
+    Returns:
+        List of dicts with keys: team_id, elo_rating (sorted desc by rating).
+        Returns empty list if the pickle cannot be loaded.
+    """
+    saved = load_elo_model(pickle_path)
+    if saved is None:
+        return []
+
+    model = saved.model if hasattr(saved, "model") else saved
+
+    if not hasattr(model, "ratings"):
+        logger.warning("Elo model missing .ratings attribute for all_teams export")
+        return []
+
+    all_teams = [
+        {"team_id": team_id, "elo_rating": round(float(rating), 1)}
+        for team_id, rating in sorted(model.ratings.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    logger.info("Exported %d teams for all_teams section", len(all_teams))
+    return all_teams
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
 def classify_tier(elo: float | None) -> str:
     """Classify team into tier based on Elo rating."""
     if elo is None or pd.isna(elo):
@@ -191,9 +351,27 @@ def build_opponent_name_map(
             oid = row.get("opponent_id")
             oname = row.get("opponent_name")
             if oid and oname and isinstance(oname, str):
-                # Strip mascot: keep everything before last 1-2 words
                 name_map[oid] = oname
     return name_map
+
+
+def _safe_round(val, decimals: int = 1):
+    """Round a value safely, returning None for NaN/None."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    return round(float(val), decimals)
+
+
+def _safe_int(val):
+    """Convert to int safely, returning None for NaN/None."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    return int(val)
+
+
+# ---------------------------------------------------------------------------
+# Bundle generation
+# ---------------------------------------------------------------------------
 
 
 def generate_bundle(season: int = 2026) -> dict:
@@ -285,7 +463,7 @@ def generate_bundle(season: int = 2026) -> dict:
         if conf:
             conf_teams.setdefault(conf, []).append(team)
 
-    # Build conference summaries
+    # Build conference summaries (with min/max Elo range)
     conferences = []
     for abbr in sorted(conf_teams.keys()):
         members = conf_teams[abbr]
@@ -299,6 +477,8 @@ def generate_bundle(season: int = 2026) -> dict:
                 "name": CONFERENCE_FULL_NAMES.get(abbr, abbr),
                 "teams": len(members),
                 "avg_elo": round(sum(elos) / len(elos), 1) if elos else None,
+                "min_elo": round(min(elos), 1) if elos else None,
+                "max_elo": round(max(elos), 1) if elos else None,
                 "avg_adj_net": round(sum(nets) / len(nets), 1) if nets else None,
                 "avg_barthag": round(sum(barthags) / len(barthags), 4) if barthags else None,
                 "best_team": min(members, key=lambda t: t["elo_rank"])["id"],
@@ -309,6 +489,10 @@ def generate_bundle(season: int = 2026) -> dict:
     # Sort conferences by avg_elo desc
     conferences.sort(key=lambda c: c["avg_elo"] or 0, reverse=True)
 
+    # Load trajectory data and all-team ratings from the model pickle
+    trajectories = load_trajectories()
+    all_teams = load_all_team_ratings()
+
     bart_coverage = sum(1 for t in teams if t["bart_name"])
     elo_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -318,8 +502,14 @@ def generate_bundle(season: int = 2026) -> dict:
         "teams": teams,
         "conferences": conferences,
         "conference_lookup": CONFERENCE_FULL_NAMES,
+        "trajectories": trajectories,
+        "all_teams": all_teams,
         "meta": {
             "total_teams": len(teams),
+            "all_teams_count": len(all_teams),
+            "trajectory_teams": TOP_N_TRAJECTORY_TEAMS,
+            "trajectory_sample_every": TRAJECTORY_SAMPLE_EVERY,
+            "trajectory_points": len(trajectories),
             "barttorvik_coverage": bart_coverage,
             "elo_model_date": elo_date,
             "barttorvik_date": bart_date,
@@ -330,21 +520,13 @@ def generate_bundle(season: int = 2026) -> dict:
     return bundle
 
 
-def _safe_round(val, decimals: int = 1):
-    """Round a value safely, returning None for NaN/None."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return None
-    return round(float(val), decimals)
-
-
-def _safe_int(val):
-    """Convert to int safely, returning None for NaN/None."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return None
-    return int(val)
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:
+    """CLI entry point for dashboard data generation."""
     parser = argparse.ArgumentParser(description="Generate NCAA D1 dashboard data")
     parser.add_argument("--season", type=int, default=2026, help="Season (default: 2026)")
     parser.add_argument(
@@ -358,7 +540,7 @@ def main() -> None:
     bundle = generate_bundle(args.season)
 
     if bundle["meta"]["total_teams"] == 0:
-        logger.error("Dashboard bundle has 0 teams — aborting")
+        logger.error("Dashboard bundle has 0 teams -- aborting")
         sys.exit(1)
 
     out_path = Path(args.output)
@@ -369,11 +551,15 @@ def main() -> None:
 
     meta = bundle["meta"]
     print(f"\nDashboard data generated: {out_path}")
-    print(f"  Teams: {meta['total_teams']}")
-    print(f"  Barttorvik coverage: {meta['barttorvik_coverage']}")
-    print(f"  Elo date: {meta['elo_model_date']}")
-    print(f"  Barttorvik date: {meta['barttorvik_date']}")
-    print(f"  Conferences: {len(bundle['conferences'])}")
+    print(f"  Teams (current season): {meta['total_teams']}")
+    print(f"  All teams (historical): {meta['all_teams_count']}")
+    print(
+        f"  Trajectory points:      {meta['trajectory_points']} ({meta['trajectory_teams']} teams)"
+    )
+    print(f"  Barttorvik coverage:    {meta['barttorvik_coverage']}")
+    print(f"  Elo date:               {meta['elo_model_date']}")
+    print(f"  Barttorvik date:        {meta['barttorvik_date']}")
+    print(f"  Conferences:            {len(bundle['conferences'])}")
 
 
 if __name__ == "__main__":

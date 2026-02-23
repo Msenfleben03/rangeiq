@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Document significant technical and strategic decisions with rationale. This helps Claude Code understand not just *what* was decided, but *why*.
+Document significant technical and strategic decisions with rationale.
+This helps Claude Code understand not just *what* was decided, but *why*.
 
 ---
 
@@ -12,17 +13,18 @@ Document significant technical and strategic decisions with rationale. This help
 **Status:** Accepted
 **Context:** Need to define how we measure model success.
 
-**Decision:**
+#### Decision
+
 Closing Line Value (CLV) is the primary success metric, NOT win rate or short-term ROI.
 
-**Rationale:**
+#### Rationale
 
 - CLV correlates strongly with long-term profitability over 1000+ bets
 - Win rate is dominated by variance over small samples
 - Professional sportsbooks use CLV to identify sharp bettors
 - A 48% winner with positive CLV will outperform a 52% winner with negative CLV long-term
 
-**Consequences:**
+#### Consequences
 
 - Must capture closing lines for every bet
 - Must track line at time of placement vs close
@@ -37,10 +39,11 @@ Closing Line Value (CLV) is the primary success metric, NOT win rate or short-te
 **Status:** Accepted
 **Context:** Need consistent bet sizing strategy.
 
-**Decision:**
+#### Decision
+
 Use 0.25 Kelly (quarter Kelly) as the default bet sizing fraction, with 3% bankroll maximum per bet.
 
-**Rationale:**
+#### Rationale
 
 - Full Kelly assumes perfect probability estimation (we don't have this)
 - Full Kelly can lead to 50%+ drawdowns during variance
@@ -48,7 +51,7 @@ Use 0.25 Kelly (quarter Kelly) as the default bet sizing fraction, with 3% bankr
 - 3% cap prevents overexposure on any single bet
 - Industry standard among professional bettors
 
-**Consequences:**
+#### Consequences
 
 - Slower bankroll growth during winning streaks
 - Significantly reduced drawdown risk
@@ -63,17 +66,18 @@ Use 0.25 Kelly (quarter Kelly) as the default bet sizing fraction, with 3% bankr
 **Status:** Accepted
 **Context:** Need backtesting methodology that produces realistic results.
 
-**Decision:**
+#### Decision
+
 All backtests must use walk-forward validation with strict time boundaries. Random train/test splits are prohibited.
 
-**Rationale:**
+#### Rationale
 
 - Sports data has strong temporal dependencies
 - Random splits allow data leakage (future info informing past predictions)
 - Walk-forward mirrors real betting (train on past, predict future)
 - Prevents overfitting to historical patterns that may not persist
 
-**Implementation:**
+#### Implementation
 
 ```python
 # CORRECT: Walk-forward
@@ -88,7 +92,7 @@ from sklearn.model_selection import train_test_split
 train, test = train_test_split(data, test_size=0.2)  # DO NOT USE
 ```
 
-**Consequences:**
+#### Consequences
 
 - Smaller effective training sets in early years
 - Must carefully manage feature engineering to avoid leakage
@@ -102,10 +106,11 @@ train, test = train_test_split(data, test_size=0.2)  # DO NOT USE
 **Status:** Accepted
 **Context:** Need to choose initial modeling approach.
 
-**Decision:**
+#### Decision
+
 Build Elo rating systems first before attempting regression or ML models.
 
-**Rationale:**
+#### Rationale
 
 - Elo is simple, interpretable, and surprisingly effective
 - Teaches core concepts: expected value, rating updates, regression to mean
@@ -113,7 +118,7 @@ Build Elo rating systems first before attempting regression or ML models.
 - Provides baseline to compare more complex models against
 - Fewer hyperparameters = less overfitting risk
 
-**Consequences:**
+#### Consequences
 
 - Initial models will be relatively simple
 - Can layer complexity (margin of victory, home court) incrementally
@@ -128,23 +133,24 @@ Build Elo rating systems first before attempting regression or ML models.
 **Status:** Accepted
 **Context:** Need to choose NCAAB data source.
 
-**Decision:**
+#### Decision
+
 Use sportsipy (Python) for NCAAB data instead of hoopR (R).
 
-**Rationale:**
+#### Rationale
 
 - Maintains Python-only stack (no R/rpy2 complexity)
 - sportsipy covers Sports Reference data adequately
 - Simpler environment management
 - Can always add hoopR later via rpy2 if needed
 
-**Trade-offs:**
+#### Trade-offs
 
 - hoopR has slightly more comprehensive data
 - May need to supplement with direct API calls
 - KenPom data requires separate handling
 
-**Consequences:**
+#### Consequences
 
 - NCAAB pipeline is Python-native
 - May need custom scrapers for advanced metrics
@@ -158,24 +164,25 @@ Use sportsipy (Python) for NCAAB data instead of hoopR (R).
 **Status:** Accepted
 **Context:** Need database for bet tracking and model data.
 
-**Decision:**
+#### Decision
+
 Start with SQLite for all database needs.
 
-**Rationale:**
+#### Rationale
 
 - Zero configuration required
 - File-based = easy backup and portability
 - More than sufficient for individual bettor scale
 - Can migrate to PostgreSQL if/when scale demands
 
-**When to Reconsider:**
+#### When to Reconsider
 
 - Multiple concurrent writers needed
 - Data exceeds 50GB
 - Need advanced query features
 - Building web interface with multiple users
 
-**Consequences:**
+#### Consequences
 
 - Single database file in `data/betting.db`
 - Use sqlite3 module or SQLAlchemy
@@ -189,24 +196,25 @@ Start with SQLite for all database needs.
 **Status:** Accepted
 **Context:** Need to prioritize which markets to model.
 
-**Decision:**
+#### Decision
+
 Prioritize player props (all sports) and small conference games (college) over main spreads/totals.
 
-**Rationale:**
+#### Rationale
 
 - Research shows main NFL/NBA spreads are highly efficient
 - Player props have lowest book limits = acknowledgment of inefficiency
 - Small conference games receive less modeling attention from books
 - Better edge opportunity compensates for lower volume
 
-**Market Priority Order:**
+#### Market Priority Order
 
 1. Player props (all sports)
 2. Small conference NCAAB/NCAAF
 3. Derivative markets (team totals, F5 lines)
 4. Main spreads (benchmark/validation only)
 
-**Consequences:**
+#### Consequences
 
 - More models to build (prop models are player-specific)
 - Lower volume of high-confidence plays
@@ -220,24 +228,25 @@ Prioritize player props (all sports) and small conference games (college) over m
 **Status:** Accepted
 **Context:** Need validation before risking bankroll.
 
-**Decision:**
+#### Decision
+
 Mandatory 2-4 week paper betting phase with CLV tracking before deploying real capital.
 
-**Criteria to Go Live:**
+#### Criteria to Go Live
 
 - 50+ paper bets tracked
 - Positive CLV over paper betting period
 - All tracking systems operational
 - Clear understanding of bet sizing execution
 
-**Rationale:**
+#### Rationale
 
 - Validates model in real-time market conditions
 - Tests operational processes (data refresh, prediction, tracking)
 - Builds confidence before risking money
 - Identifies bugs in non-costly environment
 
-**Consequences:**
+#### Consequences
 
 - Delayed live deployment
 - Must resist urge to skip paper phase
@@ -251,10 +260,11 @@ Mandatory 2-4 week paper betting phase with CLV tracking before deploying real c
 **Status:** Accepted
 **Context:** Need execution strategy for placing bets.
 
-**Decision:**
+#### Decision
+
 Maintain accounts at 5+ sportsbooks for line shopping.
 
-**Required Books:**
+#### Required Books
 
 - DraftKings (primary)
 - FanDuel
@@ -262,14 +272,14 @@ Maintain accounts at 5+ sportsbooks for line shopping.
 - Caesars
 - ESPN BET or alternative
 
-**Rationale:**
+#### Rationale
 
 - Line shopping can be worth 1-2% ROI alone
 - Different books are soft on different markets
 - Account limitations are inevitable for winners
 - Diversification provides execution resilience
 
-**Consequences:**
+#### Consequences
 
 - More complex bankroll tracking
 - Must compare odds before every bet
@@ -284,10 +294,12 @@ Maintain accounts at 5+ sportsbooks for line shopping.
 **Status:** Accepted
 **Context:** Need rules to prevent catastrophic losses.
 
-**Decision:**
+#### Decision
+
 Implement strict stop-loss and exposure limits.
 
-**Limits:**
+#### Limits
+
 | Limit | Threshold | Action |
 |-------|-----------|--------|
 | Single bet | 3% max | Hard cap |
@@ -295,14 +307,14 @@ Implement strict stop-loss and exposure limits.
 | Weekly loss | 15% | Reduce sizing 50% |
 | Monthly loss | 25% | Pause, full review |
 
-**Rationale:**
+#### Rationale
 
 - Preserves capital through inevitable downswings
 - Prevents emotional betting after losses
 - Forces review when underperforming
 - $1,000 reserve provides rebuild option
 
-**Consequences:**
+#### Consequences
 
 - May miss opportunities during limit periods
 - Requires discipline to follow rules
@@ -316,13 +328,13 @@ Implement strict stop-loss and exposure limits.
 **Status:** Accepted
 **Context:** Game times come from various sources in different timezone formats. Need consistent handling.
 
-**Decision:**
+#### Decision
 
 - Store all timestamps in UTC in the database
 - Convert to America/Chicago (Central Time) for display and user-facing output
 - Game dates (DATE type) remain in local time of the game venue
 
-**Implementation:**
+#### Implementation
 
 ```python
 from datetime import datetime, timezone
@@ -343,13 +355,13 @@ def parse_game_time(time_str: str, source_tz: str = "America/New_York") -> datet
     return local_time.astimezone(timezone.utc)
 ```
 
-**Rationale:**
+#### Rationale
 
 - UTC is unambiguous and avoids DST issues
 - Central Time matches user's location for intuitive display
 - Most East Coast games at 7pm ET display as 6pm CT
 
-**Consequences:**
+#### Consequences
 
 - All database TIMESTAMP columns are UTC
 - Must convert on input (from sources) and output (for display)
@@ -363,7 +375,8 @@ def parse_game_time(time_str: str, source_tz: str = "America/New_York") -> datet
 **Status:** Accepted
 **Context:** Real-world data has gaps. Need consistent handling per data type.
 
-**Decision:**
+#### Decision
+
 Document and implement handling strategy per feature category:
 
 | Data Type | Strategy | Rationale |
@@ -377,7 +390,7 @@ Document and implement handling strategy per feature category:
 | **Weather data** | Assume dome/ideal if missing | Conservative assumption |
 | **Game result** | Never impute | Wait for actual result |
 
-**Implementation:**
+#### Implementation
 
 ```python
 # Example: handling missing team rating
@@ -390,7 +403,7 @@ def get_team_rating(team_id: str, as_of_date: date) -> float:
     return rating
 ```
 
-**Consequences:**
+#### Consequences
 
 - Must log all imputation for audit
 - Some games may be excluded from betting consideration
@@ -404,7 +417,8 @@ def get_team_rating(team_id: str, as_of_date: date) -> float:
 **Status:** Accepted
 **Context:** Need clear, objective criteria before risking real capital.
 
-**Decision:**
+#### Decision
+
 Must meet ALL criteria before deploying real money:
 
 ### Mandatory Criteria
@@ -439,14 +453,14 @@ Must meet ALL criteria before deploying real money:
 - [ ] Time commitment: Can monitor daily
 ```
 
-**Rationale:**
+#### Rationale
 
 - Prevents premature deployment during excitement
 - Objective criteria remove emotional decision-making
 - 50 bets provides minimal statistical significance
 - Multiple criteria catch different failure modes
 
-**Consequences:**
+#### Consequences
 
 - May delay live betting by weeks
 - Requires discipline to not skip criteria
@@ -460,7 +474,8 @@ Must meet ALL criteria before deploying real money:
 **Status:** Accepted
 **Context:** Need to track model changes, compare performance across versions.
 
-**Decision:**
+#### Decision
+
 Use semantic versioning with configuration tracking:
 
 **Version Format:** `{sport}-{model_type}-v{major}.{minor}.{patch}`
@@ -471,14 +486,14 @@ Use semantic versioning with configuration tracking:
 | Minor | Hyperparameter tuning, threshold adjustments |
 | Patch | Bug fixes, no model logic change |
 
-**Examples:**
+#### Examples
 
 - `ncaab-elo-v1.0.0` → Initial Elo model
 - `ncaab-elo-v1.1.0` → Adjusted K-factor from 20 to 25
 - `ncaab-elo-v1.1.1` → Fixed home court calculation bug
 - `ncaab-elo-v2.0.0` → Added margin of victory adjustments
 
-**Tracking Requirements:**
+#### Tracking Requirements
 
 ```python
 # Each model version must have:
@@ -495,12 +510,12 @@ model_metadata = {
 }
 ```
 
-**Storage:**
+#### Storage
 
 - Git tags for code versions
 - Database `models` table for metadata
 
-**Consequences:**
+#### Consequences
 
 - More overhead when making changes
 - Clear audit trail for debugging
@@ -514,7 +529,8 @@ model_metadata = {
 **Status:** Accepted
 **Context:** Need comprehensive logging for debugging, auditing, and compliance.
 
-**Decision:**
+#### Decision
+
 Implement structured logging with tiered retention:
 
 ### Log Levels
@@ -572,11 +588,439 @@ logger.add(
 | Performance metrics | Permanent | Historical analysis |
 | Error logs | 1 year | Pattern detection |
 
-**Consequences:**
+#### Consequences
 
 - Disk space for logs (mitigated by compression)
 - Must not log sensitive data (API keys, passwords)
 - Enables post-hoc analysis of decisions
+
+---
+
+## ADR-016: Advanced Feature Selection for NCAAB Elo Model
+
+**Date:** February 2026
+**Status:** Accepted
+**Context:** The Elo-only model achieves 6.54% ROI (Sharpe 0.62) but uses no features beyond
+Elo ratings, home court, and conference adjustments. Five candidate features were evaluated
+through parallel research agents with web search and academic literature review.
+
+#### Decision
+
+Implement 4 features (3 primary GO, 1 modifier) and skip 2:
+
+| Feature | Decision | Rationale |
+|---------|----------|-----------|
+| Rolling Volatility (5g, 10g) | **GO** | Orthogonal to Elo (second moment); published research; low overfit risk |
+| Opponent-Quality-Weighted Margin | **GO** | Quality-adjusts margin; KenPom-inspired; non-redundant with Elo |
+| Rest Days / Back-to-Back | **GO** | Fully orthogonal; NBA research shows 6-8% win% impact; zero cost |
+| Time Decay (as modifier) | **GO** | Valuable as EWM modifier on margin; redundant as standalone |
+| Hurst Exponent | **SKIP** | 30 games << 100 minimum sample; no sports precedent |
+| Jensen's Alpha | **SKIP** | Evaluation metric, not feature; circular; redundant with CLV |
+
+#### Alternatives Considered
+
+- KenPom efficiency ratings: Deferred to separate initiative ($25/yr subscription)
+- Travel distance: Skipped (data unavailable from ESPN API; marginal over home/away flag)
+- Schedule strength trajectory: Skipped (redundant with Elo by construction)
+
+#### Consequences
+
+- All rolling features use `.shift(1)` internally to prevent look-ahead bias
+- Features must pass TemporalValidator (0 leaky features) before deployment
+- A/B comparison uses paired t-test on common games for statistical rigor
+- Failure criterion: Skip features if Sharpe improvement < 0.05 at p < 0.20
+
+**Full Research:** See `docs/ADVANCED_FEATURES_RESEARCH.md`
+
+---
+
+## ADR-017: CBBData REST API for Barttorvik T-Rank Integration
+
+**Date:** February 2026
+**Status:** Accepted
+**Context:** Need point-in-time efficiency ratings (AdjO, AdjD, AdjEM) for NCAAB model. KenPom is
+gold standard but requires $25/year subscription. Barttorvik T-Rank is free, well-respected
+alternative with comparable methodology. cbbdata package provides REST API access but documentation
+incomplete on date-specific queries.
+
+#### Decision
+
+Use CBBData REST API (`https://www.cbbdata.com/api/`) to access Barttorvik T-Rank historical ratings
+archive. Implement Python client wrapper bypassing R package dependency.
+
+#### Rationale
+
+- **Free access** via account registration (vs $25/year for KenPom)
+- **Day-by-day historical data** available 2015-present
+- **REST API** enables direct Python access without R/rpy2 complexity
+- **Comparable accuracy** to KenPom (correlation >0.95 on AdjEM)
+- **Updated every 15 minutes** during season (same as KenPom)
+- **Flask backend** suggests reliable infrastructure vs web scraping
+
+#### Alternatives Considered
+
+- **KenPom API** ($25/year): Better documentation, proven integration. Deferred until profitability.
+- **ESPN BPI** (free): Less accurate (no venue adjustment), no historical archive.
+- **sportsipy/cbbpy**: Scraping-based, broken, unmaintained.
+- **toRvik R package**: Predecessor using web scraping; replaced by cbbdata API.
+
+#### Implementation Details
+
+API Endpoints:
+
+```text
+Base: https://www.cbbdata.com/api/
+Auth: POST /auth/login (username, password) → api_key
+Archive: GET /torvik/ratings/archive?year=YYYY&key=KEY
+Current: GET /torvik/ratings?year=YYYY&key=KEY
+```
+
+Data Coverage:
+
+- Seasons: 2015-present (2008-2014 for year-end only)
+- Update frequency: Every 15 minutes during season
+- Granularity: Day-by-day ratings (supports point-in-time queries)
+
+Expected Fields:
+
+- `barthag`: Win probability vs average D1 team (neutral court)
+- `adj_o`: Adjusted offensive efficiency (points per 100 possessions)
+- `adj_d`: Adjusted defensive efficiency
+- `adj_t`: Adjusted tempo
+- `date` or `day_num`: Date field (to be confirmed empirically)
+
+#### Critical Unknown
+
+Documentation does NOT explicitly show date-specific query support (e.g., `?date=20220115`).
+Archive is described as "day-by-day" and supports filtering on "any data column", but exact
+parameter format requires empirical testing. Worst case: download full season archive,
+filter client-side (acceptable given free API).
+
+#### Testing Protocol
+
+1. Register account via R package or undocumented web registration
+2. Test login endpoint to obtain API key
+3. Fetch 2023 archive with `?year=2023` to inspect schema
+4. Test date parameters: `?date=YYYYMMDD`, `?date=YYYY-MM-DD`, `?day_num=N`
+5. Verify date field exists in response for point-in-time filtering
+6. Measure rate limits and cache aggressively
+
+#### Consequences
+
+- **+Expected**: 20-30% Sharpe improvement (0.62 → 0.8-0.9) from efficiency ratings
+- **+Expected**: 1-2% CLV improvement from better model calibration
+- Must cache ratings locally to avoid repeated API calls during backtest
+- Must validate point-in-time correctness (no look-ahead bias)
+- Fall back to KenPom if API unreliable or date queries unsupported
+- Account for missing data (T-Rank coverage ~85% of D1 games)
+
+#### Implementation (2026-02-17)
+
+- API returns Apache Parquet (not JSON). Column `adj_tempo` (not `adj_t`).
+- Fetcher: `pipelines/barttorvik_fetcher.py` — 347K ratings cached across 6 seasons.
+- Team mapper: `pipelines/team_name_mapping.py` — 359 ESPN teams mapped to Barttorvik names.
+- Backtest: `--barttorvik` flag on `scripts/backtest_ncaab_elo.py`.
+- Coefficients calibrated: `net_diff * 0.003 + barthag_diff * 0.1` (~5% typical adjustment).
+
+#### A/B Results (all 6 seasons, 7.5% edge, paired t-test)
+
+- Elo+Barttorvik vs Elo-only: **p=0.0066 (one-sided)** — significant at p<0.01
+- Elo+Barttorvik+Features vs Elo-only: **p=0.0089 (one-sided)** — significant at p<0.01
+- Barttorvik improves ROI in all 6 seasons vs Elo-only baseline
+- Note: ROI figures are Kelly-compound; flat-stake per-bet returns are the valid metric
+
+**Testing Script:** `scripts/test_cbbdata_api.py`
+**Research Report:** `docs/CBBDATA_API_RESEARCH.md`
+
+---
+
+## ADR-018: Grid-Optimized Barttorvik Coefficients
+
+**Date:** February 2026
+**Status:** Accepted
+**Context:** Quick grid search (12 combos, 2 seasons) found w=1.5/nc=0.003/bc=0.15 with ROI +24.2%.
+Need comprehensive search across all seasons to validate and refine these coefficients.
+
+#### Decision
+
+Run full 80-combo grid search (5 weights x 4 net_coeffs x 4 barthag_coeffs) across 6 seasons
+(2020-2025). Adopt grid-optimal coefficients for paper betting config.
+
+#### Grid Results
+
+- **Best config:** w=1.5, nc=0.005, bc=0.20
+- **ROI:** +24.0%, Sharpe 1.89, p=2.5e-6
+- vs quick-grid best: nc changed 0.003→0.005, bc changed 0.15→0.20
+
+#### Rationale
+
+- 6-season validation (2020-2025) provides robust out-of-sample evidence
+- p=2.5e-6 rules out chance at any reasonable significance level
+- Coefficients are conservative (nc=0.005 means ~0.5% adjustment per unit net rating diff)
+- 2026 season excluded from grid (no odds data for backtesting)
+
+#### Implementation
+
+Updated `config/constants.py` PaperBettingConfig:
+
+- `net_diff_coeff`: 0.003 → 0.005
+- `barthag_diff_coeff`: 0.1 → 0.20
+
+#### Consequences
+
+- Model slightly more responsive to Barttorvik efficiency differences
+- Must re-run grid search if new seasons significantly change optimal parameters
+- Paper betting uses grid-optimal config from day 1
+
+---
+
+## ADR-019: Paper Betting Orchestrator (daily_run.py)
+
+**Date:** February 2026
+**Status:** Accepted
+**Context:** Daily workflow involves 4-5 separate scripts (predict, record, settle, report).
+Error-prone and tedious to run manually each day.
+
+#### Decision
+
+Build single `daily_run.py` orchestrator that chains all phases with error handling,
+dry-run mode, and selective execution (settle-only, report-only).
+
+#### Rationale
+
+- Single command reduces operational friction for daily usage
+- Dry-run mode enables safe preview before committing bets to DB
+- Settle-only mode handles cases where morning predictions already ran
+- Error in one phase shouldn't prevent other phases from executing
+- ESPN Scoreboard API provides real-time game data (replaces manual date entry)
+
+#### Implementation
+
+```bash
+daily_run.py --dry-run          # Preview picks, no DB writes
+daily_run.py                     # Full: predict → record → settle → report
+daily_run.py --settle-only       # Settle yesterday's bets
+daily_run.py --report-only       # Weekly performance report
+```
+
+#### Consequences
+
+- Daily operation reduced to single command
+- 26 tests cover all orchestration paths
+- Must handle API failures gracefully (ESPN down, no games today, etc.)
+- DB schema must be stable (game_date, profit_loss, confidence columns verified)
+
+---
+
+## ADR-020: Memory/Context Management Strategy
+
+**Date:** February 20, 2026
+**Status:** Accepted
+**Context:** Evaluate three options for Claude Code memory/context management:
+(1) Adopt ECC continuous-learning-v2, (2) Adopt best alternative, (3) Do nothing (enhanced).
+Decision driven by 10 "Wrong Approach" incidents across 8 sessions where Claude re-did completed work.
+
+### Research Summary
+
+Three parallel research agents evaluated the options (57K, 87K, 58K tokens respectively):
+
+- **Q1 (Technical Researcher):** Deep code-level evaluation of ECC CL-v2 — read observe.sh, config.json, observer.md, instinct-cli.py. Found 9 failure points.
+- **Q2 (Research Analyst):** Surveyed 16 alternative approaches across 4 categories with 30+ cited sources.
+- **Q3 (Explore Agent):** Audited all current memory files — line counts, token footprints, redundancy, effectiveness scoring.
+
+---
+
+### 1. Executive Summary
+
+**Recommendation: Option 3+ (Enhanced Current System) with a staged trigger for Option 2.**
+
+The current auto-memory system scores 62/100 in effectiveness. Low-hanging improvements (30 min effort) can push it to 80%+. ECC continuous-learning-v2 is **incompatible with Windows** (9 failure points, python3 stub broken on every hook call) and solves the wrong problem (learns coding patterns, but the friction is session-to-session context loss). The best alternative (PreCompact hooks + Claude Diary) is viable but premature — restructuring MEMORY.md first may eliminate the need entirely.
+
+---
+
+### 2. Current System Assessment (62/100)
+
+| Dimension | Score | Finding |
+|-----------|-------|---------|
+| Preventing re-work | 3/10 | No phase decision log; no "why was X abandoned?" rationale |
+| Technical context | 8/10 | API details, gotchas well-captured in MEMORY.md |
+| Context efficiency | 6/10 | ~5K tokens wasted on rule duplicates + TypeScript rules |
+| Blocking bugs | 9/10 | Validation framework + Key Patterns strong |
+| Session handoff | 4/10 | No structured handoff template; backtest-results.md orphaned |
+| Discoverability | 5/10 | Grid search results hard to find; no index |
+
+**Total context footprint:** ~17K tokens always loaded (MEMORY.md + CLAUDE.md + 7 rules + backups).
+**Redundant/irrelevant:** ~5K tokens (backup rules, TypeScript rules for Python project).
+
+---
+
+### 3. Option 1: ECC Continuous Learning v2 — NO-GO
+
+**Verdict: INCOMPATIBLE with this environment. Do not adopt.**
+
+#### Critical Failures (code-verified)
+
+| # | Failure | Severity |
+|---|---------|----------|
+| 1 | `python3` in observe.sh (lines 60, 101, 107, 129) resolves to Windows Store stub — zero observations written | **BLOCKING** |
+| 2 | 4 python3 subprocess calls per hook event × 2 events = 6 broken calls per tool use | **BLOCKING** |
+| 3 | `kill -USR1` (line 153) terminates observer process instead of waking it | **BLOCKING** |
+| 4 | `run_mode: background` in observer.md is undocumented/non-functional in Claude Code | **BLOCKING** |
+| 5 | Plugin updates overwrite any python3 fix to observe.sh | HIGH |
+| 6 | ~1s added latency per tool call (6 × 157ms Python startup) | HIGH |
+| 7 | No mechanism to inject instincts into Claude Code context | HIGH |
+| 8 | Observer disabled by default in shipped config.json | MEDIUM |
+| 9 | Instinct confidence decay creates seasonal rot (NCAAB Nov-Apr) | LOW |
+
+#### Value Mismatch
+
+The system learns **coding patterns** (functional vs class-based, tool sequencing). This project's friction is **session context loss** (what was already done, why was X abandoned). These are fundamentally different problems. Every "instinct" the system could generate is already explicitly documented in MEMORY.md.
+
+#### Cost: ~$2.53/month Haiku + 47-94s dead latency/session + 45 min/week maintenance
+
+---
+
+### 4. Option 2: Best Alternative — PreCompact Hooks + Claude Diary (VIABLE, DEFERRED)
+
+**Verdict: Technically sound. Deferred pending Option 3+ results.**
+
+#### Architecture
+
+- **Phase 1:** PreCompact + SessionStart hooks (Python scripts)
+  - `save_checkpoint.py`: Fires before compaction, writes `.claude/session-state.md`
+  - `inject_checkpoint.py`: Fires on startup/resume/compact, injects checkpoint as `additionalContext`
+  - Zero LLM cost, zero background processes, pure file I/O
+- **Phase 2:** Claude Diary (`/diary`, `/reflect` commands from github.com/rlancemartin/claude-diary)
+  - `/diary`: Captures session summary before ending
+  - `/reflect`: Weekly analysis → evolves CLAUDE.md rules from failures
+  - ~$0.01/week LLM cost
+
+#### Why Deferred (Not Rejected)
+
+- The primary "Wrong Approach" friction appears to occur at **session boundaries** (new sessions), not mid-session compaction
+- MEMORY.md restructuring with a handoff template may eliminate 40-60% of incidents without hooks
+- Adding hooks introduces new failure modes (hooks stop after 2.5h per claude-code#16047)
+- March Madness prep (Phase 5-6) needs stability over experimentation
+
+#### Trigger to Adopt
+
+Adopt Option 2 if, after 2 weeks with Option 3+ improvements:
+
+- "Wrong Approach" incidents remain at 5+ per 8 sessions
+- Mid-session compaction is identified as the primary cause (not session-start)
+- Setup time: 1.5 hours. Maintenance: 30 min/week.
+
+---
+
+### 5. Option 3+: Enhanced Current System — ADOPTED
+
+**Verdict: Implement immediately. 30 minutes effort, expected 40-60% reduction in Wrong Approach incidents.**
+
+#### Improvements (Priority Order)
+
+| # | Improvement | Effort | Impact | Description |
+|---|-----------|--------|--------|-------------|
+| P0 | MEMORY.md restructure | 15 min | HIGH | New structure: Handoff → Technical Ref → Results → Dead Ends |
+| P1 | Link backtest-results.md | 5 min | MEDIUM | Add "Results Reference" section to MEMORY.md |
+| P2 | Delete obsolete rules | 5 min | MEDIUM | Remove `rules/backup/` (9 files) + TypeScript rules (5 files) |
+| P3 | Anti-pattern checklist | 10 min | MEDIUM | "NEVER DO" / "ALWAYS DO" section in MEMORY.md |
+| -- | **Total** | **35 min** | **HIGH** | Saves ~5K tokens, prevents re-work, improves discoverability |
+
+#### Proposed MEMORY.md Structure
+
+```
+## Session Handoff [Latest]
+├── Completed Phases (with decisions + rationale)
+├── Current State (active task, cached data)
+├── Active Blockers (decisions needed)
+├── Dead Ends (don't revisit, with WHY)
+
+## Technical Reference [Stable]
+├── API Endpoints (KenPom, Barttorvik, ESPN)
+├── Known Gotchas (venv, deepcopy, column names)
+
+## Results Archive [Historical]
+├── Best Config: w=1.5, nc=0.005, bc=0.20
+├── See: memory/backtest-results.md
+
+## Anti-Patterns [CRITICAL]
+├── NEVER: [list with reasons]
+├── ALWAYS: [list with reasons]
+```
+
+---
+
+### 6. Cost-Benefit Matrix (Weighted)
+
+Weights: Wrong Approach reduction (3x), Windows reliability (2x), Weekly maintenance (2x),
+Session continuity (2x), Context help (1.5x), Risk of breaking (1.5x), others (1x).
+
+| Dimension (weight) | Option 1: ECC CL-v2 | Option 2: Hybrid | Option 3+: Enhanced |
+|---------------------|---------------------|------------------|---------------------|
+| Wrong Approach (3x) | 2/5 → 6 | 4/5 → 12 | 3/5 → 9 |
+| Windows reliability (2x) | 1/5 → 2 | 5/5 → 10 | 5/5 → 10 |
+| Setup time (1x) | 1/5 → 1 | 4/5 → 4 | 5/5 → 5 |
+| Weekly maintenance (2x) | 2/5 → 4 | 4/5 → 8 | 5/5 → 10 |
+| Token/API cost (1x) | 3/5 → 3 | 5/5 → 5 | 5/5 → 5 |
+| Context exhaustion (1.5x) | 1/5 → 1.5 | 4/5 → 6 | 3/5 → 4.5 |
+| Session continuity (2x) | 2/5 → 4 | 5/5 → 10 | 3/5 → 6 |
+| Risk of breaking (1.5x) | 1/5 → 1.5 | 4/5 → 6 | 5/5 → 7.5 |
+| Complexity (1x) | 1/5 → 1 | 3/5 → 3 | 5/5 → 5 |
+| Reversibility (1x) | 4/5 → 4 | 5/5 → 5 | 5/5 → 5 |
+| **TOTAL (/75)** | **28** | **69** | **67** |
+
+**Sensitivity:** Option 2 and 3+ are within 3% of each other. The deciding factor is **timing**: Option 3+ delivers 85% of Option 2's value at 20% of the effort, and can be layered with Option 2 later.
+
+---
+
+### 7. Risk Register
+
+| Risk | Option | Likelihood | Impact | Mitigation |
+|------|--------|------------|--------|------------|
+| python3 stub breaks all hooks | 1 | CERTAIN | HIGH | Use absolute interpreter path (fragile) |
+| Plugin update overwrites observe.sh fix | 1 | HIGH | HIGH | Fork plugin (maintenance burden) |
+| Hooks stop after 2.5h (known bug) | 1, 2 | MEDIUM | MEDIUM | Use PreCompact, not PreToolUse |
+| Stop hook infinite loop | 2 | LOW | MEDIUM | Guard with stop_hook_active check |
+| MEMORY.md hits 200-line limit | 3+ | MEDIUM | LOW | Externalize Results Archive section |
+| Restructured MEMORY.md not followed | 3+ | LOW | LOW | SessionStart hook could enforce |
+
+---
+
+### Decision
+
+**Adopt Option 3+ (Enhanced Current System) immediately. Stage Option 2 as a contingency.**
+
+#### Rationale
+
+1. **Root cause is retrieval, not capture.** MEMORY.md already contains good state — the issue is structure and discoverability, not missing data.
+2. **Minimum viable intervention.** 35 minutes of restructuring addresses the same root causes that Option 2 automates, without new failure modes.
+3. **Stability during critical phase.** March Madness prep (Phase 5-6) starts in 1 week. Adding hooks now risks destabilizing a working pipeline.
+4. **Option 1 is dead on Windows.** 9 failure points, 3 blocking, no viable workaround without forking the plugin.
+5. **Option 2 remains available.** If Wrong Approach incidents persist at 5+/8 sessions after restructuring, adopt PreCompact hooks (1.5h setup). Claude Diary can layer on top for long-term rule evolution.
+
+#### Conditions to Re-evaluate
+
+- Wrong Approach incidents remain at 5+/8 sessions after 2 weeks with Option 3+
+- Mid-session compaction identified as primary cause (not session-start)
+- Project expands to multi-developer or multi-sport pipelines
+- ECC CL-v2 ships a Windows-native observer (no python3/bash dependency)
+
+#### Alternatives Considered
+
+- **Option 1 (ECC CL-v2):** Rejected. Windows-incompatible, value mismatch, excessive overhead.
+- **Option 2 (PreCompact + Claude Diary):** Deferred. Technically sound but premature given cheaper Option 3+ available.
+- **claude-mem (thedotmack):** Rejected. Heavy (Bun + SQLite + Chroma), Stop hook infinite loop risk.
+- **memsearch (Zilliz):** Rejected. Requires OpenAI API key for embeddings, Windows untested.
+- **idnotbe/claude-memory:** Considered. More sophisticated than needed; revisit if project scales.
+
+#### Consequences
+
+- Immediate: 35 min to restructure MEMORY.md + delete obsolete rules
+- Ongoing: ~5 min/session for manual handoff update (already part of workflow)
+- Saves: ~5K tokens/session from rule deduplication
+- Tracks: "Wrong Approach" incident count as success metric
+
+**Full Research:** See `docs/MEMORY_APPROACHES_RESEARCH.md`
 
 ---
 
@@ -589,16 +1033,16 @@ logger.add(
 **Status:** Proposed / Accepted / Deprecated / Superseded
 **Context:** [What problem are we solving?]
 
-**Decision:**
+#### Decision
 [What did we decide?]
 
-**Rationale:**
+#### Rationale
 [Why did we make this decision?]
 
-**Alternatives Considered:**
+#### Alternatives Considered
 - [Alternative 1]: [Why rejected]
 - [Alternative 2]: [Why rejected]
 
-**Consequences:**
+#### Consequences
 [What are the implications?]
 ```

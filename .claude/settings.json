@@ -21,7 +21,6 @@
     "command": "pwsh -NoProfile -File C:\\Users\\msenf\\.claude\\statusline-command.ps1"
   },
   "enabledPlugins": {
-    "code-documentation@claude-code-workflows": true,
     "commit-commands@claude-plugins-official": true,
     "data-engineering@claude-code-workflows": true,
     "data-validation-suite@claude-code-workflows": true,
@@ -30,8 +29,8 @@
     "github@claude-plugins-official": false,
     "mcp-voice-hooks-plugin@mcp-voice-hooks-marketplace": true,
     "voicemode@mbailey": false,
-    "dt-workspace@dt-workspace-marketplace": true,
-    "architecture-design@claude-rock": true,
+    "dt-workspace@dt-workspace-marketplace": false,
+    "architecture-design@claude-rock": false,
     "documentation@claude-code": true
   }
 }

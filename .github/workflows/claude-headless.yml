@@ -1,0 +1,222 @@
+# Sports Betting — Claude Code CI/CD Workflows
+# Headless automation via claude-code-action@v1
+
+name: Claude Headless Pipelines
+
+on:
+  # Daily schedule (UTC — adjust for ET)
+  schedule:
+    - cron: "0 15 * * *"   # 10:00 AM ET — daily predictions
+    - cron: "0 4 * * *"    # 11:00 PM ET — nightly refresh
+    - cron: "30 4 * * *"   # 11:30 PM ET — evening settlement
+
+  # Manual trigger with task selection
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Headless task to run"
+        required: true
+        type: choice
+        options:
+          - daily
+          - nightly
+          - settle
+          - test
+          - validate
+          - backtest
+      model:
+        description: "Model override (optional)"
+        required: false
+        default: ""
+
+  # PR automation
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ── Daily Paper Betting Pipeline ────────────────────────────
+  daily-pipeline:
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 15 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily pipeline
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the quant-analyst agent. Skills: odds-retrieval, statistical-analysis.
+            Execute the daily paper betting pipeline:
+            1. python scripts/daily_run.py --fetch-snapshots
+            2. Report results as JSON with date, games_found, bets_placed, settlements, errors
+          claude_args: >-
+            --max-turns 10
+            --allowedTools "Bash(python:*)" "Read" "Write" "Glob" "Grep"
+            ${{ github.event.inputs.model && format('--model {0}', github.event.inputs.model) || '' }}
+
+  # ── Nightly Data Refresh ────────────────────────────────────
+  nightly-refresh:
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'nightly')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run nightly refresh
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the data-scientist agent. Skills: senior-data-engineer, matplotlib.
+            Execute nightly refresh:
+            1. python scripts/fetch_season_data.py --season 2026 --incremental --no-odds
+            2. python scripts/train_ncaab_elo.py --end 2026
+            3. python scripts/generate_dashboard_data.py
+            Report any failures.
+          claude_args: "--max-turns 8"
+
+  # ── Evening Settlement ──────────────────────────────────────
+  evening-settle:
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '30 4 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'settle')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Settle bets
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "Run python scripts/daily_run.py --settle-only and report results."
+          claude_args: "--max-turns 3"
+
+  # ── Test Suite ──────────────────────────────────────────────
+  test-suite:
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'test') ||
+      (github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests via Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the senior-qa agent. Skills: test-driven-development, systematic-debugging.
+            1. Run: python -m pytest tests/ -v --tb=short
+            2. If failures, analyze and fix code (not tests unless test is wrong)
+            3. Report pass/fail status with counts
+          claude_args: "--max-turns 15"
+
+  # ── Model Validation ────────────────────────────────────────
+  model-validation:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'validate'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Gatekeeper validation
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the quant-analyst agent running Gatekeeper validation.
+            1. Run: python scripts/run_gatekeeper_validation.py
+            2. Report decision: PASS, QUARANTINE, or NEEDS_REVIEW with blocking failures
+          claude_args: "--max-turns 5"
+
+  # ── Backtest ────────────────────────────────────────────────
+  backtest:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'backtest'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run walk-forward backtest
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the data-scientist agent. Run walk-forward backtest:
+            1. python scripts/incremental_backtest.py --barttorvik
+            2. Analyze ROI, Sharpe, CLV, p-value
+            3. Report JSON summary
+          claude_args: "--max-turns 12"
+
+  # ── @claude PR/Issue Responder ──────────────────────────────
+  claude-respond:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 10"

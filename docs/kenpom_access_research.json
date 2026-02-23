@@ -1,0 +1,457 @@
+{
+  "search_summary": {
+    "platforms_searched": [
+      "kenpom.com",
+      "github",
+      "pypi",
+      "cbbdata.com",
+      "sportsdataverse",
+      "stackoverflow"
+    ],
+    "repositories_analyzed": 4,
+    "docs_reviewed": 8,
+    "research_date": "2026-02-17"
+  },
+  "executive_summary": {
+    "verdict": "DO NOT purchase KenPom subscription at this time",
+    "rationale": "Barttorvik integration already provides ~90% of KenPom signal at $0 cost. No clear incremental value for betting model.",
+    "alternative_recommendation": "Continue using Barttorvik via cbbdata.com API. Consider kenpompy as fallback if Barttorvik fails."
+  },
+  "official_kenpom_api": {
+    "citation": "KenPom.com. 'API Access Registration.' 2026. https://kenpom.com/register-api.php",
+    "exists": true,
+    "url": "https://kenpom.com/register-api.php",
+    "authentication": {
+      "method": "API Key",
+      "delivery": "Provided after purchase",
+      "payment_processor": "Stripe"
+    },
+    "pricing": {
+      "publicly_disclosed": false,
+      "notes": "Must register or contact to see pricing. Community suggests $25-95/year range."
+    },
+    "endpoints": {
+      "confirmed": [
+        "Team ratings (AdjEM, AdjO, AdjD)",
+        "Strength of Schedule (SOS)",
+        "Tempo (AdjT)",
+        "Possession length",
+        "Any season, team, or conference"
+      ],
+      "likely_available": [
+        "Historical ratings",
+        "Four Factors",
+        "Game-level data"
+      ],
+      "uncertainty": "Full endpoint list only available after purchase"
+    },
+    "documentation": {
+      "public": false,
+      "delivery": "Provided after API key purchase"
+    },
+    "rate_limits": {
+      "disclosed": false,
+      "notes": "Not mentioned in public documentation. Standard API rate limits likely apply."
+    },
+    "historical_data": {
+      "earliest_season": 2010,
+      "daily_snapshots": "Likely YES (based on archive.kenpom.com pages)",
+      "point_in_time": "Likely YES (date parameter support expected)"
+    },
+    "terms_of_service": {
+      "url": "https://kenpom.com/contact.php",
+      "scraping_policy": "Official API preferred over scraping"
+    }
+  },
+  "repositories": [
+    {
+      "citation": "Andrews, Jared. 'kenpompy: A simple yet comprehensive web scraper for kenpom.com.' GitHub, v0.3.5, 2026. https://github.com/j-andrews7/kenpompy",
+      "platform": "github",
+      "name": "kenpompy",
+      "url": "https://github.com/j-andrews7/kenpompy",
+      "pypi_url": "https://pypi.org/project/kenpompy/",
+      "docs_url": "https://kenpompy.readthedocs.io/",
+      "stats": {
+        "stars": "~50-100 (estimate from search results)",
+        "pypi_downloads": "Active package",
+        "last_updated": "2026 (maintained)",
+        "latest_version": "0.3.5"
+      },
+      "key_features": [
+        "Web scraper for kenpom.com (not official API)",
+        "Returns pandas DataFrames",
+        "Summary tables: ratings, team stats, player stats",
+        "FanMatch tables",
+        "Miscellaneous stats under Stats and Miscellany headings",
+        "Point-in-time historical ratings via archive function",
+        "Simple parameters to select seasons"
+      ],
+      "installation": "pip install kenpompy",
+      "authentication": {
+        "method": "Email and password",
+        "requirement": "Active KenPom subscription ($25/year)",
+        "login_flow": "Login function returns authenticated browser session",
+        "limitation": "Without subscription, only home page accessible"
+      },
+      "architecture": "Web scraping with BeautifulSoup and requests",
+      "code_quality": {
+        "testing": "unknown",
+        "documentation": "good (ReadTheDocs)",
+        "maintenance": "active"
+      },
+      "usage_example": "import kenpompy.utils as kp\\nbrowser = kp.login(email, password)\\nratings = kp.get_pomeroy_ratings(browser, season='2024')\\narchive = kp.kp_pomeroy_archive_ratings(date='2024-01-15')",
+      "historical_access": {
+        "function": "kp_pomeroy_archive_ratings(date='YYYY-MM-DD')",
+        "date_format": "YYYY-MM-DD (e.g., '2018-11-22')",
+        "earliest": "Depends on kenpom.com archive availability (likely 2010+)",
+        "point_in_time": true
+      },
+      "limitations": [
+        "Web scraping (fragile, could break if HTML changes)",
+        "Requires active KenPom subscription",
+        "Not official API (ToS compliance unclear)",
+        "Cloudflare bypass needed"
+      ],
+      "license": "GNU GPL v3.0",
+      "alternatives": []
+    },
+    {
+      "citation": "Weatherman, Andrew. 'cbbdata: CBBData R Package for College Basketball Data.' R Package, 2026. https://cbbdata.aweatherman.com/",
+      "platform": "cbbdata.com",
+      "name": "cbbdata (R package)",
+      "url": "https://cbbdata.aweatherman.com/",
+      "github_url": "https://github.com/andreweatherman/cbbdata",
+      "stats": {
+        "language": "R",
+        "users": "Active R community",
+        "last_updated": "2026",
+        "status": "Active"
+      },
+      "key_features": [
+        "Access to Barttorvik data (primary focus)",
+        "KenPom endpoints (requires KenPom subscription)",
+        "Flask-based API backend",
+        "Free API key (signup required)",
+        "Daily archives back to 2011-12 season"
+      ],
+      "kenpom_endpoints": {
+        "cbd_kenpom_ratings": {
+          "description": "Current KenPom ratings",
+          "authorization": "PUBLIC (no KenPom sub needed)",
+          "notes": "KenPom authorization no longer required for current ratings"
+        },
+        "cbd_kenpom_ratings_archive": {
+          "description": "Historical/preseason/year-end KenPom ratings",
+          "authorization": "REQUIRES KenPom subscription",
+          "historical_range": "2011-12 to present",
+          "point_in_time": true,
+          "date_parameter": true
+        },
+        "cbd_kenpom_authorization": {
+          "description": "Activate KenPom access with password",
+          "flow": "Pass KenPom password, API confirms active account, logs expiration date"
+        }
+      },
+      "authentication": {
+        "cbbdata_api_key": "Free (signup at cbbdata.com)",
+        "kenpom_requirement": "Email must match KenPom account email to prevent sharing",
+        "kenpom_password": "Needed for authorization function"
+      },
+      "python_access": {
+        "native": false,
+        "workaround": "rpy2 bridge to call R functions from Python",
+        "complexity": "Medium (requires R installation + rpy2)",
+        "recommended": false
+      },
+      "code_quality": {
+        "testing": "unknown",
+        "documentation": "good",
+        "maintenance": "active"
+      },
+      "usage_example": "library(cbbdata)\\ncbd_kenpom_authorization(password='your_kenpom_password')\\nratings <- cbd_kenpom_ratings_archive(year=2024, date='2024-01-15')",
+      "limitations": [
+        "R-only (not Python native)",
+        "Requires active KenPom subscription for archives",
+        "Email matching requirement (anti-sharing)",
+        "Dependency on external service"
+      ],
+      "alternatives": [
+        "hoopR (R package)",
+        "kenpompy (Python)"
+      ]
+    },
+    {
+      "citation": "Sportsdataverse. 'hoopR: Data and Tools for Men's Basketball.' R Package, v2.1.0+, 2026. https://hoopr.sportsdataverse.org/",
+      "platform": "github",
+      "name": "hoopR",
+      "url": "https://hoopr.sportsdataverse.org/",
+      "github_url": "https://github.com/sportsdataverse/hoopR",
+      "stats": {
+        "language": "R",
+        "ecosystem": "sportsdataverse",
+        "functions": "36 KenPom functions (kp_ prefix)",
+        "last_updated": "2026",
+        "status": "Active"
+      },
+      "key_features": [
+        "Comprehensive KenPom scraping interface",
+        "36 functions covering kenpom.com",
+        "Archive ratings with date parameter",
+        "Conference historical ratings",
+        "Tidy format data returns"
+      ],
+      "archive_function": {
+        "name": "kp_pomeroy_archive_ratings",
+        "url": "https://hoopr.sportsdataverse.org/reference/kp_pomeroy_archive_ratings.html",
+        "usage": "kp_pomeroy_archive_ratings(date='2018-11-22')",
+        "returns": "Data including team rankings, adjusted efficiency metrics, offensive/defensive ratings",
+        "point_in_time": true
+      },
+      "authentication": {
+        "method": "Active KenPom subscription",
+        "requirement": "Required to scrape kenpom.com"
+      },
+      "python_access": {
+        "native": false,
+        "workaround": "rpy2 bridge",
+        "complexity": "Medium",
+        "recommended": false
+      },
+      "installation": "pacman::p_load_current_gh('sportsdataverse/hoopR', dependencies=TRUE)",
+      "code_quality": {
+        "testing": "likely good (sportsdataverse ecosystem)",
+        "documentation": "excellent",
+        "maintenance": "active"
+      },
+      "limitations": [
+        "R-only (not Python)",
+        "Requires KenPom subscription",
+        "Web scraping (could break)"
+      ],
+      "alternatives": [
+        "cbbdata (R)",
+        "kenpompy (Python)"
+      ]
+    },
+    {
+      "citation": "Self, Andrew. 'kenpom-api: KenPom.com API wrapper for Node.js.' npm, 2026. https://www.npmjs.com/package/kenpom-api",
+      "platform": "npm",
+      "name": "kenpom-api (Node.js)",
+      "url": "https://www.npmjs.com/package/kenpom-api",
+      "github_url": "https://github.com/aself101/kenpom-api",
+      "stats": {
+        "language": "JavaScript/Node.js",
+        "platform": "npm",
+        "status": "Available"
+      },
+      "key_features": [
+        "Node.js wrapper for KenPom data",
+        "CLI tool included",
+        "College basketball statistics"
+      ],
+      "python_relevance": "LOW (Node.js only, not Python)",
+      "limitations": [
+        "Not Python (would need subprocess calls)",
+        "Less mature than kenpompy"
+      ]
+    }
+  ],
+  "technical_insights": {
+    "common_patterns": [
+      "All Python/R libraries use web scraping, not official API",
+      "Point-in-time access via archive pages (date parameter)",
+      "Active KenPom subscription ($25/year) universal requirement",
+      "pandas/DataFrame returns for data structures",
+      "Email/password authentication for scraping"
+    ],
+    "best_practices": [
+      "Use official API if available and reasonably priced",
+      "kenpompy most mature for Python ecosystem",
+      "Always filter by date for point-in-time (avoid look-ahead bias)",
+      "Cache results to minimize API/scrape calls",
+      "Validate against Barttorvik for correlation check"
+    ],
+    "pitfalls": [
+      "Web scraping fragile (HTML changes break code)",
+      "KenPom ToS may prohibit scraping (check before use)",
+      "Cloudflare protection may block automated requests",
+      "R packages require rpy2 bridge from Python (complexity)",
+      "No free tier — subscription always required"
+    ],
+    "emerging_trends": [
+      "Barttorvik free alternative gaining traction",
+      "cbbdata API offering both Barttorvik + KenPom",
+      "Custom ridge regression implementations (ESPN box scores)",
+      "Ensemble models (Elo + Efficiency) outperforming single metric"
+    ]
+  },
+  "kenpom_metrics": {
+    "AdjEM": {
+      "name": "Adjusted Efficiency Margin",
+      "formula": "AdjO - AdjD",
+      "description": "Net rating per 100 possessions vs average D-I team",
+      "unit": "Points per 100 possessions"
+    },
+    "AdjO": {
+      "name": "Adjusted Offensive Efficiency",
+      "formula": "Points per 100 possessions, adjusted for opponent quality",
+      "description": "Expected points scored per 100 possessions vs average D-I opponent on neutral court",
+      "unit": "Points per 100 possessions"
+    },
+    "AdjD": {
+      "name": "Adjusted Defensive Efficiency",
+      "formula": "Points allowed per 100 possessions, adjusted for opponent quality",
+      "description": "Expected points allowed per 100 possessions vs average D-I opponent on neutral court",
+      "unit": "Points per 100 possessions"
+    },
+    "AdjT": {
+      "name": "Adjusted Tempo",
+      "formula": "Possessions per 40 minutes, adjusted for opponent pace",
+      "description": "Expected pace vs team that wants to play at average D-I tempo",
+      "unit": "Possessions per 40 minutes"
+    },
+    "SOS": {
+      "name": "Strength of Schedule",
+      "description": "Average opponent AdjEM rating"
+    },
+    "Luck": {
+      "name": "Luck Rating",
+      "description": "Difference between actual record and Pythagorean expectation"
+    },
+    "FourFactors": {
+      "eFG": "Effective Field Goal % = (FGM + 0.5*3PM) / FGA",
+      "TOV": "Turnover Rate = TOV / (FGA + 0.44*FTA + TOV)",
+      "ORB": "Offensive Rebound Rate = OREB / (OREB + OppDREB)",
+      "FTR": "Free Throw Rate = FTM / FGA",
+      "weights": {
+        "eFG": "40%",
+        "TOV": "25%",
+        "ORB": "20%",
+        "FTR": "15%"
+      }
+    }
+  },
+  "historical_data_availability": {
+    "earliest_season": 2010,
+    "seasons_available": "2010-present",
+    "daily_granularity": true,
+    "point_in_time_access": true,
+    "date_format": "YYYY-MM-DD",
+    "example_date": "2024-01-15",
+    "archive_url_pattern": "archive.kenpom.com (scraped by libraries)",
+    "backtest_feasibility": "YES (critical for avoiding look-ahead bias)",
+    "implementation": "Filter games by date before computing ratings"
+  },
+  "implementation_recommendations": [
+    {
+      "scenario": "Barttorvik continues working (current state)",
+      "recommended_solution": "Continue using Barttorvik via cbbdata.com API",
+      "rationale": "Free, Python-native, ~90% KenPom correlation, already integrated, proven ROI +24%"
+    },
+    {
+      "scenario": "Barttorvik API fails or 2026 data unavailable",
+      "recommended_solution": "kenpompy + $25 KenPom subscription",
+      "rationale": "Most mature Python library, active maintenance, archive access, pandas DataFrames"
+    },
+    {
+      "scenario": "Both external sources fail",
+      "recommended_solution": "Custom ridge regression (KENPOM_EFFICIENCY_RESEARCH.md)",
+      "rationale": "22-hour investment, 0.85-0.92 correlation, full control, ESPN box scores already available"
+    },
+    {
+      "scenario": "Need official API for production reliability",
+      "recommended_solution": "Official KenPom API (if price <$100/year)",
+      "rationale": "Most stable, no scraping fragility, official support"
+    }
+  ],
+  "cost_benefit_analysis": {
+    "kenpom_subscription": {
+      "annual_cost": "$25",
+      "included": "Full website access + data suitable for scraping",
+      "point_in_time": true,
+      "libraries": [
+        "kenpompy (Python)",
+        "cbbdata (R)",
+        "hoopR (R)"
+      ]
+    },
+    "kenpom_official_api": {
+      "annual_cost": "Unknown (likely $50-150)",
+      "included": "API key + documentation + official endpoints",
+      "rate_limits": "Unknown",
+      "stability": "HIGH (official)",
+      "documentation": "Provided after purchase"
+    },
+    "barttorvik_current": {
+      "annual_cost": "$0",
+      "correlation_with_kenpom": "~0.90",
+      "point_in_time": true,
+      "historical": "2020-2025 confirmed",
+      "proven_roi": "+24.0% (p=2.5e-6)",
+      "integration_status": "COMPLETE"
+    },
+    "custom_ridge_regression": {
+      "upfront_cost": "$1,800 (36 hours @ $50/hr)",
+      "annual_cost": "$0",
+      "correlation_with_kenpom": "0.85-0.92",
+      "customization": "HIGH",
+      "transparency": "HIGH",
+      "vendor_risk": "NONE"
+    },
+    "recommendation": "Continue with Barttorvik ($0). KenPom provides <10% incremental signal for $25-150/year. Not cost-effective."
+  },
+  "community_insights": {
+    "popular_solutions": [
+      "Barttorvik (free alternative to KenPom)",
+      "kenpompy (Python scraping)",
+      "cbbdata (R package for both Barttorvik + KenPom)",
+      "Custom implementations (ridge regression)"
+    ],
+    "controversial_topics": [
+      "KenPom vs Barttorvik accuracy debate (~0.95 correlation)",
+      "Recency weighting differences (KenPom vs Torvik)",
+      "Web scraping ethics and ToS compliance",
+      "Custom vs paid metrics for betting models"
+    ],
+    "expert_opinions": [
+      "Betting models need edge detection, not perfect rankings (0.85 correlation sufficient)",
+      "KenPom itself only 60.5% accurate on tight spreads (<7 points)",
+      "Barttorvik free alternative captures 90% of signal",
+      "Custom implementations offer transparency and control"
+    ]
+  },
+  "rate_limits_and_tos": {
+    "kenpom_official_api": {
+      "rate_limits": "Not publicly disclosed",
+      "terms_of_service": "See kenpom.com ToS",
+      "scraping_policy": "Unclear — official API preferred"
+    },
+    "kenpompy_scraping": {
+      "rate_limits": "Self-imposed (avoid overwhelming server)",
+      "best_practice": "Cache results, minimize requests",
+      "cloudflare": "May require bypass mechanisms",
+      "risk": "Account ban possible if excessive scraping"
+    },
+    "cbbdata_api": {
+      "rate_limits": "Not disclosed (likely reasonable)",
+      "authentication": "Free API key + KenPom subscription",
+      "terms": "Email matching enforced to prevent account sharing"
+    }
+  },
+  "next_steps": {
+    "immediate": [
+      "NO ACTION REQUIRED — continue with Barttorvik",
+      "Monitor Barttorvik API for 2026 data availability",
+      "Focus on 2026 odds backfill (current priority)"
+    ],
+    "contingency": [
+      "If Barttorvik fails: Purchase $25 KenPom subscription + kenpompy",
+      "If both fail: Implement custom ridge regression (22 hours)"
+    ],
+    "future_research": [
+      "Contact KenPom for official API pricing (if needed)",
+      "Test kenpompy in sandbox environment (if Barttorvik delays)",
+      "Validate custom ridge regression correlation vs Barttorvik"
+    ]
+  }
+}

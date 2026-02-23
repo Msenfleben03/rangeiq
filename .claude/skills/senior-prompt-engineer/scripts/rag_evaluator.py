@@ -42,7 +42,7 @@ class RagEvaluator:
             self.validate_config()
 
             # Main processing
-            result = self._execute()
+            self._execute()
 
             self.results["status"] = "completed"
             self.results["end_time"] = datetime.now().isoformat()

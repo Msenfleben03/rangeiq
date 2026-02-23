@@ -4,9 +4,14 @@
     "MCP_VOICE_HOOKS_AUTO_OPEN_BROWSER": "true",
     "MCP_VOICE_HOOKS_AUTO_DELIVER_VOICE_INPUT_BEFORE_TOOLS": "true"
   },
+  "permissions": {
+    "allow": [
+      "Bash(powershell \"Stop-Process -Id 38940,27832 -Force\")"
+    ]
+  },
   "enabledPlugins": {
-    "plugin-dev@claude-plugins-official": true,
-    "mcp-voice-hooks-plugin@mcp-voice-hooks-marketplace": true,
+    "plugin-dev@claude-plugins-official": false,
+    "mcp-voice-hooks-plugin@mcp-voice-hooks-marketplace": false,
     "voicemode@mbailey-plugins": true
   },
   "extraKnownMarketplaces": {
@@ -22,10 +27,5 @@
         "url": "https://github.com/mbailey/plugins.git"
       }
     }
-  },
-  "permissions": {
-    "allow": [
-      "Bash(powershell \"Stop-Process -Id 38940,27832 -Force\")"
-    ]
   }
 }

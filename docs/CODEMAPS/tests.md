@@ -1,6 +1,6 @@
 # Tests Module Codemap
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-17
 **Framework:** pytest
 **Entry Point:** `tests/conftest.py` (shared fixtures)
 
@@ -16,6 +16,8 @@ tests/
   test_overfit_validator.py        # Overfitting detection (42 tests)
   test_betting_validator.py        # Betting-specific validation (52 tests)
   test_gatekeeper.py               # Final gate validation (50 tests)
+  # === Feature Tests ===
+  test_feature_engineering.py      # Feature engine + utilities (30 tests)
   # === Model Tests ===
   test_elo.py                      # Base Elo + NCAAB Elo model tests
   test_model_persistence.py        # Save/load/export model persistence tests
@@ -27,6 +29,10 @@ tests/
   test_odds_providers.py           # Odds provider strategy pattern tests (46 tests)
   test_espn_core_odds_provider.py  # ESPN Core API odds provider tests (54 tests)
   test_unified_fetcher.py          # Unified scores+odds fetcher tests (21 tests)
+  test_barttorvik_fetcher.py       # Barttorvik T-Rank fetcher tests (18 tests)
+  test_team_name_mapping.py        # ESPN<->Barttorvik name mapping tests (11 tests)
+  test_tune_barttorvik.py          # Barttorvik grid search tuning tests (14 tests)
+  test_daily_run.py                # Paper betting orchestrator tests (26 tests)
   # === Integration Tests ===
   test_backtesting.py              # Walk-forward validator, metrics, simulation tests
   test_forecasting_db.py           # Forecasting database interface tests
@@ -52,8 +58,13 @@ tests/
 | `test_unified_fetcher.py` | pipelines/unified_fetcher.py | 21 | Unified fetcher modes, skip lists, enriched parquet output |
 | `test_backtesting.py` | backtesting/ (metrics, simulation, walk_forward) | 51 | Metrics calculation, simulation config, walk-forward splits |
 | `test_forecasting_db.py` | tracking/forecasting_db.py | 20 | Forecast CRUD, revisions, calibration, Brier scores |
+| `test_feature_engineering.py` | features/engineering.py, ncaab/advanced_features.py | 30 | safe_rolling, OQ-weight, rest days, feature engine, leakage check |
+| `test_barttorvik_fetcher.py` | pipelines/barttorvik_fetcher.py | 18 | Parquet parsing, PIT lookup, cache, differentials, fetcher class |
+| `test_team_name_mapping.py` | pipelines/team_name_mapping.py | 11 | Mascot stripping, manual overrides, full mapping coverage |
+| `test_tune_barttorvik.py` | scripts/tune_barttorvik_weights.py | 14 | Grid search combos, result ranking, CSV/JSON output |
+| `test_daily_run.py` | scripts/daily_run.py | 26 | Pipeline orchestration, dry-run, settle, report modes |
 | `test_setup.py` | environment | 24 | Package imports, database connectivity |
-| **TOTAL** | | **533** | Full validation + paper betting + models + pipelines + integration |
+| **TOTAL** | | **629** | Full validation + features + paper betting + models + pipelines + Barttorvik + tuning + integration |
 
 ## Shared Fixtures (conftest.py)
 

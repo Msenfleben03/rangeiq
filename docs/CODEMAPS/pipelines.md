@@ -1,9 +1,10 @@
 # Pipelines Module Codemap
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-17
 **Entry Point:** `pipelines/__init__.py` (empty)
 **Test Coverage:** `tests/test_odds_providers.py`, `tests/test_espn_core_odds_provider.py`,
-`tests/test_unified_fetcher.py`, `tests/test_forecasting_db.py` (indirect)
+`tests/test_unified_fetcher.py`, `tests/test_barttorvik_fetcher.py`,
+`tests/test_team_name_mapping.py`, `tests/test_forecasting_db.py` (indirect)
 
 ## Architecture
 
@@ -16,6 +17,8 @@ pipelines/
   ncaab_data_fetcher.py        # NCAAB game data via sportsipy (BROKEN — use espn_ncaab_fetcher)
   polymarket_fetcher.py        # Polymarket prediction market data (CLOB + Gamma APIs)
   kalshi_fetcher.py            # Kalshi prediction market data (CFTC-regulated)
+  barttorvik_fetcher.py        # Barttorvik T-Rank ratings (cbbdata API, Parquet format)
+  team_name_mapping.py         # ESPN team_id <-> Barttorvik team name mapping (359 teams)
   batch_fetcher.py             # Async parallel data retrieval (aiohttp)
   # === Odds Retrieval (Strategy Pattern) ===
   odds_providers.py            # 4 providers: Manual, TheOddsAPI, ESPN Site, Scraper
@@ -161,6 +164,45 @@ Scores + odds in one pass — eliminates separate backfill step. Supports increm
 **Dependencies:** espn_ncaab_fetcher (ESPNDataFetcher), espn_core_odds_provider (ESPNCoreOddsProvider)
 **Tests:** 21 tests in `tests/test_unified_fetcher.py`
 
+### barttorvik_fetcher.py
+
+Barttorvik T-Rank efficiency ratings fetcher via the free cbbdata.com REST API.
+Returns Apache Parquet format with daily point-in-time snapshots.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `BarttovikFetcher` | class | Main fetcher: API calls, caching, rate limiting |
+| `parse_ratings_response(data, season)` | function | Parse Parquet bytes into clean DataFrame |
+| `lookup_team_ratings(df, team, game_date)` | function | Point-in-time rating lookup (prevents look-ahead) |
+| `compute_barttorvik_differentials(df, home, away, date)` | function | Home-away diffs for matchup features |
+| `save_season_cache(df, season, cache_dir)` | function | Save season to parquet cache |
+| `load_cached_season(season, cache_dir)` | function | Load from parquet cache |
+
+**API:** `https://www.cbbdata.com/api/torvik/ratings/archive?year=YYYY&key=KEY`
+**Auth:** Free API key (CBBDATA_API_KEY in .env)
+**Format:** Apache Parquet (application/octet-stream), NOT JSON
+**Columns:** rank, team, conf, barthag, adj_o, adj_d, adj_tempo, wab, year, date
+**Coverage:** 347,392 ratings across 6 seasons (2020-2025), 353-364 teams, 134-232 dates/season
+**Cache:** `data/external/barttorvik/barttorvik_ratings_{year}.parquet`
+**Tests:** 18 tests in `tests/test_barttorvik_fetcher.py`
+**Dependencies:** requests, pandas, pyarrow
+
+### team_name_mapping.py
+
+Maps ESPN team abbreviations (e.g., 'HOU') to Barttorvik team names (e.g., 'Houston').
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `espn_id_to_barttorvik(espn_id)` | function | Cached lookup: ESPN ID -> Barttorvik name |
+| `build_espn_barttorvik_mapping()` | function | Build full mapping from game data + manual overrides |
+| `MANUAL_OVERRIDES` | dict | 41 hand-verified ESPN->Barttorvik name overrides |
+
+**Strategy:** Auto-match by stripping mascot from ESPN opponent_name, with State->St. substitution.
+Manual overrides for teams that never appear as opponents or have naming mismatches.
+**Coverage:** 359 teams mapped (of ~360 D1)
+**Tests:** 11 tests in `tests/test_team_name_mapping.py`
+**Dependencies:** pandas (reads ESPN + Barttorvik parquet files)
+
 ### ncaab_data_fetcher.py (LEGACY)
 
 Fetches NCAA Men's Basketball data using the sportsipy library.
@@ -253,6 +295,11 @@ External APIs / Web Scraping
          +-- polymarket_fetcher.py --> tracking/forecasting_db.py (SQLite)
          |
          +-- kalshi_fetcher.py ------> tracking/forecasting_db.py (SQLite)
+         |
+         +-- barttorvik_fetcher.py --> data/external/barttorvik/ (parquet, 347K ratings)
+         |       |
+         |       +-- team_name_mapping.py (ESPN ID -> Barttorvik name, 359 teams)
+         |       +-- scripts/backtest_ncaab_elo.py (point-in-time efficiency features)
          |
          +-- batch_fetcher.py -------> (wraps above for parallel execution)
          |

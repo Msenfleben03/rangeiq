@@ -266,7 +266,7 @@ def create_box_plot(data, ax=None):
     # Generate multiple distributions
     box_data = [np.random.normal(0, std, 100) for std in range(1, 5)]
 
-    bp = ax.boxplot(
+    _bp = ax.boxplot(
         box_data,
         labels=["Group 1", "Group 2", "Group 3", "Group 4"],
         patch_artist=True,
@@ -426,11 +426,11 @@ def main():
     }
 
     if args.plot_type == "3d":
-        fig = create_3d_plot()
+        _fig = create_3d_plot()
     elif args.plot_type == "all":
-        fig = create_comprehensive_figure()
+        _fig = create_comprehensive_figure()
     else:
-        fig = plot_functions[args.plot_type](data)
+        _fig = plot_functions[args.plot_type](data)
 
     # Save figure
     plt.savefig(args.output, dpi=300, bbox_inches="tight")

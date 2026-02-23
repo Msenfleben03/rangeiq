@@ -1,6 +1,6 @@
 # Scripts Module Codemap
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-17
 
 ## Architecture
 
@@ -12,16 +12,25 @@ scripts/
   train_ncaab_elo.py             # Train Elo model on historical parquet data
   # === Phase 2: Odds Backfill ===
   backfill_historical_odds.py    # ESPN Core API odds backfill (checkpoint/resume)
+  # === Phase 2b: Barttorvik Ratings ===
+  fetch_barttorvik_data.py     # Fetch Barttorvik T-Rank ratings (cbbdata API, all seasons)
+  # === Phase 2c: Barttorvik Tuning ===
+  tune_barttorvik_weights.py     # Grid search for Barttorvik coefficients (80 combos)
   # === Phase 3: Backtesting & Validation ===
-  backtest_ncaab_elo.py          # Walk-forward backtest with simulated odds + Kelly
+  backtest_ncaab_elo.py          # Walk-forward backtest with simulated odds + Kelly + feature wrapper
+  ab_compare_features.py         # A/B comparison framework (paired t-test on common games)
+  incremental_backtest.py        # Walk-forward: train [2020..N-1], test N (5-fold)
   run_gatekeeper_validation.py   # Full 5-dimension Gatekeeper validation
   # === Phase 4: Daily Predictions ===
   daily_predictions.py           # Morning: predict + fetch odds + recommend bets
+  daily_run.py                   # Paper betting orchestrator (predict→record→settle→report)
   # === Phase 5: Paper Betting ===
   record_paper_bets.py           # Record bet decisions (interactive + CSV import)
   settle_paper_bets.py           # Settle completed games, compute P/L and CLV
   # === Phase 6: Reporting ===
   generate_report.py             # CLI for daily/weekly/CLV/health reports
+  # === Phase 7: Dashboard ===
+  generate_dashboard_data.py     # Merge Elo + Barttorvik + stats → dashboard JSON bundle
   # === Utilities ===
   validate_ncaab_elo.py          # Run NCAAB Elo through Gatekeeper (legacy)
   verify_schema.py               # Verify SQLite schema matches expected structure
@@ -134,6 +143,55 @@ python scripts/backfill_historical_odds.py --season 2025 --batch-size 100
 **Outputs:** Odds data saved to `data/odds/` directory
 **Dependencies:** pipelines.espn_core_odds_provider (ESPNCoreOddsFetcher)
 
+## Phase 2b: Barttorvik Ratings & Tuning
+
+### fetch_barttorvik_data.py
+
+Downloads daily point-in-time Barttorvik T-Rank efficiency ratings from the free
+cbbdata.com API and caches as parquet files.
+
+**Usage:**
+
+```bash
+python scripts/fetch_barttorvik_data.py
+python scripts/fetch_barttorvik_data.py --seasons 2025
+python scripts/fetch_barttorvik_data.py --force  # re-download even if cached
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `main()` | CLI argument parsing, fetcher invocation, summary display |
+
+**Outputs:** `data/external/barttorvik/barttorvik_ratings_{year}.parquet` (347K ratings total)
+**Dependencies:** pipelines.barttorvik_fetcher (BarttovikFetcher), config.settings (CBBDATA_API_KEY)
+
+### tune_barttorvik_weights.py
+
+Grid search over barttorvik_weight, net_diff_coeff, and barthag_diff_coeff
+to find the combination that maximizes flat-stake ROI while maintaining significance.
+
+**Usage:**
+
+```bash
+python scripts/tune_barttorvik_weights.py --quick                          # 12 combos, 2 seasons
+python scripts/tune_barttorvik_weights.py --seasons 2020 2021 2022 2023 2024 2025  # Full grid
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `run_grid_search(seasons, quick)` | Main: iterate combos, collect results, rank |
+| `GridResult` | Dataclass: combo params + ROI + Sharpe + p-value |
+
+**Grid:** 5 weights x 4 net_coeffs x 4 barthag_coeffs = 80 combos (full), 12 (quick)
+**Best Result:** w=1.5, nc=0.005, bc=0.20 → ROI +24.0%, Sharpe 1.89, p=2.5e-6
+**Outputs:** `data/backtests/barttorvik_grid_summary.json`, `data/backtests/barttorvik_grid_results.csv`
+**Dependencies:** scipy.stats, scripts.backtest_ncaab_elo (BarttovikCoeffs, run_backtest_with_features)
+**Tests:** 14 tests in `tests/test_tune_barttorvik.py`
+
 ## Phase 3: Backtesting & Validation
 
 ### backtest_ncaab_elo.py
@@ -157,10 +215,58 @@ python scripts/backtest_ncaab_elo.py --test-season 2025 --min-edge 0.02
 | `simulate_market_odds(win_prob, vig)` | Synthetic American odds with vig + noise |
 | `simulate_closing_odds(opening_odds)` | Synthetic line movement (1-3 pts) |
 | `run_backtest(model, games, ...)` | Walk-forward: predict -> odds -> edge -> Kelly -> P/L |
+| `run_backtest_with_features(model, games, feature_engine, ...)` | Walk-forward with feature-adjusted probabilities |
 | `summarize_backtest(df)` | Summary stats: ROI, Sharpe, drawdown, CLV |
 
 **Outputs:** `data/backtests/ncaab_elo_backtest_{season}.parquet`
-**Dependencies:** numpy, pandas, betting.odds_converter, models.model_persistence, config.constants
+**Dependencies:** numpy, pandas, betting.odds_converter, models.model_persistence, config.constants,
+features.sport_specific.ncaab.advanced_features
+
+### ab_compare_features.py
+
+A/B comparison framework using paired t-tests on per-bet returns for the same games.
+Compares Elo-only baseline against Elo + advanced features.
+
+**Usage:**
+
+```bash
+python scripts/ab_compare_features.py --seasons 2025 --min-edge 0.075
+python scripts/ab_compare_features.py --seasons 2020 2021 2022 2023 2024 2025
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `run_ab_comparison(model, games, odds_lookup, seasons, ...)` | Run both configs on same games, paired t-test |
+| `print_comparison_table(results)` | Pretty-print per-season and pooled results |
+
+**Dependencies:** copy (deepcopy), scipy.stats (ttest_rel), features.sport_specific.ncaab.advanced_features
+
+### incremental_backtest.py
+
+Walk-forward incremental retraining: for each test season N, trains on [2020..N-1]
+and tests on N. Prevents data leakage from training on future seasons.
+
+**Usage:**
+
+```bash
+python scripts/incremental_backtest.py
+python scripts/incremental_backtest.py --barttorvik
+python scripts/incremental_backtest.py --test-seasons 2024 2025 --save-models
+python scripts/incremental_backtest.py --compare-alldata
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `run_incremental_backtest(test_seasons, barttorvik, save_models)` | Main: retrain per fold, collect results |
+| `compare_to_alldata(incremental_results, alldata_results)` | Compare incremental vs all-data model |
+
+**Folds:** 5 (test seasons 2021-2025), pooled ROI +17.86%, p<0.0001
+**Outputs:** Console summary + optional saved models per fold
+**Dependencies:** scripts.train_ncaab_elo (train_model), scripts.backtest_ncaab_elo
 
 ### run_gatekeeper_validation.py
 
@@ -212,6 +318,33 @@ python scripts/daily_predictions.py --date today --mode manual --odds-file odds.
 
 **Dependencies:** pandas, betting.odds_converter, config.constants,
 models.model_persistence, pipelines.odds_orchestrator, tracking.database
+
+### daily_run.py
+
+End-to-end paper betting orchestrator: fetch games → predict → record bets → settle → report.
+Single entry point for all daily operations.
+
+**Usage:**
+
+```bash
+python scripts/daily_run.py                    # Full run
+python scripts/daily_run.py --dry-run          # Preview without recording
+python scripts/daily_run.py --settle-only      # Only settle yesterday's bets
+python scripts/daily_run.py --report-only      # Only generate weekly report
+python scripts/daily_run.py --date 2026-02-15  # Specific date
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `run_full_pipeline(date, dry_run)` | Main: orchestrate all phases |
+| `settle_yesterdays_bets(db, settle_date)` | Settle pending bets from ESPN scores |
+| `generate_weekly_report(db)` | Aggregate weekly stats |
+
+**Dependencies:** scripts.daily_predictions (fetch_espn_scoreboard, generate_predictions),
+tracking.logger (auto_record_bets_from_predictions), tracking.reports (daily_report, weekly_report)
+**Tests:** 26 tests in `tests/test_daily_run.py`
 
 ## Phase 5: Paper Betting
 
@@ -286,6 +419,33 @@ python scripts/generate_report.py --all
 
 **Dependencies:** tracking.database, tracking.reports
 
+## Phase 7: Dashboard
+
+### generate_dashboard_data.py
+
+Merges three data sources into a single JSON bundle for the NCAAB dashboard:
+Elo ratings (current), Barttorvik T-Rank (latest snapshot), and game stats (2026 W-L, PPG).
+
+**Usage:**
+
+```bash
+python scripts/generate_dashboard_data.py
+python scripts/generate_dashboard_data.py --season 2026
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `main()` | CLI parsing + merge pipeline |
+| `load_elo_ratings()` | Load trained model ratings |
+| `load_barttorvik_snapshot()` | Load latest Barttorvik snapshot |
+| `merge_data_sources(elo, barttorvik, games)` | Merge on team + add conference metadata |
+
+**Outputs:** `data/processed/ncaab_dashboard_bundle.json` (360 teams, 31 conferences)
+**Dependencies:** pipelines.team_name_mapping (build_espn_barttorvik_mapping), pandas
+**Consumed by:** `dashboards/ncaab_dashboard.html` (Plotly.js, 7 tabs)
+
 ## Utility Scripts
 
 ### validate_ncaab_elo.py
@@ -316,16 +476,21 @@ Automated docstring formatting and repair tool for consistent Google-style docst
 ## Daily Workflow
 
 ```text
-MORNING:
-  1. daily_predictions.py --date today           # Predict + odds + recommendations
-  2. record_paper_bets.py --date today            # Record bet decisions
+OPTION A — Automated (recommended):
+  1. daily_run.py --dry-run                       # Preview picks
+  2. daily_run.py                                 # Full: predict → record → settle → report
 
-EVENING:
-  3. settle_paper_bets.py --date today            # Settle completed games
-  4. generate_report.py --daily --odds-health     # Performance check
+OPTION B — Manual steps:
+  MORNING:
+    1. daily_predictions.py --date today           # Predict + odds + recommendations
+    2. record_paper_bets.py --date today            # Record bet decisions
+  EVENING:
+    3. settle_paper_bets.py --date today            # Settle completed games
+    4. generate_report.py --daily --odds-health     # Performance check
 
 WEEKLY:
   5. generate_report.py --weekly --clv            # Full review
+  6. generate_dashboard_data.py                   # Refresh dashboard data
 ```
 
 ## Related Areas
