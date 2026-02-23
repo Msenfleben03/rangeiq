@@ -359,6 +359,33 @@ class FeatureConfig:
     # Lag features (to prevent leakage)
     MIN_LAG_GAMES: int = 1  # Always lag at least 1 game
 
+    # --- Advanced feature configuration ---
+
+    # Rolling volatility windows (std dev of point_diff)
+    VOLATILITY_WINDOWS: tuple = (5, 10)
+
+    # Opponent-quality weighting
+    OQ_MEAN_ELO: float = 1500.0  # Neutral weight when opponent is average
+
+    # Rest days
+    BACK_TO_BACK_THRESHOLD: int = 1  # days_rest <= 1 = back-to-back
+
+    # Decay-weighted rolling
+    DECAY_HALF_LIFE_GAMES: int = 8  # Games for weight to halve
+
+    # Feature toggles — empty = Elo-only baseline
+    FEATURES_ENABLED: tuple = ()
+
+    # All available advanced features
+    ALL_FEATURES: tuple = (
+        "vol_5",
+        "vol_10",
+        "oq_margin_10",
+        "rest_days",
+        "is_back_to_back",
+        "decay_margin_10",
+    )
+
 
 FEATURES = FeatureConfig()
 
@@ -381,3 +408,169 @@ class LoggingConfig:
 
 
 LOGGING = LoggingConfig()
+
+# =============================================================================
+# PAPER BETTING CONFIGURATION
+# =============================================================================
+
+
+@dataclass
+class PaperBettingConfig:
+    """Paper betting pipeline configuration."""
+
+    # Edge thresholds — only bet when model edge exceeds this
+    MIN_EDGE: float = 0.075  # 7.5% minimum edge for paper bets
+
+    # Barttorvik integration
+    BARTTORVIK_WEIGHT: float = 1.0  # Full weight on Barttorvik adjustment
+    BARTTORVIK_NET_DIFF_COEFF: float = 0.005
+    BARTTORVIK_BARTHAG_DIFF_COEFF: float = 0.20
+
+    # KenPom integration (disabled until grid search completes)
+    KENPOM_WEIGHT: float = 0.0
+    KENPOM_NET_DIFF_COEFF: float = 0.005
+    KENPOM_SOS_COEFF: float = 0.0
+
+    # Bet sizing for paper tracking
+    PAPER_BANKROLL: float = 5000.0  # Virtual bankroll
+    KELLY_FRACTION: float = 0.25  # Quarter Kelly
+    MAX_BET_FRACTION: float = 0.03  # 3% max
+
+    # Daily limits
+    MAX_BETS_PER_DAY: int = 10
+    MAX_DAILY_EXPOSURE_FRACTION: float = 0.10  # 10% of bankroll
+
+    # ESPN Scoreboard API
+    ESPN_SCOREBOARD_URL: str = (
+        "http://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
+    )
+
+    # Reporting
+    WEEKLY_REVIEW_WINDOW_DAYS: int = 7
+    MIN_BETS_FOR_REPORT: int = 5
+
+
+PAPER_BETTING = PaperBettingConfig()
+
+# =============================================================================
+# BREADWINNER METRIC CONFIGURATION
+# =============================================================================
+
+
+@dataclass
+class BreadwinnerConfig:
+    """Breadwinner (player production concentration) metric configuration."""
+
+    # Rotation definition
+    MIN_MINUTES_ROTATION: float = 0.0  # Min mpg to be in rotation (0 = no filter)
+    ROTATION_SIZE: int = 8  # Top N players by minutes
+
+    # Quality filter: team must be top-N in BOTH adj_o AND adj_d
+    QUALITY_RANK_CUTOFF: int = 50
+
+    # Variance compression coefficient (grid searchable)
+    # NOTE: Needs to be large (0.5-5.0) because USG% share diffs are small (~0.02-0.05)
+    # DISABLED (0.0): 6-season backtest showed no reliable signal.
+    # Best variant (top1-centers, cutoff=150, coeff=3.0) averaged +0.13% ROI
+    # improvement — within noise. 2025 was the only positive season (+0.84%),
+    # suggesting single-season overfitting. Set >0 to re-enable for experimentation.
+    BREADWINNER_COEFF: float = 0.0
+
+    # Concentration variant: "top1", "top2", or "hhi"
+    BREADWINNER_VARIANT: str = "top1"
+
+    # Overall weight applied to the adjustment
+    BREADWINNER_WEIGHT: float = 1.0
+
+    # Center dampening: if False, skip adjustment when breadwinner is a center
+    INCLUDE_CENTERS: bool = True
+
+    # Player stats cache directory
+    PLAYER_STATS_CACHE_DIR: str = "data/external/barttorvik"
+
+    # cbbdata player endpoint
+    PLAYER_SEASON_ENDPOINT: str = "https://www.cbbdata.com/api/torvik/player/season"
+
+
+BREADWINNER = BreadwinnerConfig()
+
+# =============================================================================
+# KENPOM EFFICIENCY METRIC CONFIGURATION
+# =============================================================================
+
+
+@dataclass
+class KenPomConfig:
+    """KenPom efficiency rating integration configuration."""
+
+    # Weight applied to KenPom adjustment (0 = disabled)
+    # Start disabled — grid search (tune_kenpom_weights.py) will optimize
+    KENPOM_WEIGHT: float = 0.0
+
+    # AdjEM (net efficiency) differential coefficient
+    # Higher = more adjustment based on KenPom net rating diff
+    KENPOM_NET_DIFF_COEFF: float = 0.005
+
+    # SOS differential coefficient (optional)
+    # Schedule strength adjustment
+    KENPOM_SOS_COEFF: float = 0.0
+
+    # Rate limiting for kenpompy requests
+    REQUEST_DELAY: float = 3.0  # seconds between requests
+
+    # KenPom ratings cache directory
+    KENPOM_CACHE_DIR: str = "data/external/kenpom"
+
+
+KENPOM = KenPomConfig()
+
+# =============================================================================
+# ESPN PREDICTOR INJURY/DIVERGENCE CHECK
+# =============================================================================
+
+
+@dataclass
+class InjuryCheckConfig:
+    """ESPN predictor cross-check for injury/roster detection.
+
+    Compares our model's probability against ESPN's predictor (which
+    incorporates injuries, form, and roster changes). Large divergences
+    signal that our model is missing key information (e.g., star player out).
+    """
+
+    ENABLED: bool = True
+
+    # Divergence thresholds (in probability, e.g., 0.10 = 10 percentage points)
+    DIVERGENCE_WARN_THRESHOLD: float = 0.10  # 10pp = warning in output
+    DIVERGENCE_BLOCK_THRESHOLD: float = 0.15  # 15pp = suppress bet
+
+    # Keywords to scan in ESPN game news headlines
+    INJURY_KEYWORDS: tuple = (
+        "injury",
+        "injured",
+        "out",
+        "fracture",
+        "sprain",
+        "tear",
+        "surgery",
+        "concussion",
+        "illness",
+        "day-to-day",
+        "questionable",
+        "doubtful",
+        "sidelined",
+        "miss",
+        "absence",
+        "ruled out",
+    )
+
+    # ESPN game summary endpoint
+    ESPN_SUMMARY_URL: str = (
+        "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary"
+    )
+
+    # Rate limiting between ESPN summary requests
+    REQUEST_DELAY: float = 0.5  # seconds
+
+
+INJURY_CHECK = InjuryCheckConfig()

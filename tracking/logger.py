@@ -7,8 +7,12 @@ and batch operations.
 from __future__ import annotations
 
 import logging
-from datetime import date
-from typing import Any, Optional
+import uuid
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from config.constants import BANKROLL
 from tracking.database import BettingDatabase
@@ -41,9 +45,13 @@ def log_paper_bet(
     if missing:
         raise ValueError(f"Missing required bet fields: {missing}")
 
-    # Ensure paper bet flag
+    # Ensure paper bet flag and required DB fields
     record = dict(bet_data)
     record["is_live"] = False
+    if "bet_uuid" not in record:
+        record["bet_uuid"] = str(uuid.uuid4())
+    if "placed_at" not in record:
+        record["placed_at"] = datetime.now().isoformat()
 
     return db.insert_bet(record)
 
@@ -164,3 +172,133 @@ def validate_bet_limits(
         }
 
     return {"allowed": True, "reason": ""}
+
+
+def auto_record_bets_from_predictions(
+    db: BettingDatabase,
+    predictions_df: "pd.DataFrame",
+    game_date: str,
+    dry_run: bool = False,
+    max_bets: int = 10,
+) -> list[dict]:
+    """Automatically record paper bets from prediction DataFrame.
+
+    Filters predictions to those with recommendations (rec_side is set),
+    validates limits, and inserts as paper bets.
+
+    Args:
+        db: BettingDatabase instance.
+        predictions_df: DataFrame from generate_predictions() with rec_side.
+        game_date: Date string in YYYY-MM-DD format.
+        dry_run: If True, return bets without inserting into database.
+        max_bets: Maximum number of bets to record per day.
+
+    Returns:
+        List of bet dicts that were recorded (or would be in dry_run mode).
+    """
+    import pandas as pd
+
+    if predictions_df.empty:
+        return []
+
+    # Filter to recommendations only
+    has_rec = (
+        predictions_df["rec_side"].notna()
+        if "rec_side" in predictions_df.columns
+        else pd.Series(False, index=predictions_df.index)
+    )
+    recs = predictions_df[has_rec].copy()
+
+    if recs.empty:
+        logger.info("No bet recommendations to record")
+        return []
+
+    # Sort by edge (best first) and limit
+    if "home_edge" in recs.columns and "away_edge" in recs.columns:
+        recs["best_edge"] = recs.apply(
+            lambda r: r["home_edge"] if r.get("rec_side") == "HOME" else r.get("away_edge", 0),
+            axis=1,
+        )
+        recs = recs.sort_values("best_edge", ascending=False)
+
+    recs = recs.head(max_bets)
+
+    # Skip injury-flagged rows (bet was already suppressed in generate_predictions,
+    # but double-check here in case caller passed unfiltered DataFrame)
+    if "injury_flag" in recs.columns:
+        flagged_count = recs["injury_flag"].sum()
+        if flagged_count > 0:
+            logger.info(
+                "Skipping %d injury-flagged bets (already suppressed)",
+                int(flagged_count),
+            )
+        recs = recs[recs["injury_flag"] != True]  # noqa: E712
+
+    recorded: list[dict] = []
+    for _, row in recs.iterrows():
+        side = row["rec_side"]
+        team = row["home"] if side == "HOME" else row["away"]
+        team_name = row.get("home_name", team) if side == "HOME" else row.get("away_name", team)
+
+        # Build notes with ESPN context if available
+        notes_parts = [f"Auto-recorded paper bet. Bart adj: {row.get('bart_adj', 0):.4f}"]
+        espn_prob = row.get("espn_prob")
+        if pd.notna(espn_prob):
+            div_val = row.get("prob_divergence", 0) or 0
+            notes_parts.append(f"ESPN prob: {espn_prob:.0%}, divergence: {div_val:+.0%}")
+
+        bet_data = {
+            "sport": "ncaab",
+            "game_date": game_date,
+            "game_id": str(row.get("game_id", "")),
+            "bet_type": "moneyline",
+            "selection": f"{team_name} ML",
+            "odds_placed": int(row.get("rec_odds", 0)),
+            "stake": float(row.get("rec_stake", 0)),
+            "sportsbook": "paper",
+            "model_probability": float(row["home_prob"] if side == "HOME" else row["away_prob"]),
+            "model_edge": float(
+                row.get("home_edge", 0) if side == "HOME" else row.get("away_edge", 0)
+            ),
+            "notes": ". ".join(notes_parts),
+        }
+
+        if dry_run:
+            logger.info(
+                "[DRY RUN] Would record: %s @ %+d (edge: %.1f%%, stake: $%.0f)",
+                bet_data["selection"],
+                bet_data["odds_placed"],
+                bet_data["model_edge"] * 100,
+                bet_data["stake"],
+            )
+        else:
+            # Validate limits
+            limits = validate_bet_limits(bet_data["stake"], db)
+            if not limits["allowed"]:
+                logger.warning("Bet rejected: %s — %s", bet_data["selection"], limits["reason"])
+                continue
+
+            try:
+                bet_id = log_paper_bet(db, bet_data)
+                bet_data["bet_id"] = bet_id
+                logger.info(
+                    "Recorded bet #%d: %s @ %+d (edge: %.1f%%)",
+                    bet_id,
+                    bet_data["selection"],
+                    bet_data["odds_placed"],
+                    bet_data["model_edge"] * 100,
+                )
+            except Exception as e:
+                logger.error("Failed to record bet: %s — %s", bet_data["selection"], e)
+                continue
+
+        recorded.append(bet_data)
+
+    logger.info(
+        "%s %d/%d paper bets for %s",
+        "Would record" if dry_run else "Recorded",
+        len(recorded),
+        len(recs),
+        game_date,
+    )
+    return recorded

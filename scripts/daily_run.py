@@ -23,11 +23,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-from config.constants import BREADWINNER, ODDS_CONFIG, PAPER_BETTING
+from config.constants import BREADWINNER, INJURY_CHECK, ODDS_CONFIG, PAPER_BETTING
 from config.settings import DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
 from models.model_persistence import load_model
 from features.sport_specific.ncaab.breadwinner import build_breadwinner_lookup
 from pipelines.barttorvik_fetcher import BarttovikFetcher, load_cached_season
+from pipelines.injury_checker import fetch_game_context
 from pipelines.kenpom_fetcher import KenPomFetcher, load_cached_season as load_kenpom_cached
 from pipelines.player_stats_fetcher import load_cached_players
 from pipelines.odds_orchestrator import OddsOrchestrator
@@ -80,7 +81,7 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
 
     settled_count = 0
     for bet in pending:
-        game_id = bet.get("game_id", "")
+        game_id = bet["game_id"] or ""
         if game_id not in final_games:
             logger.debug("Game %s not final yet, skipping", game_id)
             continue
@@ -90,8 +91,8 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
         away_score = game["away_score"]
 
         # Determine result based on selection
-        selection = bet.get("selection", "")
-        bet_type = bet.get("bet_type", "")
+        selection = bet["selection"] or ""
+        bet_type = bet["bet_type"] or ""
 
         if bet_type == "moneyline":
             # Parse which team was bet on
@@ -114,8 +115,8 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
                     continue
 
             result = "win" if won else "loss"
-            odds_placed = bet.get("odds_placed", -110)
-            stake = bet.get("stake", 0)
+            odds_placed = bet["odds_placed"] or -110
+            stake = bet["stake"] or 0
 
             if won and odds_placed != 0:
                 from betting.odds_converter import american_to_decimal
@@ -243,6 +244,19 @@ def run_predictions(
     if kenpom_df is not None:
         logger.info("KenPom data: %d rows for season %d", len(kenpom_df), season)
 
+    # Fetch ESPN game context for injury/divergence detection
+    game_ctx = None
+    if INJURY_CHECK.ENABLED:
+        game_ids = [g["game_id"] for g in pre_game]
+        logger.info("Fetching ESPN game context for %d games...", len(game_ids))
+        game_ctx = fetch_game_context(game_ids)
+        ctx_with_predictor = sum(1 for c in game_ctx.values() if c.espn_home_prob is not None)
+        logger.info(
+            "ESPN predictor available for %d/%d games",
+            ctx_with_predictor,
+            len(game_ids),
+        )
+
     # Generate predictions
     predictions = generate_predictions(
         model=model,
@@ -262,6 +276,7 @@ def run_predictions(
         breadwinner_variant=BREADWINNER.BREADWINNER_VARIANT,
         breadwinner_include_centers=BREADWINNER.INCLUDE_CENTERS,
         target_date=target_date,
+        game_context=game_ctx,
     )
 
     # Record paper bets
