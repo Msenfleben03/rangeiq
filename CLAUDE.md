@@ -307,10 +307,8 @@ sports_betting/
 │   ├── verify_schema.py              # Database schema verification
 │   ├── reset_closing_odds.py          # Reset/fix closing odds data
 │   ├── fix_docstrings.py             # Docstring formatting utility
-│   │   # === Exploratory / Dead-end (cleanup candidates) ===
-│   ├── test_cbbdata_api.py            # CBBData API exploratory testing
-│   ├── kenpom_barttorvik_redundancy.py  # Dead end (Session 9) - DELETE
-│   └── kenpom_staleness_analysis.py     # Dead end (Session 9) - DELETE
+│   │   # === Exploratory ===
+│   └── test_cbbdata_api.py            # CBBData API exploratory testing
 │
 ├── scripts/                           # PowerShell orchestrators
 │   ├── nightly-refresh.ps1            # 11pm: fetch scores, Elo, Barttorvik, dashboard
