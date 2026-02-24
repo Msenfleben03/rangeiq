@@ -101,6 +101,48 @@ models. Keep updated as new features are engineered.
 | `is_rivalry` | bool | Traditional rivalry game | ⭐ |
 | `home_court_advantage` | float | Team-specific HCA (default ~3.5 pts) | ⭐⭐⭐⭐ |
 
+### Barttorvik T-Rank Ratings
+
+| Field | Type | Source | Description | Predictive Value |
+|-------|------|--------|-------------|------------------|
+| `adj_oe` | float | Barttorvik | Adjusted offensive efficiency (pts/100 poss) | ⭐⭐⭐⭐⭐ |
+| `adj_de` | float | Barttorvik | Adjusted defensive efficiency (pts allowed/100 poss) | ⭐⭐⭐⭐⭐ |
+| `adj_tempo` | float | Barttorvik | Adjusted tempo (possessions per 40 min) | ⭐⭐⭐⭐ |
+| `barthag` | float | Barttorvik | Power rating (expected win% vs avg D-I team) | ⭐⭐⭐⭐⭐ |
+| `rank` | int | Barttorvik | T-Rank overall ranking | ⭐⭐⭐⭐ |
+| `wins` | int | Barttorvik | Wins as of rating date | Context |
+| `losses` | int | Barttorvik | Losses as of rating date | Context |
+| `date` | date | Barttorvik | Rating snapshot date | Context |
+
+### Barttorvik Adjustment Fields (Prediction Pipeline)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bart_w` | float | Barttorvik weight in ensemble (default: 1.5) |
+| `bart_nc` | float | Net efficiency coefficient (default: 0.005) |
+| `bart_bc` | float | Barthag coefficient (default: 0.20) |
+| `bart_adj` | float | Computed Barttorvik adjustment to Elo spread prediction |
+| `elo_difference` | float | Raw Elo rating difference (home - away) |
+| `bc_adjustment` | float | Barthag-based adjustment component |
+
+### ESPN Predictor Cross-Check (Injury/Divergence Detection)
+
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `espn_home_prob` | float | ESPN Summary API | ESPN's game predictor home win probability |
+| `espn_away_prob` | float | ESPN Summary API | ESPN's game predictor away win probability |
+| `espn_spread` | float | ESPN Pickcenter | ESPN pickcenter consensus spread |
+| `espn_news` | list[str] | ESPN Summary API | General NCAAB news headlines (NOT game-specific) |
+| `divergence_pp` | float | Calculated | abs(model_prob - espn_prob) in percentage points |
+| `has_injury_keywords` | bool | Calculated | Whether ESPN news contains injury-related terms |
+| `should_suppress_bet` | bool | Calculated | True if divergence >= 15pp (suppresses bet recording) |
+
+**Thresholds** (config/constants.py `INJURY_CHECK`):
+
+- Warning: 10pp divergence
+- Block: 15pp divergence
+- Keywords alone do NOT block (ESPN news is general NCAAB, not game-specific)
+
 ### Tournament-Specific (March Madness)
 
 | Field | Type | Description |

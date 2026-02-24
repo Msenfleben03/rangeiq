@@ -168,125 +168,171 @@ pytest tests/ -k "validator" -v  # All validator tests
 sports_betting/
 ├── CLAUDE.md                 # This file - Claude Code context
 ├── README.md                 # Project overview
+├── AGENTS.md                 # Agent personas
 ├── requirements.txt          # Python dependencies
 ├── .env                      # API keys (gitignored)
 ├── .gitignore
 │
 ├── config/
-│   ├── settings.py           # Global configuration
-│   ├── constants.py          # Magic numbers, thresholds
-│   └── sportsbooks.py        # Book-specific settings
+│   ├── settings.py           # Global configuration (paths, API keys, DB)
+│   └── constants.py          # Thresholds, InjuryCheckConfig, OddsConfig
 │
 ├── data/
-│   ├── raw/                  # Unprocessed data downloads
-│   ├── processed/            # Cleaned, feature-engineered data
-│   ├── odds/                 # Historical and current odds
-│   └── external/             # Weather, injuries, etc.
+│   ├── raw/ncaab/            # Parquet game files per season (ncaab_games_YYYY.parquet)
+│   ├── processed/            # Backtest results, Barttorvik ratings, odds, dashboard JSON
+│   ├── odds/                 # Historical odds snapshots
+│   └── external/             # Barttorvik scraped snapshots
 │
 ├── models/
-│   ├── base.py               # Abstract base model class
-│   ├── elo.py                # Elo rating system
-│   ├── regression.py         # Linear/logistic regression models
-│   ├── poisson.py            # Poisson models (run scoring)
-│   ├── ensemble.py           # Model combination logic
+│   ├── elo.py                # Elo rating system (K-factor, HCA, regression)
+│   ├── model_persistence.py  # Save/load models with ModelMetadata
 │   └── sport_specific/
 │       ├── ncaab/
-│       │   └── team_ratings.py
-│       └── mlb/
-│           └── [future]
+│       │   └── team_ratings.py  # NCAABTeamRatings (Elo + Barttorvik ensemble)
+│       └── mlb/, nfl/, ncaaf/   # Placeholder __init__.py only
 │
 ├── features/
 │   ├── engineering.py        # Safe rolling, decay, opponent-quality, rest days
-│   ├── selection.py          # Feature importance, selection
 │   └── sport_specific/
 │       └── ncaab/
-│           └── advanced_features.py  # NCABBFeatureEngine (vol, OQ-margin, rest, decay)
+│           ├── advanced_features.py  # NCAABFeatureEngine (vol, OQ-margin, rest, decay)
+│           └── breadwinner.py        # Breadwinner metric (DISABLED - no ROI correlation)
 │
 ├── betting/
-│   ├── kelly.py              # Kelly criterion calculations
-│   ├── ev.py                 # Expected value calculations
-│   ├── clv.py                # Closing line value tracking
-│   ├── odds_converter.py     # American/decimal/implied prob
-│   └── line_shopping.py      # Multi-book comparison
+│   ├── odds_converter.py     # American/decimal/implied prob, CLV calc, Kelly
+│   └── arb_detector.py       # Cross-book arbitrage detection
 │
 ├── tracking/
-│   ├── database.py           # SQLite interface
-│   ├── models.py             # Database schema/ORM
-│   ├── logger.py             # Bet logging utilities
-│   └── reports.py            # Performance reporting
+│   ├── database.py           # BettingDatabase SQLite interface
+│   ├── models.py             # Database schema/ORM definitions
+│   ├── logger.py             # Bet logging (skips injury-flagged bets)
+│   ├── reports.py            # Performance reporting
+│   ├── forecasting_db.py     # ForecastingDatabase for prediction markets
+│   ├── cost_tracker.py       # API cost tracking
+│   └── doc_metrics.py        # Documentation metrics
 │
 ├── backtesting/
-│   ├── walk_forward.py       # Walk-forward validation
-│   ├── metrics.py            # Evaluation metrics
+│   ├── walk_forward.py       # Walk-forward validation engine
+│   ├── metrics.py            # Evaluation metrics (ROI, Sharpe, CLV)
 │   ├── simulation.py         # Monte Carlo simulations
-│   └── validators/           # 5-Dimension Validation Framework
+│   └── validators/           # 5-Dimension Validation Framework (198 tests)
 │       ├── temporal_validator.py    # Look-ahead bias detection
 │       ├── statistical_validator.py # Sample size, Sharpe, significance
 │       ├── overfit_validator.py     # Overfitting detection
 │       ├── betting_validator.py     # CLV, vig, Kelly validation
-│       └── gatekeeper.py            # Final validation gate
+│       └── gatekeeper.py           # Final validation gate
 │
 ├── pipelines/
 │   ├── espn_ncaab_fetcher.py      # ESPN Site API fetcher (primary NCAAB scores)
+│   ├── ncaab_data_fetcher.py      # Legacy sportsipy wrapper (BROKEN - use ESPN API)
 │   ├── espn_core_odds_provider.py # ESPN Core API odds (free, historical)
 │   ├── unified_fetcher.py         # Scores + odds in one pass
 │   ├── barttorvik_fetcher.py      # Barttorvik T-Rank ratings (cbbdata API, Parquet)
+│   ├── barttorvik_scraper.py      # Daily Barttorvik web scraper (for in-progress seasons)
+│   ├── kenpom_fetcher.py          # KenPom fetcher (auth BLOCKED - cbbdata issue #14)
 │   ├── team_name_mapping.py       # ESPN <-> Barttorvik team name mapping (359 teams)
+│   ├── injury_checker.py          # ESPN predictor cross-check (injury/divergence detection)
 │   ├── odds_providers.py          # Odds retrieval (4 providers)
-│   ├── odds_orchestrator.py       # Odds fallback: API → ESPN Core → ESPN → Scraper → Cache
+│   ├── odds_orchestrator.py       # Odds fallback: API -> ESPN Core -> ESPN -> Cache
+│   ├── closing_odds_collector.py  # Closing odds collection
+│   ├── batch_fetcher.py           # Batch data fetching utility
+│   ├── player_stats_fetcher.py    # Player statistics fetcher
 │   ├── polymarket_fetcher.py      # Polymarket API client
 │   ├── kalshi_fetcher.py          # Kalshi API client (CFTC-regulated)
 │   └── arb_scanner.py             # Cross-book arbitrage detection
 │
 ├── dashboards/
-│   └── ncaab_dashboard.html       # Unified NCAAB dashboard (9 tabs: Rankings, Scatter, Conference, Compare, Distributions, Lookup, Trajectories, Betting)
+│   └── ncaab_dashboard.html       # Unified NCAAB dashboard (9 tabs)
 │
-├── tests/
-│   ├── test_models.py
-│   ├── test_betting.py
+├── tests/                         # 29 test files, ~533 tests
+│   ├── conftest.py                # Shared fixtures
+│   ├── test_elo.py                # Elo model tests
+│   ├── test_daily_run.py          # 26 tests for paper betting pipeline
 │   ├── test_feature_engineering.py   # 30 tests for feature engine
 │   ├── test_barttorvik_fetcher.py    # 18 tests for Barttorvik pipeline
+│   ├── test_barttorvik_scraper.py
 │   ├── test_team_name_mapping.py     # 11 tests for ESPN<->Barttorvik mapping
+│   ├── test_espn_core_odds_provider.py
+│   ├── test_unified_fetcher.py
+│   ├── test_odds_providers.py
 │   ├── test_temporal_validator.py
 │   ├── test_statistical_validator.py
 │   ├── test_overfit_validator.py
 │   ├── test_betting_validator.py
 │   ├── test_gatekeeper.py
-│   ├── test_espn_core_odds_provider.py
-│   ├── test_unified_fetcher.py
-│   ├── test_tune_barttorvik.py         # 14 tests for weight tuning grid search
-│   └── test_daily_run.py              # 26 tests for paper betting pipeline
-│
+│   ├── test_tune_barttorvik.py       # 14 tests for weight tuning grid search
+│   ├── test_logger.py               # 8 failures (schema mismatch - known issue)
+│   ├── test_settlement.py
+│   ├── test_reports.py
+│   ├── test_model_persistence.py
+│   ├── test_forecasting_db.py
+│   ├── test_backtesting.py
+│   ├── test_breadwinner_metric.py
+│   ├── test_daily_snapshot.py
+│   ├── test_kenpom_fetcher.py
+│   ├── test_tune_kenpom.py
+│   ├── test_player_stats_fetcher.py
+│   └── test_setup.py
 │
 ├── scripts/
-│   ├── setup_database.py              # Initialize SQLite
-│   ├── fetch_historical_data.py       # Fetch NCAAB seasons (ESPN API)
-│   ├── fetch_season_data.py           # Unified scores + odds fetcher CLI
-│   ├── backfill_historical_odds.py    # ESPN Core API odds backfill (checkpoint/resume)
-│   ├── train_ncaab_elo.py             # Train Elo model on historical data
-│   ├── backtest_ncaab_elo.py          # Walk-forward backtest + feature wrapper
-│   ├── ab_compare_features.py         # A/B comparison framework (paired t-test)
-│   ├── run_gatekeeper_validation.py   # 5-dim validation pipeline
-│   ├── fetch_barttorvik_data.py       # Fetch Barttorvik T-Rank ratings (all seasons)
-│   ├── tune_barttorvik_weights.py      # Grid search for Barttorvik coefficients
-│   ├── incremental_backtest.py        # Walk-forward: train [2020..N-1], test N
-│   ├── daily_predictions.py           # ESPN Scoreboard API + Barttorvik predictions
-│   ├── daily_run.py                   # Paper betting orchestrator (predict→record→settle→report)
+│   │   # === Core Pipeline ===
+│   ├── daily_run.py                   # Paper betting orchestrator (predict->record->settle->report)
+│   ├── daily_predictions.py           # ESPN Scoreboard API + Barttorvik predictions + ESPN% display
 │   ├── record_paper_bets.py           # Log paper bet decisions
 │   ├── settle_paper_bets.py           # Settle completed bets
-│   ├── generate_report.py            # Performance reports
-│   ├── generate_dashboard_data.py     # Merge Elo + Barttorvik + stats → dashboard JSON
-│   └── test_cbbdata_api.py            # CBBData API exploratory testing
+│   ├── generate_report.py             # Performance reports
+│   │   # === Data Fetching ===
+│   ├── fetch_season_data.py           # Unified scores + odds fetcher CLI
+│   ├── fetch_historical_data.py       # Fetch NCAAB seasons (ESPN API)
+│   ├── fetch_barttorvik_data.py       # Fetch Barttorvik T-Rank ratings (all seasons)
+│   ├── fetch_barttorvik_2026.py       # 2026-specific Barttorvik fetch
+│   ├── fetch_kenpom_data.py           # KenPom data fetch
+│   ├── backfill_historical_odds.py    # ESPN Core API odds backfill (checkpoint/resume)
+│   ├── daily_snapshot.py              # Daily ratings snapshot
+│   │   # === Training & Backtesting ===
+│   ├── train_ncaab_elo.py             # Train Elo model on historical data
+│   ├── backtest_ncaab_elo.py          # Walk-forward backtest + feature wrapper
+│   ├── incremental_backtest.py        # Walk-forward: train [2020..N-1], test N
+│   ├── validate_ncaab_elo.py          # Model validation
+│   ├── run_gatekeeper_validation.py   # 5-dim validation pipeline
+│   │   # === Tuning & A/B Testing ===
+│   ├── tune_barttorvik_weights.py     # Grid search for Barttorvik coefficients
+│   ├── tune_kenpom_weights.py         # KenPom weight tuning
+│   ├── tune_breadwinner_weights.py    # Breadwinner tuning (DISABLED)
+│   ├── ab_compare_features.py         # A/B comparison framework (paired t-test)
+│   │   # === Dashboard & Infrastructure ===
+│   ├── generate_dashboard_data.py     # Merge Elo + Barttorvik + stats -> dashboard JSON
+│   ├── deploy_dashboard.py            # Deploy dashboard to Vercel
+│   ├── pipeline_health_check.py       # Pre-flight health check (venv, DB, APIs)
+│   ├── verify_schema.py              # Database schema verification
+│   ├── reset_closing_odds.py          # Reset/fix closing odds data
+│   ├── fix_docstrings.py             # Docstring formatting utility
+│   │   # === Exploratory / Dead-end (cleanup candidates) ===
+│   ├── test_cbbdata_api.py            # CBBData API exploratory testing
+│   ├── kenpom_barttorvik_redundancy.py  # Dead end (Session 9) - DELETE
+│   └── kenpom_staleness_analysis.py     # Dead end (Session 9) - DELETE
+│
+├── scripts/                           # PowerShell orchestrators
+│   ├── nightly-refresh.ps1            # 11pm: fetch scores, Elo, Barttorvik, dashboard
+│   ├── morning-betting.ps1            # 10am: settle yesterday + predict today
+│   ├── pipeline-common.ps1            # Shared PS functions (lock, log, checkpoint)
+│   └── setup-scheduled-tasks.ps1      # Register/unregister Task Scheduler tasks
 │
 └── docs/
     ├── DATA_DICTIONARY.md             # Field definitions
-    ├── DECISIONS.md                   # Architecture decisions (17 ADRs)
+    ├── DECISIONS.md                   # Architecture decisions (20 ADRs)
+    ├── ARCHITECTURE.md                # System architecture overview
+    ├── DATA_SOURCES.md                # Master data source reference
+    ├── RUNBOOK.md                     # Daily/weekly/monthly operations
+    ├── QUICKSTART.md                  # Setup checklist
+    ├── CONTRIB.md                     # Contribution guidelines
     ├── ADVANCED_FEATURES_RESEARCH.md  # Feature research report
     ├── CBBDATA_API_RESEARCH.md        # CBBData REST API research
     ├── CBBDATA_QUICKSTART.md          # CBBData API quick start guide
     ├── BARTTORVIK_SUMMARY.md          # Barttorvik integration summary
     ├── ESPN_BPI_API_RESEARCH.md       # ESPN BPI API research
     ├── KENPOM_EFFICIENCY_RESEARCH.md  # KenPom/Barttorvik data options
+    ├── reports/                       # Generated analysis reports
     └── CODEMAPS/                      # Module-level architecture docs
         ├── CODEMAP.md                 # Index / overview
         ├── backtesting.md
