@@ -127,19 +127,14 @@ if (-not $SettleOnly) {
     $skipPredictions = $false
     if (-not $Force -and -not $DryRun) {
         try {
-            $dbPath = Join-Path $Script:ProjectRoot "data" "betting.db"
+            $dbPath = Join-Path (Join-Path $Script:ProjectRoot "data") "betting.db"
             $checkDate = if ($Date -eq "today") { $today } else { $Date }
 
             # Use Python to query since PowerShell SQLite support varies
-            $checkScript = @"
-import sqlite3, sys
-conn = sqlite3.connect(r'$dbPath')
-count = conn.execute('SELECT COUNT(*) FROM bets WHERE game_date = ?', ('$checkDate',)).fetchone()[0]
-conn.close()
-print(count)
-"@
-            $countResult = $checkScript | & $Script:VenvPython -c -
-            $existingBets = [int]$countResult.Trim()
+            $checkCmd = "import sqlite3; conn = sqlite3.connect(r'$dbPath'); print(conn.execute('SELECT COUNT(*) FROM bets WHERE game_date = ?', ('$checkDate',)).fetchone()[0]); conn.close()"
+            $countResult = & $Script:VenvPython -c $checkCmd 2>$null
+            if ($null -eq $countResult) { $countResult = "0" }
+            $existingBets = [int]($countResult.ToString().Trim())
 
             if ($existingBets -gt 0) {
                 Write-Log "INFO" "Found $existingBets existing bets for $checkDate -- skipping predictions (use -Force to override)"

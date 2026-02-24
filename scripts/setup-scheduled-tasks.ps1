@@ -4,10 +4,9 @@
     for the sports betting pipeline.
 
 .DESCRIPTION
-    Manages three scheduled tasks:
+    Manages two scheduled tasks:
     - SportsBetting-Nightly   (11:00 PM ET) -- data refresh + model retrain
-    - SportsBetting-Morning   (10:00 AM ET) -- predictions + record bets
-    - SportsBetting-Settlement (11:30 PM ET) -- settle today's bets
+    - SportsBetting-Morning   (10:00 AM ET) -- settle yesterday + predictions + record bets
 
 .PARAMETER Action
     One of: register, unregister, status
@@ -45,13 +44,6 @@ $Tasks = @(
         Script      = Join-Path $ScriptsDir "morning-betting.ps1"
         TriggerTime = "10:00"  # 10:00 AM
         Arguments   = "-ExecutionPolicy Bypass -File `"$(Join-Path $ScriptsDir 'morning-betting.ps1')`""
-    },
-    @{
-        Name        = "SportsBetting-Settlement"
-        Description = "Late-night settlement: settle today's completed bets"
-        Script      = Join-Path $ScriptsDir "morning-betting.ps1"
-        TriggerTime = "23:30"  # 11:30 PM
-        Arguments   = "-ExecutionPolicy Bypass -File `"$(Join-Path $ScriptsDir 'morning-betting.ps1')`" -SettleOnly"
     }
 )
 
