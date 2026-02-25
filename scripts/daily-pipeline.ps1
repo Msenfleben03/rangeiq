@@ -1,20 +1,23 @@
 <#
 .SYNOPSIS
-    Nightly data refresh pipeline for sports betting model.
+    Unified daily pipeline -- refresh data, settle, predict, dashboard.
 
 .DESCRIPTION
-    Runs the following steps in sequence:
+    Single pipeline replacing nightly-refresh.ps1 + morning-betting.ps1.
+    Runs all steps in sequence at 7:00 AM ET:
     1. Health check (pre-flight validation)
     2. Fetch latest scores (ESPN API, incremental)
     3. Retrain Elo model with new data
     4. Scrape Barttorvik daily snapshot
-    5. Scrape KenPom daily snapshot
-    6. Fetch opening odds for tomorrow's games
-    7. Generate dashboard data bundle
-    8. Deploy dashboard to Vercel
+    5. Scrape KenPom daily snapshot (store to SQLite)
+    6. Settle yesterday's paper bets
+    7. Generate today's predictions and record paper bets
+    8. Fetch opening odds for today's games
+    9. Generate dashboard data bundle
+    10. Deploy dashboard to Vercel
 
     Supports checkpointing, retry, and notification on failure.
-    Designed to run via Windows Task Scheduler at 11:00 PM ET nightly.
+    Designed to run via Windows Task Scheduler at 7:00 AM ET daily.
 
 .PARAMETER Force
     Skip checkpoint resume -- run all steps from scratch.
@@ -25,16 +28,23 @@
 .PARAMETER SkipHealthCheck
     Skip the pre-flight health check step.
 
-.PARAMETER NoClaude
-    Skip AI-assisted diagnosis on failure (not yet implemented).
+.PARAMETER SettleOnly
+    Only settle yesterday's bets, skip everything else.
+
+.PARAMETER SkipSettle
+    Skip settlement step.
+
+.PARAMETER SkipPredict
+    Skip prediction step.
 
 .PARAMETER MaxRetries
     Maximum retry attempts per step (default: 1).
 
 .EXAMPLE
-    .\scripts\nightly-refresh.ps1
-    .\scripts\nightly-refresh.ps1 -DryRun
-    .\scripts\nightly-refresh.ps1 -Force -MaxRetries 2
+    .\scripts\daily-pipeline.ps1
+    .\scripts\daily-pipeline.ps1 -DryRun
+    .\scripts\daily-pipeline.ps1 -Force -MaxRetries 2
+    .\scripts\daily-pipeline.ps1 -SettleOnly
 #>
 
 [CmdletBinding()]
@@ -42,13 +52,13 @@ param(
     [switch]$Force,
     [switch]$DryRun,
     [switch]$SkipHealthCheck,
-    [switch]$NoClaude,
+    [switch]$SettleOnly,
+    [switch]$SkipSettle,
+    [switch]$SkipPredict,
     [int]$MaxRetries = 1
 )
 
 $ErrorActionPreference = "Stop"
-
-Write-Warning "DEPRECATED: Use daily-pipeline.ps1 instead. This script will be removed in a future version."
 
 # Load shared functions
 . "$PSScriptRoot\pipeline-common.ps1"
@@ -57,8 +67,8 @@ Write-Warning "DEPRECATED: Use daily-pipeline.ps1 instead. This script will be r
 Import-DotEnv
 
 # Initialize logging
-$logFile = Initialize-PipelineLog -PipelineType "nightly"
-Write-Log "INFO" "Nightly refresh starting (DryRun=$DryRun, Force=$Force, MaxRetries=$MaxRetries)"
+$logFile = Initialize-PipelineLog -PipelineType "daily"
+Write-Log "INFO" "Daily pipeline starting (DryRun=$DryRun, Force=$Force, SettleOnly=$SettleOnly)"
 
 # Define pipeline steps
 $steps = [ordered]@{
@@ -92,6 +102,18 @@ $steps = [ordered]@{
         critical  = $false
         timeout   = 120
     }
+    settle_bets = @{
+        script    = "daily_run.py"
+        args      = @("--settle-only")
+        critical  = $false
+        timeout   = 120
+    }
+    predictions = @{
+        script    = "daily_run.py"
+        args      = @("--skip-settle")
+        critical  = $false
+        timeout   = 300
+    }
     fetch_opening_odds = @{
         script    = "fetch_opening_odds.py"
         args      = @()
@@ -112,12 +134,11 @@ $steps = [ordered]@{
     }
 }
 
-# Skip health check if requested
+# Apply flags to skip steps
 if ($SkipHealthCheck) {
     $steps.Remove("health_check")
     Write-Log "INFO" "Health check skipped (-SkipHealthCheck)"
 
-    # When health check is skipped, acquire lock upfront
     if (-not $DryRun) {
         $locked = Acquire-PipelineLock
         if (-not $locked) {
@@ -127,14 +148,28 @@ if ($SkipHealthCheck) {
     }
 }
 
-# NOTE: When health_check IS enabled, lock is acquired AFTER it passes (see main loop).
-# Acquiring before health_check caused a self-deadlock: health_check's stale_lock
-# detector saw the lock this pipeline created and returned critical, aborting everything.
+if ($SettleOnly) {
+    # Only keep health_check and settle_bets
+    $keepSteps = @("health_check", "settle_bets")
+    $removeSteps = @($steps.Keys | Where-Object { $_ -notin $keepSteps })
+    foreach ($s in $removeSteps) { $steps.Remove($s) }
+    Write-Log "INFO" "Settle-only mode: running health_check + settle_bets only"
+}
+
+if ($SkipSettle) {
+    $steps.Remove("settle_bets")
+    Write-Log "INFO" "Settlement skipped (-SkipSettle)"
+}
+
+if ($SkipPredict) {
+    $steps.Remove("predictions")
+    Write-Log "INFO" "Predictions skipped (-SkipPredict)"
+}
 
 # Check for checkpoint to resume
 $checkpoint = $null
 if (-not $Force -and -not $DryRun) {
-    $checkpoint = Load-Checkpoint -PipelineType "nightly"
+    $checkpoint = Load-Checkpoint -PipelineType "daily"
     if ($checkpoint) {
         Write-Log "INFO" "Resuming from checkpoint (started at $($checkpoint.started_at))"
     }
@@ -144,7 +179,7 @@ if (-not $Force -and -not $DryRun) {
 $today = Get-Date -Format "yyyy-MM-dd"
 $state = @{
     date           = $today
-    pipeline       = "nightly"
+    pipeline       = "daily"
     started_at     = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
     steps          = @{}
     overall_status = "running"
@@ -207,8 +242,7 @@ foreach ($stepName in $steps.Keys) {
             duration  = $result.duration
         }
 
-        # Acquire lock AFTER health_check passes (avoids self-deadlock where
-        # health_check's stale_lock detector sees the lock we created).
+        # Acquire lock AFTER health_check passes (avoids self-deadlock)
         if ($stepName -eq "health_check" -and -not $DryRun) {
             $locked = Acquire-PipelineLock
             if (-not $locked) {
@@ -237,7 +271,7 @@ foreach ($stepName in $steps.Keys) {
             $hasCriticalFailure = $true
             Write-Log "ERROR" "CRITICAL step [$stepName] failed -- aborting pipeline"
             Send-PipelineNotification `
-                -Title "Nightly Pipeline FAILED" `
+                -Title "Daily Pipeline FAILED" `
                 -Message "Critical step '$stepName' failed: $errorMsg" `
                 -Level "error"
         } else {
@@ -273,7 +307,7 @@ if (-not $DryRun) {
 
 # Summary
 Write-Log "INFO" "========================================"
-Write-Log "INFO" "Nightly refresh: $($state.overall_status.ToUpper())"
+Write-Log "INFO" "Daily pipeline: $($state.overall_status.ToUpper())"
 Write-Log "INFO" "========================================"
 
 foreach ($stepName in $steps.Keys) {
@@ -291,7 +325,7 @@ foreach ($stepName in $steps.Keys) {
 
 if ($exitCode -eq 0) {
     Send-PipelineNotification `
-        -Title "Nightly Pipeline Success" `
+        -Title "Daily Pipeline Success" `
         -Message "All steps completed for $today" `
         -Level "success"
 }

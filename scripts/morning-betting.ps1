@@ -49,6 +49,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Write-Warning "DEPRECATED: Use daily-pipeline.ps1 instead. This script will be removed in a future version."
+
 # Load shared functions
 . "$PSScriptRoot\pipeline-common.ps1"
 
