@@ -147,6 +147,11 @@ def load_game_stats(
 ) -> pd.DataFrame:
     """Aggregate per-team game stats for a season.
 
+    The parquet file is deduplicated by game_id, so each game appears once
+    with a single team_id.  A team may appear as team_id in some games and
+    as opponent_id in others.  We build two DataFrames (one per perspective),
+    normalise the column names, concatenate, and then aggregate.
+
     Returns DataFrame with: team_id, wins, losses, ppg, papg, margin, games.
     """
     path = games_dir / f"ncaab_games_{season}.parquet"
@@ -158,15 +163,27 @@ def load_game_stats(
     if df.empty:
         return pd.DataFrame()
 
+    # Perspective 1: rows where the team is team_id (original view)
+    p1 = df[["team_id", "result", "points_for", "points_against"]].copy()
+    p1.columns = ["team_id", "result", "pts_scored", "pts_allowed"]
+
+    # Perspective 2: rows where the team is opponent_id (mirror view)
+    result_flip = {"W": "L", "L": "W"}
+    p2 = df[["opponent_id", "result", "points_against", "points_for"]].copy()
+    p2.columns = ["team_id", "result", "pts_scored", "pts_allowed"]
+    p2["result"] = p2["result"].map(result_flip)
+
+    combined = pd.concat([p1, p2], ignore_index=True)
+
     # Aggregate per team
     stats = (
-        df.groupby("team_id")
+        combined.groupby("team_id")
         .agg(
             games=("result", "count"),
             wins=("result", lambda x: (x == "W").sum()),
             losses=("result", lambda x: (x == "L").sum()),
-            ppg=("points_for", "mean"),
-            papg=("points_against", "mean"),
+            ppg=("pts_scored", "mean"),
+            papg=("pts_allowed", "mean"),
         )
         .reset_index()
     )
@@ -380,6 +397,20 @@ def generate_bundle(season: int = 2026) -> dict:
     elo_df = load_elo_ratings()
     bart_df, bart_date = load_barttorvik_latest()
     game_stats = load_game_stats(season)
+
+    # Filter out non-D1 exhibition opponents (< 10 games) before building
+    # the active set.  Real D1 teams play 25-35 games; exhibition opponents
+    # that only appear as opponent_id have 1-3 games.
+    MIN_GAMES_D1 = 10
+    if not game_stats.empty:
+        n_before = len(game_stats)
+        game_stats = game_stats[game_stats["games"] >= MIN_GAMES_D1].copy()
+        logger.info(
+            "Filtered non-D1 teams: %d -> %d (min %d games)",
+            n_before,
+            len(game_stats),
+            MIN_GAMES_D1,
+        )
 
     # Filter Elo to only teams active in the current season
     active_team_ids = set(game_stats["team_id"]) if not game_stats.empty else set()
