@@ -193,6 +193,41 @@ class BettingDatabase:
                 "UPDATE odds_snapshots SET snapshot_type = 'current' WHERE snapshot_type IS NULL"
             )
 
+            # KenPom daily ratings snapshots
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS kenpom_ratings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team TEXT NOT NULL,
+                    conf TEXT,
+                    season INTEGER NOT NULL,
+                    snapshot_date DATE NOT NULL,
+                    rank INTEGER,
+                    adj_em REAL,
+                    adj_o REAL,
+                    adj_o_rk INTEGER,
+                    adj_d REAL,
+                    adj_d_rk INTEGER,
+                    adj_t REAL,
+                    adj_t_rk INTEGER,
+                    luck REAL,
+                    luck_rk INTEGER,
+                    sos_adj_em REAL,
+                    sos_adj_em_rk INTEGER,
+                    sos_opp_o REAL,
+                    sos_opp_o_rk INTEGER,
+                    sos_opp_d REAL,
+                    sos_opp_d_rk INTEGER,
+                    ncsos_adj_em REAL,
+                    ncsos_adj_em_rk INTEGER,
+                    w_l TEXT,
+                    seed TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    UNIQUE(team, season, snapshot_date)
+                )
+            """
+            )
+
             logger.info(f"Database initialized at {self.db_path}")
 
     def execute_query(self, query: str, params: Optional[tuple] = None):
