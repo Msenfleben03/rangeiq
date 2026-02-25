@@ -391,7 +391,7 @@ table.data-table .conf-stripe { border-left: 3px solid var(--accent); }
     <div class="chart-row">
       <div class="chart-container">
         <div style="text-align:center;margin-bottom:8px;font-weight:600;font-size:14px;">Monte Carlo P/L Simulation</div>
-        <div style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:12px;">1,000 simulated seasons &middot; 35% win rate &middot; avg +180 payout &middot; 8 bets/day &middot; 150 days</div>
+        <div id="mcSubtitle" style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:12px;"></div>
         <div class="chart-row" style="margin-bottom:0;">
           <div>
             <div style="text-align:center;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">$100 Flat Stake</div>
@@ -401,13 +401,17 @@ table.data-table .conf-stripe { border-left: 3px solid var(--accent); }
             <div style="text-align:center;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">$150 Flat Stake (3% of $5K)</div>
             <div id="mcChartB" style="height:350px;"></div>
           </div>
+          <div>
+            <div style="text-align:center;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Dynamic Kelly (&frac14;K, 5% cap)</div>
+            <div id="mcChartC" style="height:350px;"></div>
+          </div>
         </div>
       </div>
     </div>
     <div class="chart-row">
       <div class="chart-container">
         <div style="font-weight:600;font-size:14px;margin-bottom:12px;">Losing Streak Probabilities</div>
-        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">At 35% win rate over ~2,200 bets (~1 season)</div>
+        <div id="lsSubtitle" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;"></div>
         <div id="losingStreakChart" style="height:240px;"></div>
         <table class="ls-table">
           <thead><tr><th>Consecutive Losses</th><th>P(at least once)</th><th>Expected Count</th></tr></thead>
@@ -468,10 +472,13 @@ const EXPECTATIONS_DATA = {
     { season: 2025, roiElo: -0.4509, roiBarttorvik: 1.4633 },
   ],
   monteCarlo: {
-    winRate: 0.35, avgDecimalOdds: 2.80, betsPerDay: 8, days: 150,
+    // Derive win rate from observed ROI: ROI = w*d - 1  =>  w = (1+ROI)/d
+    winRate: (1 + 0.0654) / 2.80,  // ≈ 0.3805 (38.1%)
+    avgDecimalOdds: 2.80, betsPerDay: 8, days: 150,
     scenarios: [
       { name: "$100 Flat Stake", stake: 100 },
       { name: "$150 Flat Stake (3% of $5K)", stake: 150 },
+      { name: "Dynamic Kelly (\u00bcK, 5% cap)", stake: 0, dynamic: true },
     ],
   },
 };
@@ -1155,10 +1162,18 @@ function renderBetting() {
 
   // Monte Carlo with CI bands
   const mc = d.monteCarlo;
-  renderMonteCarloCI('mcChartA', mc.scenarios[0].stake, mc);
-  renderMonteCarloCI('mcChartB', mc.scenarios[1].stake, mc);
+  const wrPct = (mc.winRate * 100).toFixed(1);
+  const amOdds = mc.avgDecimalOdds >= 2 ? '+' + Math.round((mc.avgDecimalOdds - 1) * 100) : '-' + Math.round(100 / (mc.avgDecimalOdds - 1));
+  document.getElementById('mcSubtitle').textContent =
+    `1,000 simulated seasons \u00b7 ${wrPct}% implied win rate (from ${(d.pooled.flatROI*100).toFixed(1)}% ROI) \u00b7 avg ${amOdds} payout \u00b7 ${mc.betsPerDay} bets/day \u00b7 ${mc.days} days`;
+  renderMonteCarloCI('mcChartA', mc.scenarios[0], mc);
+  renderMonteCarloCI('mcChartB', mc.scenarios[1], mc);
+  renderMonteCarloCI('mcChartC', mc.scenarios[2], mc);
 
   // Losing streaks
+  const totalSeasonBets = Math.round(d.pooled.bets / d.seasons.length);
+  document.getElementById('lsSubtitle').textContent =
+    `At ${wrPct}% win rate over ~${totalSeasonBets.toLocaleString()} bets (~1 season)`;
   renderLosingStreaks(d.losingStreaks);
 
   // A/B: Elo-only vs Elo+Barttorvik
@@ -1182,19 +1197,42 @@ function renderBetting() {
   }, PC);
 }
 
-function renderMonteCarloCI(containerId, stake, mc) {
+function renderMonteCarloCI(containerId, scenario, mc) {
   const nSims = 1000;
   const totalBets = mc.betsPerDay * mc.days;
-  const profitPerWin = stake * (mc.avgDecimalOdds - 1);
   const rng = mulberry32(42);
+  const isDynamic = scenario.dynamic || false;
+  const baseStake = scenario.stake || 150;
+  const bankroll = 5000;
+  const kellyFrac = 0.25;
+  const maxBetFrac = 0.05;
+  const impliedProb = 1 / mc.avgDecimalOdds;
+  const avgEdge = mc.winRate - impliedProb;
+  const b = mc.avgDecimalOdds - 1;
 
   const allPaths = [];
   for (let s = 0; s < nSims; s++) {
     let cumPnl = 0;
     const path = [0];
-    for (let b = 0; b < totalBets; b++) {
-      cumPnl += rng() < mc.winRate ? profitPerWin : -stake;
-      if ((b + 1) % mc.betsPerDay === 0) path.push(cumPnl);
+    for (let bet = 0; bet < totalBets; bet++) {
+      let stake;
+      if (isDynamic) {
+        // Vary edge per bet: uniform(0.3x, 2.5x) of average edge
+        const edgeMult = 0.3 + rng() * 2.2;
+        const thisEdge = avgEdge * edgeMult;
+        const thisWinProb = impliedProb + thisEdge;
+        const rawKelly = (b * thisWinProb - (1 - thisWinProb)) / b;
+        const betFrac = Math.min(Math.max(0, rawKelly * kellyFrac), maxBetFrac);
+        stake = bankroll * betFrac;
+        if (stake < 10) stake = 0;  // min bet threshold
+      } else {
+        stake = baseStake;
+      }
+      if (stake > 0) {
+        const profitPerWin = stake * b;
+        cumPnl += rng() < mc.winRate ? profitPerWin : -stake;
+      }
+      if ((bet + 1) % mc.betsPerDay === 0) path.push(cumPnl);
     }
     allPaths.push(path);
   }
