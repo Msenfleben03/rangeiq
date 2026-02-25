@@ -29,6 +29,8 @@ pybaseball>=2.2.7
 # College Sports (NCAAB, NCAAF)
 sportsipy>=0.6.0
 # cfbd>=4.5.0  # CollegeFootballData.com API wrapper - uncomment if using
+# KenPom efficiency ratings (scrapes kenpom.com, requires subscription)
+kenpompy>=0.5.0
 
 # General Sports Reference
 sportsreference>=0.5.2
