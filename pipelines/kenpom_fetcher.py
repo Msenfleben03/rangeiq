@@ -321,6 +321,121 @@ def append_to_cache(
 
 
 # ---------------------------------------------------------------------------
+# SQLite Storage
+# ---------------------------------------------------------------------------
+
+
+def store_snapshot_to_db(
+    df: pd.DataFrame,
+    season: int,
+    db_path: str = "data/betting.db",
+) -> int:
+    """Store a KenPom ratings snapshot to the kenpom_ratings SQLite table.
+
+    Uses INSERT OR REPLACE for idempotent daily writes. The UNIQUE constraint
+    on (team, season, snapshot_date) prevents duplicates.
+
+    Args:
+        df: Normalized KenPom ratings DataFrame (from normalize_kenpom_df).
+        season: Season year.
+        db_path: Path to SQLite database.
+
+    Returns:
+        Number of rows stored.
+    """
+    if df.empty:
+        return 0
+
+    import sqlite3
+
+    snapshot_date = date.today().isoformat()
+    if "date" in df.columns:
+        first_date = pd.to_datetime(df["date"].iloc[0])
+        snapshot_date = first_date.strftime("%Y-%m-%d")
+
+    db_columns = [
+        "team",
+        "conf",
+        "season",
+        "snapshot_date",
+        "rank",
+        "adj_em",
+        "adj_o",
+        "adj_o_rk",
+        "adj_d",
+        "adj_d_rk",
+        "adj_t",
+        "adj_t_rk",
+        "luck",
+        "luck_rk",
+        "sos_adj_em",
+        "sos_adj_em_rk",
+        "sos_opp_o",
+        "sos_opp_o_rk",
+        "sos_opp_d",
+        "sos_opp_d_rk",
+        "ncsos_adj_em",
+        "ncsos_adj_em_rk",
+        "w_l",
+        "seed",
+    ]
+    placeholders = ", ".join(["?"] * len(db_columns))
+    col_names = ", ".join(db_columns)
+    sql = (
+        f"INSERT OR REPLACE INTO kenpom_ratings ({col_names}) VALUES ({placeholders})"  # nosec B608
+    )
+
+    conn = sqlite3.connect(db_path)
+    count = 0
+    try:
+        cursor = conn.cursor()
+        for _, row in df.iterrows():
+            values = (
+                row.get("team"),
+                row.get("conf"),
+                season,
+                snapshot_date,
+                _to_py(row.get("rank")),
+                _to_py(row.get("adj_em")),
+                _to_py(row.get("adj_o")),
+                _to_py(row.get("adj_o_rk")),
+                _to_py(row.get("adj_d")),
+                _to_py(row.get("adj_d_rk")),
+                _to_py(row.get("adj_t")),
+                _to_py(row.get("adj_t_rk")),
+                _to_py(row.get("luck")),
+                _to_py(row.get("luck_rk")),
+                _to_py(row.get("sos_adj_em")),
+                _to_py(row.get("sos_adj_em_rk")),
+                _to_py(row.get("sos_opp_o")),
+                _to_py(row.get("sos_opp_o_rk")),
+                _to_py(row.get("sos_opp_d")),
+                _to_py(row.get("sos_opp_d_rk")),
+                _to_py(row.get("ncsos_adj_em")),
+                _to_py(row.get("ncsos_adj_em_rk")),
+                row.get("w_l"),
+                row.get("seed"),
+            )
+            cursor.execute(sql, values)
+            count += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info("Stored %d KenPom ratings to DB for season %d (%s)", count, season, snapshot_date)
+    return count
+
+
+def _to_py(val: Any) -> Any:
+    """Convert pandas/numpy scalar to Python native type for SQLite."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    if hasattr(val, "item"):
+        return val.item()
+    return val
+
+
+# ---------------------------------------------------------------------------
 # Fetcher Class
 # ---------------------------------------------------------------------------
 

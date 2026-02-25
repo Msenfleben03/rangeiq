@@ -67,6 +67,11 @@ def main() -> int:
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--store-db",
+        action="store_true",
+        help="Also store snapshot to SQLite kenpom_ratings table",
+    )
     args = parser.parse_args()
 
     # Configure logging
@@ -102,6 +107,14 @@ def main() -> int:
             print("FAILED: No data retrieved.")
             return 1
         _print_summary(df, "Current")
+        if args.store_db:
+            from datetime import date
+
+            from pipelines.kenpom_fetcher import store_snapshot_to_db
+
+            season = int(df["year"].iloc[0]) if "year" in df.columns else date.today().year
+            count = store_snapshot_to_db(df, season)
+            print(f"Stored {count} ratings to SQLite (kenpom_ratings table)")
         return 0
 
     # Fetch specified seasons
