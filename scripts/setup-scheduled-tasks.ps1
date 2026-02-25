@@ -4,9 +4,8 @@
     for the sports betting pipeline.
 
 .DESCRIPTION
-    Manages two scheduled tasks:
-    - SportsBetting-Nightly   (11:00 PM ET) -- data refresh + model retrain
-    - SportsBetting-Morning   (10:00 AM ET) -- settle yesterday + predictions + record bets
+    Manages one scheduled task:
+    - SportsBetting-Daily     (7:00 AM ET) -- full daily pipeline
 
 .PARAMETER Action
     One of: register, unregister, status
@@ -32,18 +31,11 @@ $ScriptsDir = Join-Path $ProjectRoot "scripts"
 # Task definitions
 $Tasks = @(
     @{
-        Name        = "SportsBetting-Nightly"
-        Description = "Nightly data refresh: fetch scores, retrain Elo, scrape Barttorvik, generate dashboard"
-        Script      = Join-Path $ScriptsDir "nightly-refresh.ps1"
-        TriggerTime = "23:00"  # 11:00 PM
-        Arguments   = "-ExecutionPolicy Bypass -File `"$(Join-Path $ScriptsDir 'nightly-refresh.ps1')`""
-    },
-    @{
-        Name        = "SportsBetting-Morning"
-        Description = "Morning betting: settle yesterday's bets, generate today's predictions"
-        Script      = Join-Path $ScriptsDir "morning-betting.ps1"
-        TriggerTime = "10:00"  # 10:00 AM
-        Arguments   = "-ExecutionPolicy Bypass -File `"$(Join-Path $ScriptsDir 'morning-betting.ps1')`""
+        Name        = "SportsBetting-Daily"
+        Description = "Daily pipeline: fetch scores, retrain Elo, scrape Barttorvik + KenPom, settle bets, predict, dashboard"
+        Script      = Join-Path $ScriptsDir "daily-pipeline.ps1"
+        TriggerTime = "07:00"  # 7:00 AM
+        Arguments   = "-ExecutionPolicy Bypass -File `"$(Join-Path $ScriptsDir 'daily-pipeline.ps1')`""
     }
 )
 
