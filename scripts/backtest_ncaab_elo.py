@@ -292,6 +292,7 @@ def run_backtest(
     bankroll: float = 5000.0,
     odds_lookup: dict[str, dict] | None = None,
     use_simulated: bool = False,
+    kelly_sizer=None,
 ) -> pd.DataFrame:
     """Run walk-forward backtest.
 
@@ -371,8 +372,15 @@ def run_backtest(
 
             # 5. SIZE BET (Kelly)
             decimal_odds = american_to_decimal(bet_odds)
-            bet_fraction = fractional_kelly(bet_prob, decimal_odds, kelly_fraction, max_bet)
-            stake = current_bankroll * bet_fraction
+            if kelly_sizer is not None:
+                stake = kelly_sizer.size_bet(
+                    model_prob=bet_prob,
+                    edge=max(home_edge, away_edge),
+                    american_odds=bet_odds,
+                )
+            else:
+                bet_fraction = fractional_kelly(bet_prob, decimal_odds, kelly_fraction, max_bet)
+                stake = current_bankroll * bet_fraction
 
             if stake > 0:
                 # 6. CALCULATE P/L
@@ -568,6 +576,7 @@ def run_backtest_with_features(
     bankroll: float = 5000.0,
     odds_lookup: dict[str, dict] | None = None,
     use_simulated: bool = False,
+    kelly_sizer=None,
 ) -> pd.DataFrame:
     """Run walk-forward backtest with optional feature adjustments.
 
@@ -792,8 +801,15 @@ def run_backtest_with_features(
 
             # 5. SIZE BET
             decimal_odds = american_to_decimal(bet_odds)
-            bet_fraction = fractional_kelly(bet_prob, decimal_odds, kelly_fraction, max_bet)
-            stake = current_bankroll * bet_fraction
+            if kelly_sizer is not None:
+                stake = kelly_sizer.size_bet(
+                    model_prob=bet_prob,
+                    edge=max(home_edge, away_edge),
+                    american_odds=bet_odds,
+                )
+            else:
+                bet_fraction = fractional_kelly(bet_prob, decimal_odds, kelly_fraction, max_bet)
+                stake = current_bankroll * bet_fraction
 
             if stake > 0:
                 if won:
@@ -875,6 +891,11 @@ def main() -> None:
         default=1.0,
         help="Weight for KenPom probability adjustment (default: 1.0)",
     )
+    parser.add_argument(
+        "--calibrated-kelly",
+        action="store_true",
+        help="Use Platt-calibrated Kelly sizing instead of raw model prob",
+    )
     args = parser.parse_args()
 
     # Load trained model
@@ -951,6 +972,24 @@ def main() -> None:
             args.kenpom_weight,
         )
 
+    # Build calibrated Kelly sizer (if requested)
+    kelly_sizer = None
+    if args.calibrated_kelly:
+        from betting.odds_converter import KellySizer, build_calibration_data
+
+        backtest_dir = Path("data/backtests")
+        try:
+            edges, outcomes = build_calibration_data(backtest_dir)
+            kelly_sizer = KellySizer(
+                kelly_fraction=args.kelly,
+                max_bet_fraction=args.max_bet,
+                bankroll=args.bankroll,
+            )
+            kelly_sizer.calibrate(edges, outcomes)
+            logger.info("Calibrated Kelly sizer on %d bets", len(edges))
+        except FileNotFoundError:
+            logger.warning("No calibration data; falling back to raw Kelly")
+
     # Run backtest
     if args.barttorvik or args.kenpom:
         results = run_backtest_with_features(
@@ -968,6 +1007,7 @@ def main() -> None:
             bankroll=args.bankroll,
             odds_lookup=odds_lookup,
             use_simulated=args.simulate,
+            kelly_sizer=kelly_sizer,
         )
     else:
         results = run_backtest(
@@ -979,6 +1019,7 @@ def main() -> None:
             bankroll=args.bankroll,
             odds_lookup=odds_lookup,
             use_simulated=args.simulate,
+            kelly_sizer=kelly_sizer,
         )
 
     # Save results
