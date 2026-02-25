@@ -4,6 +4,10 @@ Converts between different odds formats (American, Decimal, Implied Probability)
 and calculates key betting metrics like expected value and closing line value.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 
 def american_to_decimal(american: int) -> float:
     """Convert American odds to decimal odds.
@@ -166,6 +170,99 @@ def fractional_kelly(
     kelly = (b * win_prob - q) / b
     recommended = max(0, kelly * fraction)
     return min(recommended, max_bet)
+
+
+class KellySizer:
+    """Dynamic bet sizer with Platt-calibrated win probabilities.
+
+    Uses logistic regression on historical (edge, win/loss) data to correct
+    model overconfidence before feeding into Kelly criterion.
+
+    Args:
+        kelly_fraction: Fraction of full Kelly to use (default 0.25 = quarter).
+        max_bet_fraction: Max bet as fraction of bankroll (default 0.05 = 5%).
+        bankroll: Current bankroll in dollars (default 5000).
+        min_bet: Minimum bet in dollars; smaller stakes round to 0 (default 10).
+    """
+
+    def __init__(
+        self,
+        kelly_fraction: float = 0.25,
+        max_bet_fraction: float = 0.05,
+        bankroll: float = 5000.0,
+        min_bet: float = 10.0,
+    ) -> None:
+        """Initialize KellySizer with bet-sizing parameters."""
+        self.kelly_fraction = kelly_fraction
+        self.max_bet_fraction = max_bet_fraction
+        self.bankroll = bankroll
+        self.min_bet = min_bet
+        self._calibrator = None
+
+    @property
+    def is_calibrated(self) -> bool:
+        """Whether Platt calibration has been fitted."""
+        return self._calibrator is not None
+
+    def calibrate(self, edges: Any, outcomes: Any) -> None:
+        """Fit Platt scaling on historical edge -> win/loss data.
+
+        Args:
+            edges: Array of model edge values (0 to 1).
+            outcomes: Array of 1 (win) / 0 (loss).
+        """
+        from sklearn.linear_model import LogisticRegression
+
+        X = edges.reshape(-1, 1) if edges.ndim == 1 else edges
+        self._calibrator = LogisticRegression(random_state=42)
+        self._calibrator.fit(X, outcomes)
+
+    def calibrated_win_prob(self, edge: float) -> float | None:
+        """Return calibrated P(win) for a given edge, or None if uncalibrated.
+
+        Args:
+            edge: Model edge value (model_prob - implied_prob).
+
+        Returns:
+            Calibrated win probability, or None if not yet calibrated.
+        """
+        if self._calibrator is None:
+            return None
+        import numpy as np
+
+        return float(self._calibrator.predict_proba(np.array([[edge]]))[0][1])
+
+    def size_bet(
+        self,
+        model_prob: float,
+        edge: float,
+        american_odds: int,
+    ) -> float:
+        """Calculate stake in dollars using calibrated Kelly.
+
+        If calibrated, uses calibrated P(win) from edge.
+        If uncalibrated, falls back to raw model_prob.
+
+        Args:
+            model_prob: Raw model win probability (fallback if uncalibrated).
+            edge: Model edge (model_prob - implied_prob).
+            american_odds: American odds for the bet.
+
+        Returns:
+            Stake in dollars (0.0 if bet not recommended).
+        """
+        cal_prob = self.calibrated_win_prob(edge)
+        win_prob = cal_prob if cal_prob is not None else model_prob
+
+        decimal_odds = american_to_decimal(american_odds)
+        bet_frac = fractional_kelly(
+            win_prob, decimal_odds, self.kelly_fraction, self.max_bet_fraction
+        )
+        stake = self.bankroll * bet_frac
+
+        if stake < self.min_bet:
+            return 0.0
+        return round(stake, 2)
 
 
 # Break-even win rates for common odds
