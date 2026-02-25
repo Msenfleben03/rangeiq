@@ -23,7 +23,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-from betting.odds_converter import american_to_decimal, calculate_clv
+from betting.odds_converter import (
+    KellySizer,
+    american_to_decimal,
+    build_calibration_data,
+    calculate_clv,
+)
 from config.constants import BREADWINNER, INJURY_CHECK, ODDS_CONFIG, PAPER_BETTING
 from config.settings import DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
 from features.sport_specific.ncaab.breadwinner import build_breadwinner_lookup
@@ -411,6 +416,23 @@ def run_predictions(
             len(game_ids),
         )
 
+    # Build calibrated Kelly sizer from historical backtests
+    backtest_dir = PROJECT_ROOT / "data" / "backtests"
+    kelly_sizer = KellySizer(
+        kelly_fraction=PAPER_BETTING.KELLY_FRACTION,
+        max_bet_fraction=PAPER_BETTING.MAX_BET_FRACTION,
+        bankroll=PAPER_BETTING.PAPER_BANKROLL,
+    )
+    try:
+        edges, outcomes = build_calibration_data(backtest_dir)
+        kelly_sizer.calibrate(edges, outcomes)
+        logger.info(
+            "KellySizer calibrated on %d historical bets",
+            len(edges),
+        )
+    except FileNotFoundError:
+        logger.warning("No backtest data for calibration; using raw model probs")
+
     # Generate predictions
     predictions = generate_predictions(
         model=model,
@@ -431,6 +453,7 @@ def run_predictions(
         breadwinner_include_centers=BREADWINNER.INCLUDE_CENTERS,
         target_date=target_date,
         game_context=game_ctx,
+        kelly_sizer=kelly_sizer,
     )
 
     # Record paper bets

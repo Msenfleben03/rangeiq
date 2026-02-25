@@ -166,6 +166,7 @@ def generate_predictions(
     breadwinner_include_centers: bool = BREADWINNER.INCLUDE_CENTERS,
     target_date: datetime | None = None,
     game_context: dict[str, GameContext] | None = None,
+    kelly_sizer=None,
 ) -> pd.DataFrame:
     """Generate predictions + odds + edge calculations for each game.
 
@@ -187,6 +188,8 @@ def generate_predictions(
         game_context: Dict of game_id -> GameContext from ESPN summary API.
             Used to cross-check model probabilities against ESPN predictor
             and scan news for injury keywords.
+        kelly_sizer: Optional KellySizer instance for calibrated bet sizing.
+            When None, falls back to raw fractional_kelly with model probs.
 
     Returns:
         DataFrame of predictions with bet recommendations.
@@ -314,21 +317,37 @@ def generate_predictions(
 
                     # Bet recommendation
                     if home_edge >= min_edge:
-                        decimal_odds = american_to_decimal(odds.moneyline_home)
-                        kelly = fractional_kelly(home_prob, decimal_odds)
-                        stake = PAPER_BETTING.PAPER_BANKROLL * kelly
-                        pred["rec_side"] = "HOME"
-                        pred["rec_odds"] = odds.moneyline_home
-                        pred["rec_kelly"] = kelly
-                        pred["rec_stake"] = stake
+                        if kelly_sizer is not None:
+                            stake = kelly_sizer.size_bet(
+                                model_prob=home_prob,
+                                edge=home_edge,
+                                american_odds=odds.moneyline_home,
+                            )
+                        else:
+                            decimal_odds = american_to_decimal(odds.moneyline_home)
+                            kelly = fractional_kelly(home_prob, decimal_odds)
+                            stake = PAPER_BETTING.PAPER_BANKROLL * kelly
+                        if stake > 0:
+                            pred["rec_side"] = "HOME"
+                            pred["rec_odds"] = odds.moneyline_home
+                            pred["rec_kelly"] = stake / PAPER_BETTING.PAPER_BANKROLL
+                            pred["rec_stake"] = stake
                     elif away_edge >= min_edge:
-                        decimal_odds = american_to_decimal(odds.moneyline_away)
-                        kelly = fractional_kelly(1 - home_prob, decimal_odds)
-                        stake = PAPER_BETTING.PAPER_BANKROLL * kelly
-                        pred["rec_side"] = "AWAY"
-                        pred["rec_odds"] = odds.moneyline_away
-                        pred["rec_kelly"] = kelly
-                        pred["rec_stake"] = stake
+                        if kelly_sizer is not None:
+                            stake = kelly_sizer.size_bet(
+                                model_prob=1 - home_prob,
+                                edge=away_edge,
+                                american_odds=odds.moneyline_away,
+                            )
+                        else:
+                            decimal_odds = american_to_decimal(odds.moneyline_away)
+                            kelly = fractional_kelly(1 - home_prob, decimal_odds)
+                            stake = PAPER_BETTING.PAPER_BANKROLL * kelly
+                        if stake > 0:
+                            pred["rec_side"] = "AWAY"
+                            pred["rec_odds"] = odds.moneyline_away
+                            pred["rec_kelly"] = stake / PAPER_BETTING.PAPER_BANKROLL
+                            pred["rec_stake"] = stake
 
         # ESPN predictor cross-check (injury/divergence detection)
         if game_context and game_id in game_context:
