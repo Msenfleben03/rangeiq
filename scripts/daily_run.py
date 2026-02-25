@@ -424,11 +424,11 @@ def run_predictions(
         bankroll=PAPER_BETTING.PAPER_BANKROLL,
     )
     try:
-        edges, outcomes = build_calibration_data(backtest_dir)
-        kelly_sizer.calibrate(edges, outcomes)
+        model_probs, outcomes = build_calibration_data(backtest_dir)
+        kelly_sizer.calibrate(model_probs, outcomes)
         logger.info(
             "KellySizer calibrated on %d historical bets",
-            len(edges),
+            len(model_probs),
         )
     except FileNotFoundError:
         logger.warning("No backtest data for calibration; using raw model probs")

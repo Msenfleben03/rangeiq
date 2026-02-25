@@ -1,47 +1,61 @@
 ## Active Task
-Session 21 COMPLETE — KenPom nightly scraper + pipeline merge.
+Session 23 COMPLETE — KellySizer Platt calibration bug fix + explanation docs.
 
 ## Last Completed Step
-All work done. 6 commits merged to main (ad7b8e1), pushed to origin.
+All work done. Bug fixed, docs created, analysis run. NOT YET COMMITTED.
 
 ## Completed This Session
-- [x] Technical discussion: KenPom nightly scraping requirements
-- [x] Implementation plan written (docs/plans/2026-02-25-kenpom-nightly-scraper.md)
-- [x] Task 1: Added kenpompy>=0.5.0 to requirements.txt, installed
-- [x] Task 2: Added kenpom_ratings table to SQLite schema (tracking/database.py)
-- [x] Task 3: Added store_snapshot_to_db() function + --store-db CLI flag
-- [x] Task 4: Added scrape_kenpom step to nightly-refresh.ps1
-- [x] Task 5: Created daily-pipeline.ps1 merging nightly + morning (10 steps)
-- [x] Task 6: Updated setup-scheduled-tasks.ps1 for single 7 AM job
-- [x] Task 7: End-to-end verification (72/72 tests pass, 0 regressions)
-- [x] Manual: Added KENPOM_EMAIL/KENPOM_PASSWORD to .env
-- [x] Manual: Merged feat/kenpom-nightly-scraper to main, pushed
-- [x] Manual: Unregistered old tasks, registered SportsBetting-Daily at 07:00
+- [x] Diagnosed KellySizer calibration bug: edge-based Platt gave P(win)=18.7% for -410 favorites
+- [x] Root cause: `calibrated_win_prob(edge)` ignores base probability; edge alone doesn't determine win rate
+- [x] Fixed: changed calibration feature from `edge` to `model_prob` (standard Platt scaling)
+- [x] Updated `betting/odds_converter.py`: KellySizer.calibrate(), calibrated_win_prob(), size_bet(), build_calibration_data()
+- [x] Updated `scripts/daily_run.py`: variable rename edges -> model_probs
+- [x] Updated `scripts/backtest_ncaab_elo.py`: variable rename edges -> model_probs
+- [x] Updated `tests/test_kelly_sizer.py`: fixtures use model_prob, added test_stakes_vary_with_edge_size (16 tests)
+- [x] All 103 tests pass (16 kelly + 29 daily_run + 5 fetch_odds + 53 elo), zero regressions
+- [x] Ruff lint + format clean on all 4 modified files
+- [x] Created `docs/explanation/platt-calibration.md` (520 lines, Diataxis explanation)
+- [x] Created `docs/explanation/platt-calibration-explorer.html` (1209 lines, 4-tab interactive visualization)
+- [x] Ran backtest distribution analysis (3,710 bets, 6 seasons)
 
 ## Verification Results
-- 38/38 KenPom tests pass (9 new + 29 existing)
-- 34/34 core pipeline tests pass (zero regressions)
-- Ruff check clean on all modified files
-- All 15 pre-commit hooks pass on every commit
-- Task Scheduler: SportsBetting-Daily Ready, next run 07:00
+- 16/16 test_kelly_sizer pass
+- 29/29 test_daily_run pass
+- 5/5 test_fetch_opening_odds pass
+- 53/53 test_elo pass
+- Ruff: all checks passed, 4 files already formatted
+
+## Key Context
+### The Bug
+- Old: `calibrated_win_prob(edge)` mapped edge -> P(win) via logistic regression
+- Edge alone ignores base win rate; 31.4% overall win rate, mostly longshots
+- A -410 favorite got cal_prob=0.187, Kelly returned $0 for EVERY bet
+- All 8 production bets used flat $150 from pre-Kelly fallback
+
+### The Fix
+- New: `calibrated_win_prob(model_prob)` — standard Platt scaling preserving base rate
+- Platt coefficients: coef=6.4558, intercept=-3.8831 (from 3,710 backtest bets)
+- Stakes now range $0-$250 proportional to calibrated edge
+- Tomorrow's 7 AM pipeline will be FIRST to produce dynamically-sized bets
+
+### Backtest Distribution (calibrated Kelly on 6 seasons)
+- 3,710 total bets, 97% on underdogs, 31.4% overall win rate
+- Kelly filters out 38% of bets (1,409 marginal bets with -0.037 avg cal_edge, only +1.2% ROI)
+- 2,301 surviving bets: mean stake $163, median $199, 45.5% at $250 cap
+- Kelly ROI +156.9% vs flat +93.2% (+64pp improvement, every season better)
+- Total Kelly P&L: +$587K on $374K staked
 
 ## Files Modified This Session
-- `requirements.txt` — added kenpompy>=0.5.0
-- `tracking/database.py` — added kenpom_ratings table creation
-- `pipelines/kenpom_fetcher.py` — added store_snapshot_to_db(), _to_py()
-- `scripts/fetch_kenpom_data.py` — added --store-db flag
-- `scripts/daily-pipeline.ps1` — NEW: merged 10-step pipeline
-- `scripts/nightly-refresh.ps1` — added KenPom step + deprecation warning
-- `scripts/morning-betting.ps1` — added deprecation warning
-- `scripts/setup-scheduled-tasks.ps1` — single SportsBetting-Daily at 07:00
-- `tests/test_kenpom_scraper_db.py` — NEW: 9 tests for DB storage
-- `docs/plans/2026-02-25-kenpom-nightly-scraper.md` — implementation plan
-- `.env` — added KENPOM_EMAIL, KENPOM_PASSWORD
+- `betting/odds_converter.py` — KellySizer calibration feature: edge -> model_prob
+- `scripts/daily_run.py` — variable rename edges -> model_probs
+- `scripts/backtest_ncaab_elo.py` — variable rename edges -> model_probs
+- `tests/test_kelly_sizer.py` — fixtures updated, new test added (16 total)
+- `docs/explanation/platt-calibration.md` — NEW: Diataxis explanation (520 lines)
+- `docs/explanation/platt-calibration-explorer.html` — NEW: interactive visualization (1209 lines)
 
 ## Still Outstanding (carry forward)
-- [ ] Monitor first 7 AM pipeline run (check logs/pipeline-daily-*.log)
-- [ ] Verify KenPom data accumulating: SELECT snapshot_date, COUNT(*) FROM kenpom_ratings GROUP BY snapshot_date
-- [ ] Verify CLV collection in production (settle bets, check odds_closing/clv populated)
+- [ ] Commit and push session 23 changes (awaiting user approval)
+- [ ] Monitor tomorrow's 7 AM pipeline for varied stake sizes (should NOT be flat $150)
 - [ ] Fix test_logger failures (8 regressions — sqlite3 schema mismatch)
 - [ ] Test coverage gaps (41.4% overall)
 - [ ] Monitor injury check thresholds (currently 10pp warn, 15pp block)

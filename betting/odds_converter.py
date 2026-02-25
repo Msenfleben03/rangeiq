@@ -175,7 +175,7 @@ def fractional_kelly(
 class KellySizer:
     """Dynamic bet sizer with Platt-calibrated win probabilities.
 
-    Uses logistic regression on historical (edge, win/loss) data to correct
+    Uses logistic regression on historical (model_prob, win/loss) data to correct
     model overconfidence before feeding into Kelly criterion.
 
     Args:
@@ -204,24 +204,24 @@ class KellySizer:
         """Whether Platt calibration has been fitted."""
         return self._calibrator is not None
 
-    def calibrate(self, edges: Any, outcomes: Any) -> None:
-        """Fit Platt scaling on historical edge -> win/loss data.
+    def calibrate(self, model_probs: Any, outcomes: Any) -> None:
+        """Fit Platt scaling on historical model_prob -> win/loss data.
 
         Args:
-            edges: Array of model edge values (0 to 1).
+            model_probs: Array of model win probabilities (0 to 1).
             outcomes: Array of 1 (win) / 0 (loss).
         """
         from sklearn.linear_model import LogisticRegression
 
-        X = edges.reshape(-1, 1) if edges.ndim == 1 else edges
+        X = model_probs.reshape(-1, 1) if model_probs.ndim == 1 else model_probs
         self._calibrator = LogisticRegression(random_state=42)
         self._calibrator.fit(X, outcomes)
 
-    def calibrated_win_prob(self, edge: float) -> float | None:
-        """Return calibrated P(win) for a given edge, or None if uncalibrated.
+    def calibrated_win_prob(self, model_prob: float) -> float | None:
+        """Return calibrated P(win) for a given model probability.
 
         Args:
-            edge: Model edge value (model_prob - implied_prob).
+            model_prob: Raw model win probability (0 to 1).
 
         Returns:
             Calibrated win probability, or None if not yet calibrated.
@@ -230,7 +230,7 @@ class KellySizer:
             return None
         import numpy as np
 
-        return float(self._calibrator.predict_proba(np.array([[edge]]))[0][1])
+        return float(self._calibrator.predict_proba(np.array([[model_prob]]))[0][1])
 
     def size_bet(
         self,
@@ -240,18 +240,18 @@ class KellySizer:
     ) -> float:
         """Calculate stake in dollars using calibrated Kelly.
 
-        If calibrated, uses calibrated P(win) from edge.
+        If calibrated, uses Platt-calibrated P(win) from model_prob.
         If uncalibrated, falls back to raw model_prob.
 
         Args:
-            model_prob: Raw model win probability (fallback if uncalibrated).
-            edge: Model edge (model_prob - implied_prob).
+            model_prob: Raw model win probability.
+            edge: Model edge (model_prob - implied_prob). Kept for API compat.
             american_odds: American odds for the bet.
 
         Returns:
             Stake in dollars (0.0 if bet not recommended).
         """
-        cal_prob = self.calibrated_win_prob(edge)
+        cal_prob = self.calibrated_win_prob(model_prob)
         win_prob = cal_prob if cal_prob is not None else model_prob
 
         decimal_odds = american_to_decimal(american_odds)
@@ -268,13 +268,13 @@ class KellySizer:
 def build_calibration_data(
     backtest_dir: str,
 ) -> tuple:
-    """Load historical backtest results and extract (edge, outcome) arrays.
+    """Load historical backtest results and extract (model_prob, outcome) arrays.
 
     Args:
         backtest_dir: Directory containing ncaab_elo_backtest_YYYY.parquet files.
 
     Returns:
-        Tuple of (edges, outcomes) numpy arrays.
+        Tuple of (model_probs, outcomes) numpy arrays.
 
     Raises:
         FileNotFoundError: If no backtest parquet files found.
@@ -291,10 +291,10 @@ def build_calibration_data(
     dfs = [pd.read_parquet(f) for f in files]
     combined = pd.concat(dfs, ignore_index=True)
 
-    edges = combined["edge"].values.astype(np.float64)
+    model_probs = combined["model_prob"].values.astype(np.float64)
     outcomes = (combined["result"] == "win").astype(np.int32).values
 
-    return edges, outcomes
+    return model_probs, outcomes
 
 
 # Break-even win rates for common odds

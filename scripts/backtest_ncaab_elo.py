@@ -979,14 +979,14 @@ def main() -> None:
 
         backtest_dir = Path("data/backtests")
         try:
-            edges, outcomes = build_calibration_data(backtest_dir)
+            model_probs, outcomes = build_calibration_data(backtest_dir)
             kelly_sizer = KellySizer(
                 kelly_fraction=args.kelly,
                 max_bet_fraction=args.max_bet,
                 bankroll=args.bankroll,
             )
-            kelly_sizer.calibrate(edges, outcomes)
-            logger.info("Calibrated Kelly sizer on %d bets", len(edges))
+            kelly_sizer.calibrate(model_probs, outcomes)
+            logger.info("Calibrated Kelly sizer on %d bets", len(model_probs))
         except FileNotFoundError:
             logger.warning("No calibration data; falling back to raw Kelly")
 

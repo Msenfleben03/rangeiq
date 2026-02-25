@@ -270,6 +270,7 @@ sports_betting/
 │   ├── test_backtesting.py
 │   ├── test_breadwinner_metric.py
 │   ├── test_daily_snapshot.py
+│   ├── test_kelly_sizer.py          # 15 tests for KellySizer + calibration
 │   ├── test_kenpom_fetcher.py
 │   ├── test_tune_kenpom.py
 │   ├── test_player_stats_fetcher.py
@@ -622,21 +623,34 @@ def regress_to_mean(rating: float, mean: float = 1500, factor: float = 0.33) -> 
 | Caesars | $750 | Line shopping |
 | ESPN BET | $500 | Backup |
 
-### Bet Sizing Rules
+### Bet Sizing Rules (Dynamic Kelly)
 
-| Confidence | Kelly Fraction | Max Bet |
-|------------|----------------|---------|
-| Standard | 0.25 (Quarter) | 3% ($150) |
-| High | 0.33 (Third) | 4% ($200) |
-| Uncertain | 0.15 | 2% ($100) |
+Bets are sized using `KellySizer` (in `betting/odds_converter.py`) with Platt-calibrated
+win probabilities. The calibrator fits a logistic regression on historical backtest
+(edge, win/loss) data to correct ~10pp model overconfidence before feeding into Kelly.
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Kelly Fraction | 0.25 (Quarter) | Default; 0.33 for high confidence |
+| Max Bet | 5% ($250) | Hard cap per bet |
+| Min Bet | $10 | Below this, bet is skipped |
+| Bankroll | $5,000 | Static paper bankroll |
+
+```python
+from betting.odds_converter import KellySizer, build_calibration_data
+sizer = KellySizer(kelly_fraction=0.25, max_bet_fraction=0.05, bankroll=5000)
+edges, outcomes = build_calibration_data("data/backtests")
+sizer.calibrate(edges, outcomes)
+stake = sizer.size_bet(model_prob=0.60, edge=0.15, american_odds=+180)
+```
 
 ### Risk Limits
 
 | Limit Type | Threshold | Action |
 |------------|-----------|--------|
-| Daily exposure | 10% ($500) | No new bets |
-| Weekly loss | 15% ($750) | Reduce sizing 50% |
-| Monthly loss | 25% ($1,250) | Pause, full review |
+| Daily exposure | 20% ($1,000) | No new bets |
+| Weekly loss | 25% ($1,250) | Reduce sizing 50% |
+| Monthly loss | 40% ($2,000) | Pause, full review |
 
 ---
 
@@ -794,6 +808,7 @@ python scripts/daily_run.py
 # RUN BACKTESTS
 # ===============================================================
 python scripts/backtest_ncaab_elo.py --barttorvik --test-season 2025
+python scripts/backtest_ncaab_elo.py --barttorvik --test-season 2025 --calibrated-kelly
 python scripts/incremental_backtest.py --barttorvik
 
 # ===============================================================
