@@ -114,3 +114,43 @@ class TestSizeBet:
         """Stakes below $10 should be rounded to 0."""
         stake = calibrated_sizer.size_bet(model_prob=0.52, edge=0.075, american_odds=-105)
         assert stake == 0.0 or stake >= 10.0
+
+
+class TestBuildCalibrationData:
+    """Test calibration data loader."""
+
+    def test_loads_from_parquet_files(self, tmp_path):
+        from betting.odds_converter import build_calibration_data
+
+        df = pd.DataFrame(
+            {
+                "edge": [0.10, 0.15, 0.20],
+                "result": ["win", "loss", "win"],
+            }
+        )
+        df.to_parquet(tmp_path / "ncaab_elo_backtest_2025.parquet", index=False)
+
+        edges, outcomes = build_calibration_data(tmp_path)
+        assert len(edges) == 3
+        assert list(outcomes) == [1, 0, 1]
+
+    def test_combines_multiple_seasons(self, tmp_path):
+        from betting.odds_converter import build_calibration_data
+
+        for season in [2024, 2025]:
+            df = pd.DataFrame(
+                {
+                    "edge": [0.10, 0.20],
+                    "result": ["win", "loss"],
+                }
+            )
+            df.to_parquet(tmp_path / f"ncaab_elo_backtest_{season}.parquet", index=False)
+
+        edges, outcomes = build_calibration_data(tmp_path)
+        assert len(edges) == 4
+
+    def test_empty_directory_raises(self, tmp_path):
+        from betting.odds_converter import build_calibration_data
+
+        with pytest.raises(FileNotFoundError):
+            build_calibration_data(tmp_path)

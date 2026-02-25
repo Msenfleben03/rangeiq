@@ -265,6 +265,38 @@ class KellySizer:
         return round(stake, 2)
 
 
+def build_calibration_data(
+    backtest_dir: str,
+) -> tuple:
+    """Load historical backtest results and extract (edge, outcome) arrays.
+
+    Args:
+        backtest_dir: Directory containing ncaab_elo_backtest_YYYY.parquet files.
+
+    Returns:
+        Tuple of (edges, outcomes) numpy arrays.
+
+    Raises:
+        FileNotFoundError: If no backtest parquet files found.
+    """
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path
+
+    backtest_dir = Path(backtest_dir)
+    files = sorted(backtest_dir.glob("ncaab_elo_backtest_*.parquet"))
+    if not files:
+        raise FileNotFoundError(f"No backtest parquet files in {backtest_dir}")
+
+    dfs = [pd.read_parquet(f) for f in files]
+    combined = pd.concat(dfs, ignore_index=True)
+
+    edges = combined["edge"].values.astype(np.float64)
+    outcomes = (combined["result"] == "win").astype(np.int32).values
+
+    return edges, outcomes
+
+
 # Break-even win rates for common odds
 BREAKEVEN_RATES = {-110: 0.5238, -105: 0.5122, +100: 0.5000, +150: 0.4000, -200: 0.6667}
 
