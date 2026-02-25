@@ -8,8 +8,10 @@
     2. Fetch latest scores (ESPN API, incremental)
     3. Retrain Elo model with new data
     4. Scrape Barttorvik daily snapshot
-    5. Generate dashboard data bundle
-    6. Deploy dashboard to Vercel
+    5. Scrape KenPom daily snapshot
+    6. Fetch opening odds for tomorrow's games
+    7. Generate dashboard data bundle
+    8. Deploy dashboard to Vercel
 
     Supports checkpointing, retry, and notification on failure.
     Designed to run via Windows Task Scheduler at 11:00 PM ET nightly.
@@ -79,6 +81,12 @@ $steps = [ordered]@{
     scrape_barttorvik = @{
         script    = "fetch_barttorvik_data.py"
         args      = @("--seasons", "2026", "--scrape")
+        critical  = $false
+        timeout   = 120
+    }
+    scrape_kenpom = @{
+        script    = "fetch_kenpom_data.py"
+        args      = @("--daily-only", "--store-db")
         critical  = $false
         timeout   = 120
     }
