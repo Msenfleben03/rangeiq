@@ -23,15 +23,17 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
+from betting.odds_converter import american_to_decimal, calculate_clv
 from config.constants import BREADWINNER, INJURY_CHECK, ODDS_CONFIG, PAPER_BETTING
 from config.settings import DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
-from models.model_persistence import load_model
 from features.sport_specific.ncaab.breadwinner import build_breadwinner_lookup
+from models.model_persistence import load_model
 from pipelines.barttorvik_fetcher import BarttovikFetcher, load_cached_season
+from pipelines.espn_core_odds_provider import ESPNCoreOddsFetcher, OddsSnapshot
 from pipelines.injury_checker import fetch_game_context
 from pipelines.kenpom_fetcher import KenPomFetcher, load_cached_season as load_kenpom_cached
-from pipelines.player_stats_fetcher import load_cached_players
 from pipelines.odds_orchestrator import OddsOrchestrator
+from pipelines.player_stats_fetcher import load_cached_players
 from scripts.backtest_ncaab_elo import BarttovikCoeffs, KenPomCoeffs
 from scripts.daily_predictions import (
     display_predictions,
@@ -49,15 +51,91 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _get_closing_ml_for_bet(
+    selection: str,
+    game: dict,
+    snapshot: OddsSnapshot,
+) -> int | None:
+    """Determine the correct closing moneyline for a bet's side.
+
+    Args:
+        selection: Bet selection string (e.g. "Duke Blue Devils ML").
+        game: Game dict from ESPN scoreboard.
+        snapshot: OddsSnapshot with closing odds.
+
+    Returns:
+        Closing moneyline integer, or None if side can't be determined.
+    """
+    home_abbr = game.get("home", "")
+    away_abbr = game.get("away", "")
+    home_name = game.get("home_name", "")
+    away_name = game.get("away_name", "")
+
+    is_home = "HOME" in selection.upper() or home_abbr in selection or home_name in selection
+    is_away = "AWAY" in selection.upper() or away_abbr in selection or away_name in selection
+
+    if is_home and snapshot.home_ml_close is not None:
+        return snapshot.home_ml_close
+    if is_away and snapshot.away_ml_close is not None:
+        return snapshot.away_ml_close
+
+    # Fallback: try current ML if close not available
+    if is_home and snapshot.home_moneyline is not None:
+        return snapshot.home_moneyline
+    if is_away and snapshot.away_moneyline is not None:
+        return snapshot.away_moneyline
+
+    return None
+
+
+def _store_closing_snapshot(db: BettingDatabase, snapshot: OddsSnapshot) -> None:
+    """Store a closing odds snapshot to odds_snapshots table.
+
+    Args:
+        db: BettingDatabase instance.
+        snapshot: OddsSnapshot with closing data from ESPN Core API.
+    """
+    from datetime import timezone
+
+    db.execute_query(
+        """INSERT OR IGNORE INTO odds_snapshots
+            (game_id, sportsbook, captured_at,
+             spread_home, spread_home_odds, spread_away_odds,
+             total, over_odds, under_odds,
+             moneyline_home, moneyline_away,
+             is_closing, confidence, snapshot_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            snapshot.game_id,
+            snapshot.provider_name.lower().replace(" ", "_"),
+            datetime.now(timezone.utc).isoformat(),
+            snapshot.home_spread_close or snapshot.spread,
+            snapshot.home_spread_odds_close or snapshot.home_spread_odds,
+            snapshot.away_spread_odds_close or snapshot.away_spread_odds,
+            snapshot.total_close or snapshot.over_under,
+            snapshot.over_odds_close or snapshot.over_odds,
+            snapshot.under_odds_close or snapshot.under_odds,
+            snapshot.home_ml_close or snapshot.home_moneyline,
+            snapshot.away_ml_close or snapshot.away_moneyline,
+            True,  # is_closing
+            0.92,  # confidence (ESPN Core API)
+            "closing",
+        ),
+    )
+
+
 def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) -> dict:
     """Settle paper bets from a past date using ESPN final scores.
+
+    After settling win/loss, fetches closing odds from ESPN Core API
+    and calculates CLV for each bet.
 
     Args:
         db: BettingDatabase instance.
         settle_date: Date to settle (YYYY-MM-DD). Default: yesterday.
 
     Returns:
-        Dict with settlement stats.
+        Dict with settlement and CLV stats.
     """
     if settle_date is None:
         settle_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -79,7 +157,10 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
         g["game_id"]: g for g in games if g["status"] in ("STATUS_FINAL", "STATUS_FINAL_OT")
     }
 
+    # -- Pass 1: Settle win/loss -------------------------------------------------
     settled_count = 0
+    settled_game_ids: set[str] = set()
+
     for bet in pending:
         game_id = bet["game_id"] or ""
         if game_id not in final_games:
@@ -119,8 +200,6 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
             stake = bet["stake"] or 0
 
             if won and odds_placed != 0:
-                from betting.odds_converter import american_to_decimal
-
                 decimal_odds = american_to_decimal(odds_placed)
                 profit = stake * (decimal_odds - 1)
             else:
@@ -135,6 +214,7 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
                     (result, profit, bet["id"]),
                 )
                 settled_count += 1
+                settled_game_ids.add(game_id)
                 logger.info(
                     "Settled bet #%d: %s -> %s ($%+.2f)",
                     bet["id"],
@@ -145,11 +225,85 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
             except Exception as e:
                 logger.error("Failed to settle bet #%d: %s", bet["id"], e)
 
+    # -- Pass 2: Fetch closing odds and calculate CLV ----------------------------
+    clv_updated = 0
+    clv_failed = 0
+    clv_values: list[float] = []
+
+    if settled_game_ids:
+        closing_odds: dict[str, OddsSnapshot] = {}
+        fetcher = ESPNCoreOddsFetcher(sport="ncaab")
+        try:
+            for game_id in settled_game_ids:
+                try:
+                    snapshots = fetcher.fetch_game_odds(game_id)
+                    if snapshots:
+                        pre_game = [s for s in snapshots if s.provider_id != 59]
+                        best = pre_game[0] if pre_game else snapshots[0]
+                        closing_odds[game_id] = best
+
+                        # Store closing snapshot
+                        _store_closing_snapshot(db, best)
+                    else:
+                        logger.warning("No closing odds for game %s", game_id)
+                except Exception as e:
+                    logger.error("Failed to fetch closing odds for %s: %s", game_id, e)
+        finally:
+            fetcher.close()
+
+        # Calculate CLV for each settled bet
+        for bet in pending:
+            game_id = bet["game_id"] or ""
+            if game_id not in closing_odds:
+                if game_id in settled_game_ids:
+                    clv_failed += 1
+                continue
+
+            odds_placed = bet["odds_placed"]
+            if not odds_placed:
+                continue
+
+            selection = bet["selection"] or ""
+            game = final_games.get(game_id, {})
+            snapshot = closing_odds[game_id]
+
+            # Determine which closing ML to use based on bet side
+            closing_ml = _get_closing_ml_for_bet(selection, game, snapshot)
+            if closing_ml is None:
+                clv_failed += 1
+                continue
+
+            try:
+                clv = calculate_clv(odds_placed, closing_ml)
+                db.execute_query(
+                    """UPDATE bets
+                       SET odds_closing = ?, clv = ?
+                       WHERE id = ?""",
+                    (closing_ml, clv, bet["id"]),
+                )
+                clv_updated += 1
+                clv_values.append(clv)
+                logger.info(
+                    "CLV bet #%d: placed %+d, closed %+d, CLV %+.2f%%",
+                    bet["id"],
+                    odds_placed,
+                    closing_ml,
+                    clv * 100,
+                )
+            except Exception as e:
+                logger.error("Failed to update CLV for bet #%d: %s", bet["id"], e)
+                clv_failed += 1
+
+    avg_clv = sum(clv_values) / len(clv_values) if clv_values else 0.0
+
     return {
         "date": settle_date,
         "settled": settled_count,
         "pending": len(pending) - settled_count,
         "total_pending": len(pending),
+        "clv_updated": clv_updated,
+        "clv_failed": clv_failed,
+        "avg_clv": avg_clv,
     }
 
 
@@ -446,6 +600,10 @@ def main() -> None:
     if args.settle_only:
         result = settle_yesterdays_bets(db, args.settle_date)
         print(f"\nSettlement: {result['settled']} settled, {result['pending']} still pending")
+        if result.get("clv_updated", 0) > 0:
+            print(f"CLV: {result['clv_updated']} updated, avg CLV: {result['avg_clv']:+.2%}")
+        if result.get("clv_failed", 0) > 0:
+            print(f"CLV failed: {result['clv_failed']} (no closing odds)")
         return
 
     # Full pipeline
@@ -459,6 +617,13 @@ def main() -> None:
         print("\n--- Settling yesterday's bets ---")
         settle_result = settle_yesterdays_bets(db, args.settle_date)
         print(f"Settled: {settle_result['settled']}, Pending: {settle_result['pending']}")
+        if settle_result.get("clv_updated", 0) > 0:
+            print(
+                f"CLV: {settle_result['clv_updated']} updated, "
+                f"avg CLV: {settle_result['avg_clv']:+.2%}"
+            )
+        if settle_result.get("clv_failed", 0) > 0:
+            print(f"CLV failed: {settle_result['clv_failed']} (no closing odds)")
 
     # Step 2: Generate today's predictions and record bets
     print("\n--- Generating today's predictions ---")

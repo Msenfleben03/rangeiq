@@ -82,6 +82,12 @@ $steps = [ordered]@{
         critical  = $false
         timeout   = 120
     }
+    fetch_opening_odds = @{
+        script    = "fetch_opening_odds.py"
+        args      = @()
+        critical  = $false
+        timeout   = 180
+    }
     generate_dashboard = @{
         script    = "generate_dashboard_data.py"
         args      = @()

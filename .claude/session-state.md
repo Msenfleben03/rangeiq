@@ -1,41 +1,70 @@
 ## Active Task
-Session 17 complete -- pipeline verification and cleanup for Feb 24 slate
+CLV Collection System — subagent-driven implementation from plan
 
 ## Last Completed Step
-All tasks complete. Session ready to close.
+Design phase complete. Plan written and saved. No implementation started.
 
-## Completed This Session (Session 17, 2026-02-24)
-- [x] Verified nightly pipeline (Feb 23, 23:00) ran successfully (all 6 steps OK)
-- [x] Verified morning pipeline (Feb 24, 10:00) ran successfully (settle 2 UNC bets + predict)
-- [x] Verified all scheduled tasks registered and ready
-- [x] Manually settled SJU bet #1 (WIN +$31.91) -- stuck since Feb 18 due to game_date mismatch
-- [x] Removed redundant 23:30 SportsBetting-Settlement task (was perpetual no-op)
-- [x] Committed morning-betting.ps1 idempotency fix (null-valued expression warning)
-- [x] Updated setup-scheduled-tasks.ps1 to reflect 2-task setup
-- [x] Commit: 2812d1a (fix: morning pipeline idempotency + remove settlement task)
-- [x] Pushed to origin/main
+## Plan Location
+`docs/plans/2026-02-24-clv-collection.md`
 
-## Previous Session (Session 16, 2026-02-23/24)
-- Built ESPN predictor injury/divergence check (pipelines/injury_checker.py)
-- Catch-up commit of sessions 7-13 (199 files)
-- Fixed morning-betting.ps1 idempotency (the fix committed this session)
+## Execution Method
+**Subagent-driven development** — dispatch fresh subagent per task, review between tasks.
+Use `superpowers:executing-plans` skill to implement task-by-task.
+
+## Remaining (6 tasks)
+- [ ] Task 1: Add `snapshot_type` column to `odds_snapshots` (`tracking/database.py`)
+- [ ] Task 2: Create `scripts/fetch_opening_odds.py` + tests
+- [ ] Task 3: Add opening odds step to `nightly-refresh.ps1`
+- [ ] Task 4: Add CLV calculation to `settle_yesterdays_bets()` in `scripts/daily_run.py` + tests
+- [ ] Task 5: Update settlement output display in `daily_run.py:main()`
+- [ ] Task 6: Clean up inline `american_to_decimal` import
 
 ## Key Context
-- **Scheduled tasks**: 2 tasks only (Nightly 23:00, Morning 10:00). Settlement removed.
-- **Paper betting**: 6 settled (5W-1L, +$456.84), 2 pending today (ARIZ #7, TTU #8)
-- **Settlement flow**: Morning 10:00 AM settles yesterday's bets. No separate settlement task.
-- **Data freshness**: Elo Feb 23, Barttorvik Feb 23, ESPN scores through Feb 24
-- **Games table**: Empty (0 rows) in betting.db -- game data lives in Parquet files only. Settlement uses ESPN Scoreboard API live, not the DB.
 
-## Still Outstanding (for next session)
-- [ ] Fix test_logger failures (8 regressions -- sqlite3 schema mismatch)
-- [ ] Test coverage gaps (41.4% overall; betting 21.2%, tracking 36.1%)
-- [ ] Monitor injury check thresholds after a week of data (tune 10pp/15pp if needed)
-- [ ] March Madness prep (bracket data not until Mar 15-16)
-- [ ] Cleanup: delete scripts/kenpom_barttorvik_redundancy.py, scripts/kenpom_staleness_analysis.py
+### Architecture (DO NOT re-derive)
+- **No pre-game fetch needed.** ESPN Core API returns actual closing odds for completed games via `close` fields.
+- **Two pipeline modifications, zero new scheduled tasks:**
+  1. Nightly (11pm): new step `fetch_opening_odds.py` after `scrape_barttorvik` — fetches tomorrow's opening odds via ESPN Core API
+  2. Morning (10am): `settle_yesterdays_bets()` gains Pass 2 — fetches ESPN Core API `close` fields, stores closing snapshot, calculates CLV
+- **CLV formula:** `(prob_closing - prob_placed) / prob_placed` using `calculate_clv()` from `betting/odds_converter.py:116`
+- **Closing odds lookup:** JOIN from `odds_snapshots` by `game_id + snapshot_type='closing'` — NOT denormalized onto `bets` table (decision: option B)
+
+### ESPN Core API Verified Data
+Tested on completed games (Feb 23). Returns all three markets:
+- ML: open home=+105, close home=+124 (line moved)
+- Spread: open -2.5 (-115), close -2.5 (-112/-108)
+- Total: open 136.5 (-110/-110), close 138.5 (-108/-112)
+- Provider: DraftKings (id=100) for 2026 season
+- Coverage: ~90%+ of NCAAB games
+
+### Schema Change
+- Add `snapshot_type TEXT DEFAULT 'current'` to `odds_snapshots`
+- Values: `'opening'`, `'closing'`, `'current'`
+- Keep `is_closing` boolean for backward compatibility
+- Backfill 81 existing rows as `'current'`
+
+### Key Files to Modify
+| File | Change |
+|------|--------|
+| `tracking/database.py:160-179` | ALTER TABLE migration + CREATE TABLE update |
+| `scripts/fetch_opening_odds.py` | NEW — opening odds fetcher |
+| `tests/test_fetch_opening_odds.py` | NEW — 6 tests |
+| `scripts/nightly-refresh.ps1:79-97` | Add step to `$steps` hashtable |
+| `scripts/daily_run.py:52-153` | Rewrite `settle_yesterdays_bets()` with CLV Pass 2 |
+| `tests/test_daily_run.py:365+` | Add 3 CLV tests to `TestSettlement` |
+
+### Existing Functions Used (DO NOT rewrite)
+- `calculate_clv(odds_placed, odds_closing)` — `betting/odds_converter.py:116`
+- `american_to_implied_prob(american)` — `betting/odds_converter.py:33`
+- `ESPNCoreOddsFetcher.fetch_game_odds(event_id)` — `pipelines/espn_core_odds_provider.py:472`
+- `OddsSnapshot` dataclass — `pipelines/espn_core_odds_provider.py:61`
+- `fetch_espn_scoreboard(target_date)` — `scripts/daily_predictions.py:66`
 
 ## Files Modified This Session
-- scripts/morning-betting.ps1 (idempotency fix -- committed)
-- scripts/setup-scheduled-tasks.ps1 (removed settlement task -- committed)
-- data/betting.db (settled SJU bet #1 manually)
-- .claude/session-state.md (this file)
+- `docs/plans/2026-02-24-clv-collection.md` (created — implementation plan)
+
+## Still Outstanding (non-CLV, carry forward)
+- [ ] Fix test_logger failures (8 regressions — sqlite3 schema mismatch)
+- [ ] Test coverage gaps (41.4% overall)
+- [ ] Monitor injury check thresholds (currently 10pp warn, 15pp block)
+- [ ] March Madness prep (bracket data Mar 15-16)

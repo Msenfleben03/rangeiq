@@ -173,9 +173,24 @@ class BettingDatabase:
                     moneyline_home INTEGER,
                     moneyline_away INTEGER,
                     is_closing BOOLEAN DEFAULT FALSE,
-                    confidence REAL DEFAULT 1.0
+                    confidence REAL DEFAULT 1.0,
+                    snapshot_type TEXT DEFAULT 'current'
                 )
             """
+            )
+
+            # Migration: add snapshot_type column if missing
+            try:
+                cursor.execute(
+                    "ALTER TABLE odds_snapshots ADD COLUMN snapshot_type TEXT DEFAULT 'current'"
+                )
+                logger.info("Added snapshot_type column to odds_snapshots")
+            except Exception:
+                pass  # Column already exists
+
+            # Backfill existing rows without snapshot_type
+            cursor.execute(
+                "UPDATE odds_snapshots SET snapshot_type = 'current' WHERE snapshot_type IS NULL"
             )
 
             logger.info(f"Database initialized at {self.db_path}")
