@@ -1,6 +1,6 @@
 # Scripts Module Codemap
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-25
 
 ## Architecture
 
@@ -21,9 +21,11 @@ scripts/
   ab_compare_features.py         # A/B comparison framework (paired t-test on common games)
   incremental_backtest.py        # Walk-forward: train [2020..N-1], test N (5-fold)
   run_gatekeeper_validation.py   # Full 5-dimension Gatekeeper validation
+  # === Phase 3b: Opening Odds ===
+  fetch_opening_odds.py          # Nightly: fetch opening odds for tomorrow's games (ESPN Core API)
   # === Phase 4: Daily Predictions ===
   daily_predictions.py           # Morning: predict + fetch odds + recommend bets
-  daily_run.py                   # Paper betting orchestrator (predict→record→settle→report)
+  daily_run.py                   # Paper betting orchestrator (predict→record→settle→report+CLV)
   # === Phase 5: Paper Betting ===
   record_paper_bets.py           # Record bet decisions (interactive + CSV import)
   settle_paper_bets.py           # Settle completed games, compute P/L and CLV
@@ -292,6 +294,33 @@ python scripts/run_gatekeeper_validation.py --backtest data/backtests/ncaab_elo_
 **Outputs:** `data/validation/{model_name}_gatekeeper_report.json`
 **Dependencies:** pandas, backtesting.validators.gatekeeper (optional), config.settings
 
+## Phase 3b: Opening Odds
+
+### fetch_opening_odds.py
+
+Nightly step: fetches opening/early odds for tomorrow's NCAAB games via ESPN Core API.
+Stores snapshots with `snapshot_type='opening'` in `odds_snapshots` table.
+Runs as part of `nightly-refresh.ps1` after Barttorvik scraping.
+
+**Usage:**
+
+```bash
+python scripts/fetch_opening_odds.py                    # Tomorrow (default)
+python scripts/fetch_opening_odds.py --date 2026-02-25  # Specific date
+python scripts/fetch_opening_odds.py --dry-run           # Preview games only
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `fetch_opening_odds(db, target_date)` | Discover games, skip existing, fetch odds via ESPN Core API |
+| `store_opening_snapshot(db, snapshot)` | Store OddsSnapshot as `snapshot_type='opening'` |
+
+**Dependencies:** pipelines.espn_core_odds_provider (ESPNCoreOddsFetcher),
+scripts.daily_predictions (fetch_espn_scoreboard), tracking.database
+**Tests:** 5 tests in `tests/test_fetch_opening_odds.py`
+
 ## Phase 4: Daily Predictions
 
 ### daily_predictions.py
@@ -339,12 +368,15 @@ python scripts/daily_run.py --date 2026-02-15  # Specific date
 | Function | Purpose |
 |----------|---------|
 | `run_full_pipeline(date, dry_run)` | Main: orchestrate all phases |
-| `settle_yesterdays_bets(db, settle_date)` | Settle pending bets from ESPN scores |
+| `settle_yesterdays_bets(db, settle_date)` | Pass 1: settle win/loss; Pass 2: fetch closing odds + CLV |
+| `_get_closing_ml_for_bet(selection, game, snapshot)` | Match bet side to closing moneyline |
+| `_store_closing_snapshot(db, snapshot)` | Store closing odds as `snapshot_type='closing'` |
 | `generate_weekly_report(db)` | Aggregate weekly stats |
 
 **Dependencies:** scripts.daily_predictions (fetch_espn_scoreboard, generate_predictions),
+pipelines.espn_core_odds_provider (ESPNCoreOddsFetcher), betting.odds_converter (calculate_clv),
 tracking.logger (auto_record_bets_from_predictions), tracking.reports (daily_report, weekly_report)
-**Tests:** 26 tests in `tests/test_daily_run.py`
+**Tests:** 29 tests in `tests/test_daily_run.py`
 
 ## Phase 5: Paper Betting
 

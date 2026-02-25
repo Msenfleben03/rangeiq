@@ -244,10 +244,11 @@ sports_betting/
 ├── dashboards/
 │   └── ncaab_dashboard.html       # Unified NCAAB dashboard (9 tabs)
 │
-├── tests/                         # 29 test files, ~533 tests
+├── tests/                         # 30 test files, ~541 tests
 │   ├── conftest.py                # Shared fixtures
 │   ├── test_elo.py                # Elo model tests
-│   ├── test_daily_run.py          # 26 tests for paper betting pipeline
+│   ├── test_daily_run.py          # 29 tests for paper betting pipeline (incl. CLV)
+│   ├── test_fetch_opening_odds.py # 5 tests for opening odds fetcher
 │   ├── test_feature_engineering.py   # 30 tests for feature engine
 │   ├── test_barttorvik_fetcher.py    # 18 tests for Barttorvik pipeline
 │   ├── test_barttorvik_scraper.py
@@ -276,12 +277,13 @@ sports_betting/
 │
 ├── scripts/
 │   │   # === Core Pipeline ===
-│   ├── daily_run.py                   # Paper betting orchestrator (predict->record->settle->report)
+│   ├── daily_run.py                   # Paper betting orchestrator (predict->record->settle->report+CLV)
 │   ├── daily_predictions.py           # ESPN Scoreboard API + Barttorvik predictions + ESPN% display
 │   ├── record_paper_bets.py           # Log paper bet decisions
 │   ├── settle_paper_bets.py           # Settle completed bets
 │   ├── generate_report.py             # Performance reports
 │   │   # === Data Fetching ===
+│   ├── fetch_opening_odds.py          # Nightly: fetch opening odds for tomorrow's games (ESPN Core)
 │   ├── fetch_season_data.py           # Unified scores + odds fetcher CLI
 │   ├── fetch_historical_data.py       # Fetch NCAAB seasons (ESPN API)
 │   ├── fetch_barttorvik_data.py       # Fetch Barttorvik T-Rank ratings (all seasons)
@@ -389,6 +391,7 @@ sports_betting/
 - [x] Built NCAAB dashboard (7-tab HTML, Elo + Barttorvik + game stats)
 - [x] Built dashboard data pipeline (generate_dashboard_data.py → JSON bundle)
 - [x] Dry-run paper betting verified (5 picks, 7.9-13.4% edges)
+- [x] Implement CLV collection system (opening odds + closing odds + CLV calc)
 - [ ] Begin live paper betting tracking (daily_run.py)
 - [ ] Backfill 2026 odds (0% coverage currently)
 

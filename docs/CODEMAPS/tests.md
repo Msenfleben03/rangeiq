@@ -1,6 +1,6 @@
 # Tests Module Codemap
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-25
 **Framework:** pytest
 **Entry Point:** `tests/conftest.py` (shared fixtures)
 
@@ -32,7 +32,8 @@ tests/
   test_barttorvik_fetcher.py       # Barttorvik T-Rank fetcher tests (18 tests)
   test_team_name_mapping.py        # ESPN<->Barttorvik name mapping tests (11 tests)
   test_tune_barttorvik.py          # Barttorvik grid search tuning tests (14 tests)
-  test_daily_run.py                # Paper betting orchestrator tests (26 tests)
+  test_daily_run.py                # Paper betting orchestrator tests (29 tests, incl. CLV)
+  test_fetch_opening_odds.py       # Opening odds fetcher tests (5 tests)
   # === Integration Tests ===
   test_backtesting.py              # Walk-forward validator, metrics, simulation tests
   test_forecasting_db.py           # Forecasting database interface tests

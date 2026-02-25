@@ -448,6 +448,26 @@ models. Keep updated as new features are engineered.
 | `as_of_game_id` | string | Last game included in this rating |
 | `created_at` | datetime | Row creation timestamp |
 
+### Odds Snapshots (tracking.database.odds_snapshots)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Unique snapshot identifier (auto-increment) |
+| `game_id` | string | ESPN game identifier |
+| `sportsbook` | string | Provider name (draft_kings, espn_bet, etc.) |
+| `captured_at` | datetime | When snapshot was taken |
+| `spread_home` | float | Home team spread line |
+| `spread_home_odds` | int | Home spread American odds |
+| `spread_away_odds` | int | Away spread American odds |
+| `total` | float | Over/under total |
+| `over_odds` | int | Over American odds |
+| `under_odds` | int | Under American odds |
+| `moneyline_home` | int | Home moneyline American odds |
+| `moneyline_away` | int | Away moneyline American odds |
+| `is_closing` | bool | True if this is a closing line snapshot |
+| `confidence` | float | Provider confidence score (0-1) |
+| `snapshot_type` | string | `opening`, `closing`, or `current` (default: current) |
+
 ---
 
 ## Injury & Roster Data

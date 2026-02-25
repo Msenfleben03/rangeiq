@@ -1,6 +1,6 @@
 # Tracking Module Codemap
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-25
 **Entry Point:** `tracking/__init__.py` (empty)
 **Test Coverage:** `tests/test_forecasting_db.py`, `tests/test_logger.py`, `tests/test_reports.py`, `tests/test_settlement.py`
 
@@ -47,7 +47,7 @@ SQLite database management for the core betting tracking system.
 - `predictions` - Model prediction records (predicted vs actual values)
 - `team_ratings` - Elo ratings by team, sport, season
 - `games` - Game schedule and results
-- `odds_snapshots` - Historical odds from multiple sportsbooks
+- `odds_snapshots` - Historical odds from multiple sportsbooks (`snapshot_type`: opening/closing/current)
 - Plus additional tables (22 total in full schema)
 
 ### logger.py

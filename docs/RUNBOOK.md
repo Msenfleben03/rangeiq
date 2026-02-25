@@ -41,8 +41,8 @@ Follow these checklists for consistent performance tracking and health.
 ## Evening Reconciliation - [DATE]
 
 ### 1. Settle Bets
-- [ ] Run settlement: `python scripts/settle_paper_bets.py --date today`
-- [ ] Review P/L and CLV for each settled bet
+- [ ] Run settlement: `python scripts/daily_run.py --settle-only` (auto-calculates CLV)
+- [ ] Review P/L and CLV for each settled bet (CLV now populated automatically)
 - [ ] Note any games not yet final (skipped)
 
 ### 2. Daily Report
@@ -312,11 +312,11 @@ If CLV drops below 0% for 50+ consecutive bets:
 ### Windows Task Scheduler
 
 ```powershell
-# Morning predictions (6am CT)
-schtasks /create /sc daily /tn "NCAAB Morning" /tr "C:\Users\msenf\sports-betting\venv\Scripts\python.exe C:\Users\msenf\sports-betting\scripts\daily_predictions.py --date today" /st 06:00
+# Preferred: Use PowerShell orchestrators via Task Scheduler
+.\scripts\setup-scheduled-tasks.ps1 -Action register
 
-# Evening settlement (11pm CT)
-schtasks /create /sc daily /tn "NCAAB Evening" /tr "C:\Users\msenf\sports-betting\venv\Scripts\python.exe C:\Users\msenf\sports-betting\scripts\settle_paper_bets.py --date today" /st 23:00
+# Nightly (11pm): fetch scores, train Elo, scrape Barttorvik, fetch opening odds, dashboard
+# Morning (10am): settle yesterday (with auto-CLV) + predict today
 ```
 
 ### Cron Schedule (Linux/Mac)
@@ -374,7 +374,7 @@ python scripts/backtest_ncaab_elo.py                 # Phase 3: backtest
 python scripts/run_gatekeeper_validation.py          # Phase 3: validate
 python scripts/daily_predictions.py --date today     # Phase 4: predict
 python scripts/record_paper_bets.py --date today     # Phase 5: record
-python scripts/settle_paper_bets.py --date today     # Phase 5: settle
+python scripts/daily_run.py --settle-only             # Phase 5: settle (with CLV)
 python scripts/generate_report.py --all              # Phase 6: report
 
 # Reports
