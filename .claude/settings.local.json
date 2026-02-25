@@ -1,31 +1,10 @@
 {
-  "env": {
-    "MCP_VOICE_HOOKS_PORT": "5111",
-    "MCP_VOICE_HOOKS_AUTO_OPEN_BROWSER": "true",
-    "MCP_VOICE_HOOKS_AUTO_DELIVER_VOICE_INPUT_BEFORE_TOOLS": "true"
-  },
   "permissions": {
-    "allow": [
-      "Bash(powershell \"Stop-Process -Id 38940,27832 -Force\")"
-    ]
+    "allow": []
   },
   "enabledPlugins": {
     "plugin-dev@claude-plugins-official": false,
-    "mcp-voice-hooks-plugin@mcp-voice-hooks-marketplace": false,
-    "voicemode@mbailey-plugins": true
-  },
-  "extraKnownMarketplaces": {
-    "mcp-voice-hooks-marketplace": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/johnmatthewtennant/mcp-voice-hooks.git"
-      }
-    },
-    "mbailey-plugins": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/mbailey/plugins.git"
-      }
-    }
+    "voicemode@mbailey-plugins": false,
+    "mcp-voice-hooks-plugin@mcp-voice-hooks-marketplace": false
   }
 }

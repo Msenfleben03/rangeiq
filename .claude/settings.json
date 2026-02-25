@@ -18,7 +18,8 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "pwsh -NoProfile -File C:\\Users\\msenf\\.claude\\statusline-command.ps1"
+    "command": "bash /c/Users/msenf/.claude/statusline.sh",
+    "padding": 0
   },
   "enabledPlugins": {
     "commit-commands@claude-plugins-official": true,
@@ -27,8 +28,7 @@
     "database-design@claude-code-workflows": true,
     "python-development@claude-code-workflows": true,
     "github@claude-plugins-official": false,
-    "mcp-voice-hooks-plugin@mcp-voice-hooks-marketplace": true,
-    "voicemode@mbailey": false,
+    "mcp-voice-hooks-plugin@mcp-voice-hooks-marketplace": false,
     "dt-workspace@dt-workspace-marketplace": false,
     "architecture-design@claude-rock": false,
     "documentation@claude-code": true
