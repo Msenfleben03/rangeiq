@@ -28,13 +28,13 @@ class BankrollConfig:
     KELLY_FRACTION_HIGH_CONF: float = 0.33  # Third Kelly
     KELLY_FRACTION_UNCERTAIN: float = 0.15
 
-    MAX_BET_FRACTION: float = 0.03  # 3% of bankroll
-    MAX_BET_DOLLARS: float = 150.0  # $150 cap
+    MAX_BET_FRACTION: float = 0.05  # 5% of bankroll
+    MAX_BET_DOLLARS: float = 250.0  # $250 cap
 
     # Exposure limits
-    DAILY_EXPOSURE_LIMIT: float = 0.10  # 10% of bankroll
-    WEEKLY_LOSS_TRIGGER: float = 0.15  # 15% triggers sizing reduction
-    MONTHLY_LOSS_PAUSE: float = 0.25  # 25% triggers full pause
+    DAILY_EXPOSURE_LIMIT: float = 0.20  # 20% of bankroll
+    WEEKLY_LOSS_TRIGGER: float = 0.25  # 25% triggers sizing reduction
+    MONTHLY_LOSS_PAUSE: float = 0.40  # 40% triggers full pause
 
 
 BANKROLL = BankrollConfig()
@@ -434,11 +434,11 @@ class PaperBettingConfig:
     # Bet sizing for paper tracking
     PAPER_BANKROLL: float = 5000.0  # Virtual bankroll
     KELLY_FRACTION: float = 0.25  # Quarter Kelly
-    MAX_BET_FRACTION: float = 0.03  # 3% max
+    MAX_BET_FRACTION: float = 0.05  # 5% max
 
     # Daily limits
     MAX_BETS_PER_DAY: int = 10
-    MAX_DAILY_EXPOSURE_FRACTION: float = 0.10  # 10% of bankroll
+    MAX_DAILY_EXPOSURE_FRACTION: float = 0.20  # 20% of bankroll
 
     # ESPN Scoreboard API
     ESPN_SCOREBOARD_URL: str = (
