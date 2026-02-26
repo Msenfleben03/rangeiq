@@ -1,6 +1,6 @@
 # Scripts Module Codemap
 
-**Last Updated:** 2026-02-25
+**Last Updated:** 2026-02-26
 
 ## Architecture
 
@@ -38,13 +38,13 @@ scripts/
   verify_schema.py               # Verify SQLite schema matches expected structure
   reset_closing_odds.py          # Reset/repair closing odds data
   fix_docstrings.py              # Automated docstring formatting
-  # === MLB Scripts (SKELETONS) ===
-  mlb_daily_run.py               # MLB daily pipeline orchestrator (event-driven)
-  mlb_fetch_historical.py        # Bulk fetch 2023-2025 data
-  mlb_backtest.py                # Walk-forward backtesting (rolling windows)
-  mlb_train_model.py             # Poisson model training
-  mlb_fetch_projections.py       # Preseason ZiPS/Steamer pull
-  mlb_init_db.py                 # Initialize mlb_data.db schema (14 tables)
+  # === MLB Scripts (Phase 1 implemented; Phase 2+ pending) ===
+  mlb_init_db.py                 # Initialize mlb_data.db schema — IMPLEMENTED (13 tables, 30 teams, 360 park factors)
+  mlb_fetch_historical.py        # Bulk fetch 2023-2025 games + pitcher stats — IMPLEMENTED (7511 games, 2193 stat rows)
+  mlb_daily_run.py               # MLB daily pipeline orchestrator (event-driven) — skeleton
+  mlb_backtest.py                # Walk-forward backtesting (rolling windows) — skeleton
+  mlb_train_model.py             # Poisson model training — skeleton
+  mlb_fetch_projections.py       # Preseason ZiPS/Steamer pull — skeleton
 ```
 
 ## Phase 1: Data & Training
@@ -485,41 +485,53 @@ python scripts/generate_dashboard_data.py --season 2026
 **Dependencies:** pipelines.team_name_mapping (build_espn_barttorvik_mapping), pandas
 **Consumed by:** `dashboards/ncaab_dashboard.html` (Plotly.js, 7 tabs)
 
-## MLB Scripts (skeletons — Phase 1 implementation pending)
+## MLB Scripts
 
-All MLB scripts mirror the NCAAB pattern but handle MLB-specific characteristics:
-15 games/day, lineup-dependent predictions, weather sensitivity, multiple market types,
-and a separate `mlb_data.db` database (14 tables).
+All MLB scripts handle MLB-specific characteristics: 15 games/day, lineup-dependent
+predictions, weather sensitivity, multiple market types, and a separate `mlb_data.db`
+database (13 tables). Phase 1 core data pipeline is implemented.
 
-### mlb_init_db.py
+### mlb_init_db.py ✓ IMPLEMENTED
 
-Creates `mlb_data.db` schema with all 14 tables and views. Safe to re-run.
+Creates `mlb_data.db` schema with all tables and views. Safe to re-run.
 
 **Usage:**
 
 ```bash
 python scripts/mlb_init_db.py
-python scripts/mlb_init_db.py --seed-teams   # Populate 30 MLB teams
+python scripts/mlb_init_db.py --seed-teams   # Populate 30 MLB teams + 360 park factors
+python scripts/mlb_init_db.py --verify       # Print row counts
 ```
 
-**Tables:** teams, players, games, pitcher_game_logs, pitcher_season_stats,
-batter_season_stats, lineups, weather, park_factors, umpire_stats, projections,
-bullpen_usage. **View:** v_bullpen_fatigue.
+**Tables:** teams (30 seeded), players, games, pitcher_game_logs, pitcher_season_stats,
+batter_season_stats, lineups, weather, park_factors (360 rows), umpire_stats, projections,
+bullpen_usage, schema_version. **View:** v_bullpen_fatigue (rolling 3/7-day pitcher workload).
 
-### mlb_fetch_historical.py
+### mlb_fetch_historical.py ✓ IMPLEMENTED
 
-Bulk historical data fetcher for 2023-2025 backtesting. Full pull may take 30-60 minutes.
+Bulk historical data fetcher for 2023-2025 backtesting. Fetches games from MLB Stats API
+and pitcher season stats from FanGraphs via pybaseball. Month-by-month with checkpoint/resume.
+
+**Results (2026-02-26):** 7,511 games + 2,193 pitcher_season_stats rows + 1,012 players.
 
 **Usage:**
 
 ```bash
 python scripts/mlb_fetch_historical.py --seasons 2023 2024 2025
-python scripts/mlb_fetch_historical.py --seasons 2025 --incremental
-python scripts/mlb_fetch_historical.py --seasons 2023 2024 2025 --weather  # Phase 2
+python scripts/mlb_fetch_historical.py --seasons 2025 --incremental  # skip complete seasons
+python scripts/mlb_fetch_historical.py --seasons 2025 --games-only   # skip FanGraphs stats
+python scripts/mlb_fetch_historical.py --seasons 2025 --stats-only   # skip game schedule
+python scripts/mlb_fetch_historical.py --reset-checkpoint             # start from scratch
 ```
 
-**Dependencies:** pipelines/mlb_stats_api.py, pipelines/mlb_pybaseball_fetcher.py,
-pipelines/espn_core_odds_provider.py
+**Checkpoint:** `data/mlb_historical_checkpoint.json` — tracks completed months per season.
+
+**Key implementation note:** MLB Stats API returns `home_probable_pitcher_id=None` for all
+completed historical games. Players table is populated from FanGraphs `IDfg` cross-referenced
+to MLBAM via `playerid_reverse_lookup(key_type='fangraphs')`, not from the schedule API.
+Games store `NULL` starter IDs (FK allows NULL) — by design.
+
+**Dependencies:** `MLB-StatsAPI`, `pybaseball` (both installed)
 
 ### mlb_fetch_projections.py
 

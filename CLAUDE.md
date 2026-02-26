@@ -455,7 +455,9 @@ sports_betting/
 - [x] Create MLB skeleton (47 files: models, features, pipelines, scripts, tests, docs)
 - [ ] Begin live paper betting tracking (daily_run.py)
 - [ ] Backfill 2026 odds (0% coverage currently)
-- [ ] MLB Phase 1: init_db → historical data → Poisson model v1
+- [x] MLB Phase 1a: init_db — mlb_data.db schema (13 tables, 30 teams, 360 park factors)
+- [x] MLB Phase 1b: historical data — 7,511 games + 2,193 pitcher stat rows (2023-2025)
+- [ ] MLB Phase 1c: Poisson model v1 (models/sport_specific/mlb/poisson_model.py)
 
 ### Prediction Markets Integration
 
