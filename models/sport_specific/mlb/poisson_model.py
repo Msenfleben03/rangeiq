@@ -382,3 +382,39 @@ class PoissonModel:
             "run_line_home": run_line_prob(matrix, line=run_line),
             "total_over": total_prob(matrix, total=total_line),
         }
+
+    @classmethod
+    def from_db(
+        cls,
+        db_path: str = "data/mlb_data.db",
+        seasons: list[int] | None = None,
+    ) -> "PoissonModel":
+        """Create and fit a model from the MLB database.
+
+        Args:
+            db_path: Path to mlb_data.db.
+            seasons: List of seasons to include. None = all.
+
+        Returns:
+            Fitted PoissonModel instance.
+        """
+        import sqlite3
+
+        conn = sqlite3.connect(db_path)
+        query = (
+            "SELECT game_pk, game_date, season, home_team_id, away_team_id, "
+            "home_score, away_score FROM games WHERE status = 'final'"
+        )
+        if seasons:
+            placeholders = ",".join("?" for _ in seasons)
+            query += f" AND season IN ({placeholders})"
+            df = pd.read_sql_query(query, conn, params=seasons)
+        else:
+            df = pd.read_sql_query(query, conn)
+        conn.close()
+
+        logger.info("Loaded %d games from %s", len(df), db_path)
+
+        model = cls()
+        model.fit(df)
+        return model

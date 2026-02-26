@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from pathlib import Path
+
 from models.sport_specific.mlb.poisson_model import (
     PoissonModel,
     build_score_matrix,
@@ -21,6 +23,8 @@ from models.sport_specific.mlb.poisson_model import (
     run_line_prob,
     total_prob,
 )
+
+MLB_DB_PATH = Path(__file__).parent.parent / "data" / "mlb_data.db"
 
 
 # =============================================================================
@@ -352,3 +356,41 @@ class TestPoissonModelPredict:
         """Run line probability is between 0 and 1."""
         pred = self.model.predict(self.team_ids[0], self.team_ids[1], run_line=-1.5)
         assert 0 < pred["run_line_home"] < 1
+
+
+# =============================================================================
+# TestFromDB (integration, requires real data)
+# =============================================================================
+
+
+@pytest.mark.slow
+class TestFromDB:
+    """Integration test with real mlb_data.db."""
+
+    def test_from_db_loads_and_fits(self):
+        """Load games from mlb_data.db and verify model fits 30 teams."""
+        if not MLB_DB_PATH.exists():
+            pytest.skip("mlb_data.db not found")
+
+        model = PoissonModel.from_db(str(MLB_DB_PATH))
+        assert len(model.team_ratings) == 30
+        assert model.league_avg > 3.0
+
+    def test_from_db_predict_nyy_vs_bos(self):
+        """Predict NYY (147) vs BOS (111) — should be reasonable."""
+        if not MLB_DB_PATH.exists():
+            pytest.skip("mlb_data.db not found")
+
+        model = PoissonModel.from_db(str(MLB_DB_PATH))
+        result = model.predict(147, 111)
+        assert 0.3 < result["moneyline_home"] < 0.7
+        assert result["lambda_home"] > 2.0
+        assert result["lambda_away"] > 2.0
+
+    def test_from_db_single_season(self):
+        """Fit on single season (2024 only)."""
+        if not MLB_DB_PATH.exists():
+            pytest.skip("mlb_data.db not found")
+
+        model = PoissonModel.from_db(str(MLB_DB_PATH), seasons=[2024])
+        assert len(model.team_ratings) == 30

@@ -574,3 +574,37 @@ class InjuryCheckConfig:
 
 
 INJURY_CHECK = InjuryCheckConfig()
+
+# =============================================================================
+# MLB POISSON MODEL CONFIGURATION
+# =============================================================================
+
+
+@dataclass
+class MLBModelConfig:
+    """MLB Poisson model configuration."""
+
+    # Home field advantage multiplier (~53% home win rate)
+    HFA: float = 1.04
+
+    # Iterative convergence parameters
+    CONVERGENCE_ITERATIONS: int = 50
+    MIN_GAMES_FOR_RATING: int = 20
+
+    # Score matrix dimension (0..MAX_SCORE inclusive)
+    MAX_SCORE: int = 15
+
+    # Minimum edge for paper betting (more liquid than NCAAB)
+    MIN_EDGE: float = 0.05
+
+    # Default total line when none provided
+    DEFAULT_TOTAL_LINE: float = 8.5
+
+    # Default run line
+    DEFAULT_RUN_LINE: float = -1.5
+
+    # Database path
+    DB_PATH: str = "data/mlb_data.db"
+
+
+MLB_MODEL = MLBModelConfig()
