@@ -179,6 +179,9 @@ sports_betting/
 │
 ├── data/
 │   ├── raw/ncaab/            # Parquet game files per season (ncaab_games_YYYY.parquet)
+│   ├── raw/mlb/              # MLB raw data
+│   ├── mlb_data.db           # MLB-specific database (14 tables, game_pk key)
+│   ├── projections/mlb/      # MLB preseason projections cache
 │   ├── processed/            # Backtest results, Barttorvik ratings, odds, dashboard JSON
 │   ├── odds/                 # Historical odds snapshots
 │   └── external/             # Barttorvik scraped snapshots
@@ -189,14 +192,26 @@ sports_betting/
 │   └── sport_specific/
 │       ├── ncaab/
 │       │   └── team_ratings.py  # NCAABTeamRatings (Elo + Barttorvik ensemble)
-│       └── mlb/, nfl/, ncaaf/   # Placeholder __init__.py only
+│       ├── mlb/
+│       │   ├── poisson_model.py     # Poisson run distribution → ML/RL/totals/F5
+│       │   ├── pitcher_model.py     # Pitcher evaluation and projection
+│       │   ├── lineup_model.py      # Lineup strength with platoon splits
+│       │   └── projection_blender.py # ZiPS/Steamer blending with observed data
+│       └── nfl/, ncaaf/             # Placeholder __init__.py only
 │
 ├── features/
 │   ├── engineering.py        # Safe rolling, decay, opponent-quality, rest days
 │   └── sport_specific/
-│       └── ncaab/
-│           ├── advanced_features.py  # NCAABFeatureEngine (vol, OQ-margin, rest, decay)
-│           └── breadwinner.py        # Breadwinner metric (DISABLED - no ROI correlation)
+│       ├── ncaab/
+│       │   ├── advanced_features.py  # NCAABFeatureEngine (vol, OQ-margin, rest, decay)
+│       │   └── breadwinner.py        # Breadwinner metric (DISABLED - no ROI correlation)
+│       └── mlb/
+│           ├── pitcher_features.py   # K-BB%, SIERA, xFIP, Stuff+, rolling stats
+│           ├── lineup_features.py    # Aggregate wRC+, platoon splits, xwOBA
+│           ├── bullpen_features.py   # Fatigue tracking, availability, TTOP
+│           ├── weather_features.py   # Wind direction/speed, temp, dome detection
+│           ├── park_features.py      # Event-specific park factors by handedness
+│           └── umpire_features.py    # Zone size, K/BB rates, run impact
 │
 ├── betting/
 │   ├── odds_converter.py     # American/decimal/implied prob, CLV calc, Kelly
@@ -239,7 +254,15 @@ sports_betting/
 │   ├── player_stats_fetcher.py    # Player statistics fetcher
 │   ├── polymarket_fetcher.py      # Polymarket API client
 │   ├── kalshi_fetcher.py          # Kalshi API client (CFTC-regulated)
-│   └── arb_scanner.py             # Cross-book arbitrage detection
+│   ├── arb_scanner.py             # Cross-book arbitrage detection
+│   │   # === MLB Pipelines ===
+│   ├── mlb_stats_api.py           # MLB Stats API client (schedules, lineups, rosters)
+│   ├── mlb_pybaseball_fetcher.py  # pybaseball wrapper (Statcast, FanGraphs)
+│   ├── mlb_weather_fetcher.py     # Open-Meteo client (forecast + historical)
+│   ├── mlb_projections_fetcher.py # ZiPS/Steamer from FanGraphs
+│   ├── mlb_odds_provider.py       # MLB odds (ESPN Core API + others)
+│   ├── mlb_lineup_monitor.py      # Lineup confirmation polling / event-driven
+│   └── mlb_park_factors.py        # Park factor ingestion + computation
 │
 ├── dashboards/
 │   └── ncaab_dashboard.html       # Unified NCAAB dashboard (9 tabs)
@@ -274,7 +297,13 @@ sports_betting/
 │   ├── test_kenpom_fetcher.py
 │   ├── test_tune_kenpom.py
 │   ├── test_player_stats_fetcher.py
-│   └── test_setup.py
+│   ├── test_setup.py
+│   │   # === MLB Tests ===
+│   ├── test_mlb_poisson_model.py    # Poisson run distribution tests
+│   ├── test_mlb_pitcher_model.py    # Pitcher evaluation tests
+│   ├── test_mlb_stats_api.py        # MLB Stats API client tests
+│   ├── test_mlb_weather_fetcher.py  # Open-Meteo weather tests
+│   └── test_mlb_daily_run.py        # MLB daily pipeline tests
 │
 ├── scripts/
 │   │   # === Core Pipeline ===
@@ -310,6 +339,13 @@ sports_betting/
 │   ├── verify_schema.py              # Database schema verification
 │   ├── reset_closing_odds.py          # Reset/fix closing odds data
 │   ├── fix_docstrings.py             # Docstring formatting utility
+│   │   # === MLB Scripts ===
+│   ├── mlb_daily_run.py               # MLB daily pipeline orchestrator (event-driven)
+│   ├── mlb_fetch_historical.py        # Bulk fetch 2023-2025 data
+│   ├── mlb_backtest.py                # Walk-forward backtesting
+│   ├── mlb_train_model.py             # Model training
+│   ├── mlb_fetch_projections.py       # Preseason projections pull
+│   ├── mlb_init_db.py                 # Initialize mlb_data.db schema
 │   │   # === Exploratory ===
 │   └── test_cbbdata_api.py            # CBBData API exploratory testing
 │
@@ -334,6 +370,23 @@ sports_betting/
     ├── ESPN_BPI_API_RESEARCH.md       # ESPN BPI API research
     ├── KENPOM_EFFICIENCY_RESEARCH.md  # KenPom/Barttorvik data options
     ├── reports/                       # Generated analysis reports
+    ├── plans/                         # Design documents
+    │   └── 2026-02-25-mlb-expansion-design.md  # MLB expansion design
+    ├── mlb/                           # MLB-specific documentation
+    │   ├── README.md                  # MLB model overview + NCAAB comparison
+    │   ├── DATA_SOURCES.md            # MLB Stats API, pybaseball, Open-Meteo
+    │   ├── DATA_DICTIONARY.md         # mlb_data.db schema (14 tables)
+    │   ├── MODEL_ARCHITECTURE.md      # Poisson model design, feature hierarchy
+    │   ├── PIPELINE_DESIGN.md         # Event-driven pipeline architecture
+    │   └── research/                  # MLB research by topic
+    │       ├── pitching-metrics.md    # SIERA, K-BB%, Stuff+, stabilization
+    │       ├── bullpen-fatigue.md     # Fatigue modeling, availability tracking
+    │       ├── weather-effects.md     # Wind, temperature, humidity
+    │       ├── park-factors.md        # Event-specific park effects
+    │       ├── platoon-splits.md      # L/R matchup advantages
+    │       ├── umpire-zones.md        # Strike zone analysis
+    │       ├── market-strategies.md   # F5, totals, K props, contrarian
+    │       └── projection-systems.md  # ZiPS, Steamer, blending weights
     └── CODEMAPS/                      # Module-level architecture docs
         ├── CODEMAP.md                 # Index / overview
         ├── backtesting.md
