@@ -38,6 +38,13 @@ scripts/
   verify_schema.py               # Verify SQLite schema matches expected structure
   reset_closing_odds.py          # Reset/repair closing odds data
   fix_docstrings.py              # Automated docstring formatting
+  # === MLB Scripts (SKELETONS) ===
+  mlb_daily_run.py               # MLB daily pipeline orchestrator (event-driven)
+  mlb_fetch_historical.py        # Bulk fetch 2023-2025 data
+  mlb_backtest.py                # Walk-forward backtesting (rolling windows)
+  mlb_train_model.py             # Poisson model training
+  mlb_fetch_projections.py       # Preseason ZiPS/Steamer pull
+  mlb_init_db.py                 # Initialize mlb_data.db schema (14 tables)
 ```
 
 ## Phase 1: Data & Training
@@ -477,6 +484,109 @@ python scripts/generate_dashboard_data.py --season 2026
 **Outputs:** `data/processed/ncaab_dashboard_bundle.json` (360 teams, 31 conferences)
 **Dependencies:** pipelines.team_name_mapping (build_espn_barttorvik_mapping), pandas
 **Consumed by:** `dashboards/ncaab_dashboard.html` (Plotly.js, 7 tabs)
+
+## MLB Scripts (skeletons — Phase 1 implementation pending)
+
+All MLB scripts mirror the NCAAB pattern but handle MLB-specific characteristics:
+15 games/day, lineup-dependent predictions, weather sensitivity, multiple market types,
+and a separate `mlb_data.db` database (14 tables).
+
+### mlb_init_db.py
+
+Creates `mlb_data.db` schema with all 14 tables and views. Safe to re-run.
+
+**Usage:**
+
+```bash
+python scripts/mlb_init_db.py
+python scripts/mlb_init_db.py --seed-teams   # Populate 30 MLB teams
+```
+
+**Tables:** teams, players, games, pitcher_game_logs, pitcher_season_stats,
+batter_season_stats, lineups, weather, park_factors, umpire_stats, projections,
+bullpen_usage. **View:** v_bullpen_fatigue.
+
+### mlb_fetch_historical.py
+
+Bulk historical data fetcher for 2023-2025 backtesting. Full pull may take 30-60 minutes.
+
+**Usage:**
+
+```bash
+python scripts/mlb_fetch_historical.py --seasons 2023 2024 2025
+python scripts/mlb_fetch_historical.py --seasons 2025 --incremental
+python scripts/mlb_fetch_historical.py --seasons 2023 2024 2025 --weather  # Phase 2
+```
+
+**Dependencies:** pipelines/mlb_stats_api.py, pipelines/mlb_pybaseball_fetcher.py,
+pipelines/espn_core_odds_provider.py
+
+### mlb_fetch_projections.py
+
+Preseason ZiPS + Steamer projections from FanGraphs. Run once before Opening Day.
+
+**Usage:**
+
+```bash
+python scripts/mlb_fetch_projections.py --season 2026
+python scripts/mlb_fetch_projections.py --season 2026 --system zips
+```
+
+**Dependencies:** pipelines/mlb_projections_fetcher.py
+
+### mlb_train_model.py
+
+Trains the Poisson regression model on historical data.
+
+**Usage:**
+
+```bash
+python scripts/mlb_train_model.py --end-season 2025
+python scripts/mlb_train_model.py --end-season 2025 --save
+```
+
+**Output:** Model coefficients for lambda = exp(X @ beta)
+**Dependencies:** models/sport_specific/mlb/poisson_model.py, features/sport_specific/mlb/
+
+### mlb_backtest.py
+
+Walk-forward backtesting with rolling windows (not season-based like NCAAB).
+
+**Usage:**
+
+```bash
+python scripts/mlb_backtest.py --test-season 2025
+python scripts/mlb_backtest.py --test-season 2025 --calibrated-kelly
+python scripts/mlb_backtest.py --test-season 2024 2025 --market moneyline
+```
+
+**Output:** Per-bet results + parquet for KellySizer calibration
+**Dependencies:** backtesting/validators/gatekeeper.py (sport='mlb')
+
+### mlb_daily_run.py
+
+Event-driven daily pipeline orchestrator for MLB paper betting.
+
+**Usage:**
+
+```bash
+python scripts/mlb_daily_run.py                 # Full event-driven run
+python scripts/mlb_daily_run.py --dry-run       # Preview picks only
+python scripts/mlb_daily_run.py --settle-only   # Settle yesterday only
+python scripts/mlb_daily_run.py --morning-only  # Just fetch schedule/odds
+```
+
+**Pipeline Flow:**
+
+```text
+Morning → fetch schedule + pitchers + opening odds
+Lineup Monitor → poll for confirmed lineups (event-driven)
+Per-Game → pitcher features → lineup features → Poisson → edge → Kelly → log
+Post-Game → settle bets → fetch results → compute CLV
+```
+
+**Dependencies:** All MLB models, features, and pipelines
+**Tests:** `tests/test_mlb_daily_run.py` (7 planned tests)
 
 ## Utility Scripts
 

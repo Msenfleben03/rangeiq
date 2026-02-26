@@ -267,7 +267,7 @@ sports_betting/
 ├── dashboards/
 │   └── ncaab_dashboard.html       # Unified NCAAB dashboard (9 tabs)
 │
-├── tests/                         # 30 test files, ~541 tests
+├── tests/                         # 35 test files, ~629 tests + 35 planned MLB
 │   ├── conftest.py                # Shared fixtures
 │   ├── test_elo.py                # Elo model tests
 │   ├── test_daily_run.py          # 29 tests for paper betting pipeline (incl. CLV)
@@ -350,8 +350,9 @@ sports_betting/
 │   └── test_cbbdata_api.py            # CBBData API exploratory testing
 │
 ├── scripts/                           # PowerShell orchestrators
-│   ├── nightly-refresh.ps1            # 11pm: fetch scores, Elo, Barttorvik, dashboard
-│   ├── morning-betting.ps1            # 10am: settle yesterday + predict today
+│   ├── daily-pipeline.ps1             # Unified daily pipeline (7 AM: scores→Elo→Barttorvik→KenPom→settle→predict→dashboard)
+│   ├── nightly-refresh.ps1            # Legacy (replaced by daily-pipeline.ps1)
+│   ├── morning-betting.ps1            # Legacy (replaced by daily-pipeline.ps1)
 │   ├── pipeline-common.ps1            # Shared PS functions (lock, log, checkpoint)
 │   └── setup-scheduled-tasks.ps1      # Register/unregister Task Scheduler tasks
 │
@@ -409,10 +410,10 @@ sports_betting/
 | Phase | Dates | Focus | Status |
 |-------|-------|-------|--------|
 | 1-2 | Jan 24 - Feb 6 | NCAAB foundation | Complete |
-| 3-4 | Feb 7 - Feb 20 | NCAAB paper betting + MLB build | In Progress |
-| 5-6 | Feb 21 - Mar 6 | March Madness prep | Upcoming |
-| 7-8 | Mar 7 - Mar 20 | Live testing (small stakes) | Upcoming |
-| 9-10 | Mar 21 - Apr 3 | MLB deployment | Upcoming |
+| 3-4 | Feb 7 - Feb 20 | NCAAB paper betting + automation | Complete |
+| 5-6 | Feb 21 - Mar 6 | March Madness prep + MLB skeleton | In Progress |
+| 7-8 | Mar 7 - Mar 20 | Live testing (small stakes) + MLB data | Upcoming |
+| 9-10 | Mar 21 - Apr 3 | MLB model v1 + paper betting | Upcoming |
 
 ### Current Sprint Focus
 
@@ -446,8 +447,15 @@ sports_betting/
 - [x] Built dashboard data pipeline (generate_dashboard_data.py → JSON bundle)
 - [x] Dry-run paper betting verified (5 picks, 7.9-13.4% edges)
 - [x] Implement CLV collection system (opening odds + closing odds + CLV calc)
+- [x] Implement Dynamic Kelly sizing (KellySizer + Platt calibration)
+- [x] Implement KenPom nightly scraping (kenpompy → parquet + SQLite)
+- [x] Unify pipeline automation (daily-pipeline.ps1, Task Scheduler 7 AM)
+- [x] Implement ESPN predictor cross-check (injury/divergence detection)
+- [x] Design MLB expansion (15 architectural decisions documented)
+- [x] Create MLB skeleton (47 files: models, features, pipelines, scripts, tests, docs)
 - [ ] Begin live paper betting tracking (daily_run.py)
 - [ ] Backfill 2026 odds (0% coverage currently)
+- [ ] MLB Phase 1: init_db → historical data → Poisson model v1
 
 ### Prediction Markets Integration
 
@@ -882,9 +890,20 @@ python scripts/generate_dashboard_data.py    # Regenerate data bundle
 python -m http.server 8765                   # Serve at localhost:8765
 
 # ===============================================================
+# MLB PIPELINE (planned — skeleton files exist, implementation pending)
+# ===============================================================
+python scripts/mlb_init_db.py --seed-teams          # Create mlb_data.db + 30 teams
+python scripts/mlb_fetch_historical.py --seasons 2023 2024 2025  # Bulk data
+python scripts/mlb_fetch_projections.py --season 2026            # ZiPS + Steamer
+python scripts/mlb_train_model.py --end-season 2025              # Poisson model
+python scripts/mlb_backtest.py --test-season 2025                # Walk-forward
+python scripts/mlb_daily_run.py --dry-run                        # Preview picks
+
+# ===============================================================
 # DATABASE ACCESS
 # ===============================================================
-sqlite3 data/betting.db
+sqlite3 data/betting.db      # Shared: bets, odds, bankroll, predictions
+sqlite3 data/mlb_data.db     # MLB-specific: 14 tables, game_pk key
 ```
 
 ---

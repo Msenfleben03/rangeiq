@@ -1,6 +1,6 @@
 # Features Module Codemap
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-25
 **Entry Point:** `features/__init__.py` (empty)
 
 ## Architecture
@@ -14,6 +14,14 @@ features/
     ncaab/
       __init__.py                   # Package marker
       advanced_features.py          # NCABBFeatureEngine (vol, OQ-margin, rest, decay)
+    mlb/
+      __init__.py                   # Package marker
+      pitcher_features.py           # K-BB%, SIERA, xFIP, Stuff+, CSW% rolling stats (SKELETON)
+      lineup_features.py            # Aggregate wRC+, xwOBA, platoon splits (SKELETON)
+      bullpen_features.py           # Fatigue tracking, availability, TTOP (SKELETON)
+      weather_features.py           # Wind direction/speed, temp, dome detection (SKELETON)
+      park_features.py              # Event-specific park factors by handedness (SKELETON)
+      umpire_features.py            # Zone size, K/BB rates, run impact (SKELETON)
 ```
 
 ## Core Utilities (`engineering.py`)
@@ -74,6 +82,44 @@ additional features alongside the NCABBFeatureEngine outputs.
 | `barthag_diff` | Barttorvik | Overall quality gap (0-1 scale) |
 | `net_rating_diff` | Derived (AdjO-AdjD) | Net efficiency gap |
 
+## MLB Feature Modules (skeletons — implementation pending)
+
+Six skeleton modules for MLB-specific feature engineering. All files contain docstrings,
+research references, and TODOs. No executable code yet. Organized by predictive tier.
+
+### Phase 1 (core model features)
+
+| Module | Key Features | Stabilization | Data Source |
+|--------|-------------|---------------|-------------|
+| `pitcher_features.py` | K-BB%, SIERA, xFIP, Stuff+, CSW%, xERA | 80-200 BF | pybaseball, pitcher_game_logs |
+| `lineup_features.py` | Aggregate wRC+, xwOBA, platoon-adjusted strength | 50-500 PA | batter_season_stats |
+| `bullpen_features.py` | PC_L3/L7, consecutive days, fatigue, opener detection | N/A | bullpen_usage table |
+
+### Phase 2 (context features)
+
+| Module | Key Features | Edge Source | Data Source |
+|--------|-------------|-------------|-------------|
+| `weather_features.py` | Wind bearing (in/out/cross), temp, humidity, dome flag | Totals (55.5% unders w/ wind in) | Open-Meteo API |
+| `park_features.py` | Event-specific factors (HR, hits, K, BB) by handedness | Lambda adjustment | FanGraphs |
+| `umpire_features.py` | Zone size, K/BB rates, pitcher interaction effects | Totals, K props | MLB Stats API, Statcast |
+
+### Feature Hierarchy (from design doc)
+
+```text
+Pitcher quality (Tier 1 — highest signal)
+  └── K-BB%, Stuff+, SIERA → pitcher_features.py
+Lineup strength (Tier 2)
+  └── Platoon-adjusted wRC+, xwOBA → lineup_features.py
+Bullpen quality (Tier 3)
+  └── Fatigue-adjusted xFIP → bullpen_features.py
+Park factors (Tier 4)
+  └── Event-specific × handedness → park_features.py
+Weather (Tier 5 — totals only)
+  └── Wind bearing, temp → weather_features.py
+Umpire (Tier 6 — interaction effects)
+  └── Zone size × pitcher style → umpire_features.py
+```
+
 ## Integration Points
 
 - `scripts/backtest_ncaab_elo.py`: `run_backtest_with_features()` wrapper adjusts Elo probability
@@ -81,6 +127,8 @@ additional features alongside the NCABBFeatureEngine outputs.
 - `pipelines/barttorvik_fetcher.py`: External efficiency ratings (347K ratings, 6 seasons)
 - `pipelines/team_name_mapping.py`: ESPN team ID -> Barttorvik name (359 teams)
 - `tests/test_feature_engineering.py`: 30 tests covering all utilities and engine methods
+- **MLB pipelines**: `mlb_pybaseball_fetcher.py`, `mlb_weather_fetcher.py`,
+  `mlb_park_factors.py` provide raw data for MLB features
 
 ## Related Areas
 

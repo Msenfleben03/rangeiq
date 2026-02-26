@@ -1,10 +1,11 @@
 # Pipelines Module Codemap
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-25
 **Entry Point:** `pipelines/__init__.py` (empty)
 **Test Coverage:** `tests/test_odds_providers.py`, `tests/test_espn_core_odds_provider.py`,
 `tests/test_unified_fetcher.py`, `tests/test_barttorvik_fetcher.py`,
-`tests/test_team_name_mapping.py`, `tests/test_forecasting_db.py` (indirect)
+`tests/test_team_name_mapping.py`, `tests/test_forecasting_db.py` (indirect),
+`tests/test_mlb_stats_api.py`, `tests/test_mlb_weather_fetcher.py`
 
 ## Architecture
 
@@ -27,6 +28,14 @@ pipelines/
   # === CLV & Arbitrage ===
   closing_odds_collector.py    # Selenium-based closing odds scraper for CLV
   arb_scanner.py               # CLI wrapper for betting.arb_detector
+  # === MLB Pipelines (SKELETONS) ===
+  mlb_stats_api.py             # MLB Stats API client: schedules, lineups, rosters
+  mlb_pybaseball_fetcher.py    # pybaseball wrapper: Statcast, FanGraphs leaderboards
+  mlb_weather_fetcher.py       # Open-Meteo client: forecast + historical weather
+  mlb_projections_fetcher.py   # ZiPS/Steamer projection fetcher from FanGraphs
+  mlb_odds_provider.py         # MLB odds (ESPN Core API + others)
+  mlb_lineup_monitor.py        # Lineup confirmation polling / event-driven
+  mlb_park_factors.py          # Park factor ingestion from FanGraphs
 ```
 
 ## Odds Retrieval System
@@ -270,6 +279,92 @@ CLI wrapper and pipeline integration point for arbitrage detection.
 
 **Dependencies:** betting.arb_detector (ArbDetector, ArbOpportunity)
 
+## MLB Pipelines (skeletons — implementation pending)
+
+Seven skeleton modules for MLB data ingestion. All contain docstrings, research references,
+and TODOs. No executable code yet.
+
+### mlb_stats_api.py
+
+MLB Stats API client — primary data source for daily pipeline operations.
+
+| Planned Export | Type | Purpose |
+|---------------|------|---------|
+| `MLBStatsAPIClient` | class | Schedules, lineups, rosters, probable pitchers, umpires |
+
+**API:** `https://statsapi.mlb.com/api/v1/` (free, no auth)
+**Library:** `MLB-StatsAPI` (pip install)
+**Key ID:** `game_pk` (universal game identifier across all MLB tables)
+
+### mlb_pybaseball_fetcher.py
+
+pybaseball wrapper unifying Statcast, FanGraphs, and Baseball Reference data.
+
+| Planned Export | Type | Purpose |
+|---------------|------|---------|
+| `PybaseballFetcher` | class | Pitcher/batter stats, Statcast data, park factors |
+
+**Library:** `pybaseball` (pip install)
+**Critical:** Enable caching for large Statcast pulls (~700K+ pitches/season)
+
+### mlb_weather_fetcher.py
+
+Open-Meteo weather client for game-time conditions (forecast + historical).
+
+| Planned Export | Type | Purpose |
+|---------------|------|---------|
+| `OpenMeteoClient` | class | Game weather at stadium coordinates |
+
+**API:** `https://open-meteo.com/` (free, no key, no rate limits)
+**Parameters:** temperature, wind speed/direction, humidity, precipitation
+
+### mlb_projections_fetcher.py
+
+Preseason projection system fetcher (ZiPS + Steamer from FanGraphs).
+
+| Planned Export | Type | Purpose |
+|---------------|------|---------|
+| `ProjectionsFetcher` | class | ZiPS/Steamer pitcher and batter projections |
+
+**Timing:** Run once preseason, cache in `projections` table
+**Blending:** Managed by `models/sport_specific/mlb/projection_blender.py`
+
+### mlb_odds_provider.py
+
+MLB odds fetching, reusing existing NCAAB odds infrastructure.
+
+| Planned Export | Type | Purpose |
+|---------------|------|---------|
+| `MLBOddsProvider` | class | Opening/closing/current odds for MLB markets |
+
+**Providers:** ESPN Core API (primary), The Odds API (backup)
+**Markets:** Moneylines (Phase 1), run lines/totals/F5 (Phase 2)
+**Storage:** Shared `odds_snapshots` table (sport='mlb')
+
+### mlb_lineup_monitor.py
+
+Event-driven lineup confirmation polling — the largest line movement trigger.
+
+| Planned Export | Type | Purpose |
+|---------------|------|---------|
+| `LineupMonitor` | class | Per-game state tracking and lineup polling |
+| `GameState` | enum | SCHEDULED → PITCHERS_SET → LINEUPS_CONFIRMED → PREDICTED → SETTLED |
+
+**Polling:** Every 15-30 min starting 4 hours before first pitch
+**Trigger:** Fires prediction pipeline per-game as lineups lock
+
+### mlb_park_factors.py
+
+Event-specific park factor data ingestion from FanGraphs.
+
+| Planned Export | Type | Purpose |
+|---------------|------|---------|
+| `ParkFactorsFetcher` | class | Annual park factors with handedness breakdown |
+
+**Data:** FanGraphs park factors via pybaseball
+**Dimensions:** runs, HR (overall + L/R), hits, doubles, triples, BB, SO
+**Storage:** `park_factors` table in `mlb_data.db`
+
 ## Data Flow
 
 ```text
@@ -306,6 +401,21 @@ External APIs / Web Scraping
          +-- closing_odds_collector.py --> bets.odds_closing (SQLite)
          |
          +-- arb_scanner.py ---------> arb_opportunities (SQLite)
+         |
+         # === MLB Data Flow (planned) ===
+         +-- mlb_stats_api.py ------> games, lineups, players (mlb_data.db)
+         |
+         +-- mlb_pybaseball_fetcher.py --> pitcher_game_logs, batter_season_stats (mlb_data.db)
+         |
+         +-- mlb_projections_fetcher.py -> projections table (mlb_data.db)
+         |
+         +-- mlb_weather_fetcher.py --> weather table (mlb_data.db)
+         |
+         +-- mlb_park_factors.py ----> park_factors table (mlb_data.db)
+         |
+         +-- mlb_odds_provider.py ---> odds_snapshots (shared betting.db, sport='mlb')
+         |
+         +-- mlb_lineup_monitor.py --> lineups + triggers per-game prediction pipeline
 ```
 
 ## External Dependencies
@@ -318,6 +428,8 @@ External APIs / Web Scraping
 | py-clob-client | polymarket_fetcher.py | Optional | Polymarket CLOB API client |
 | aiohttp | batch_fetcher.py | Optional | Async HTTP for parallel fetching |
 | selenium | closing_odds_collector.py, odds_providers.py (ScraperOddsProvider) | Optional | Headless Chrome for odds scraping |
+| MLB-StatsAPI | mlb_stats_api.py | Planned | MLB official stats API client |
+| pybaseball | mlb_pybaseball_fetcher.py, mlb_park_factors.py | Planned | Statcast, FanGraphs, BBRef data |
 
 ## Related Areas
 

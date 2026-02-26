@@ -1,8 +1,9 @@
 # Models Module Codemap
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-25
 **Entry Point:** `models/__init__.py` (empty)
-**Test Coverage:** `tests/test_elo.py`, `tests/test_model_persistence.py`
+**Test Coverage:** `tests/test_elo.py`, `tests/test_model_persistence.py`,
+`tests/test_mlb_poisson_model.py`, `tests/test_mlb_pitcher_model.py`
 
 ## Architecture
 
@@ -21,7 +22,11 @@ models/
     nfl/
       __init__.py                      # Empty (future)
     mlb/
-      __init__.py                      # Empty (future)
+      __init__.py                      # Empty package marker
+      poisson_model.py                 # Poisson run distribution → ML/RL/totals/F5 (SKELETON)
+      pitcher_model.py                 # Pitcher evaluation: K-BB%, SIERA, Stuff+, TTOP (SKELETON)
+      lineup_model.py                  # Lineup strength with platoon splits (SKELETON)
+      projection_blender.py            # ZiPS/Steamer blending with in-season phasing (SKELETON)
 ```
 
 ## Key Modules
@@ -121,9 +126,32 @@ NCAAB-specific Elo model extending EloRatingSystem with basketball-specific feat
 - MOV cap: 25 points, Regression factor: 0.50
 - Tournament K-factor: 32, Early season: first 5 games at 70% K
 
+### MLB Models (skeletons — Phase 1 implementation pending)
+
+Four skeleton modules implementing a pitcher-centric Poisson regression approach for MLB.
+Unlike NCAAB's Elo-based system, MLB uses Poisson run distribution derived from pitcher
+matchups and lineup composition. All files contain docstrings and TODOs, no executable code yet.
+
+**sport_specific/mlb/poisson_model.py** — Core model: computes lambda (expected runs) per team
+from pitcher + lineup + context, builds Poisson score matrix (0-15 x 0-15), extracts ML/RL/totals/F5 probabilities.
+
+**sport_specific/mlb/pitcher_model.py** — Projects starter's expected run allowance using
+skill metrics (K-BB%, SIERA, xFIP, Stuff+), exponential decay weighting of recent starts,
+matchup context (platoon composition), and TTOP (Times Through Order Penalty).
+
+**sport_specific/mlb/lineup_model.py** — Projects lineup offensive output against a specific
+pitcher: aggregate wRC+/xwOBA, platoon adjustments (L/R splits), park factor interaction,
+rest/travel penalties. Handles unconfirmed lineups via projected/typical fallback.
+
+**sport_specific/mlb/projection_blender.py** — Blends preseason projections (ZiPS, Steamer)
+with observed in-season data using time-dependent schedule: 90/10 April → 20/80 July+.
+Separate blending curves for pitchers vs batters (pitcher metrics stabilize faster).
+
+**Planned Tests:** `tests/test_mlb_poisson_model.py` (8 tests), `tests/test_mlb_pitcher_model.py` (6 tests)
+
 ### Future Sport Models (placeholders)
 
-Empty `__init__.py` files for: ncaaf/, nfl/, mlb/
+Empty `__init__.py` files for: ncaaf/, nfl/
 
 ## Data Flow
 
@@ -145,6 +173,23 @@ models/sport_specific/ncaab/team_ratings.py (NCAAB extensions)
         +------> backtesting/ (walk-forward validation of predictions)
         |
         +------> betting/ (EV calculation, Kelly sizing from model probabilities)
+
+# MLB Model Data Flow (planned)
+pipelines/mlb_projections_fetcher.py (ZiPS/Steamer)
+        |
+        v
+models/sport_specific/mlb/projection_blender.py (blend projections + observed)
+        |
+        +------> models/sport_specific/mlb/pitcher_model.py (starter evaluation)
+        |                |
+        |                +------> models/sport_specific/mlb/poisson_model.py (lambda computation)
+        |                                   ^
+        +------> models/sport_specific/mlb/lineup_model.py (lineup strength)
+                         |
+                         +------> poisson_model.py (consume lambda → ML/RL/totals/F5)
+                                          |
+                                          +------> betting/ (edge calc, Kelly sizing)
+                                          +------> models/model_persistence.py (save/load)
 ```
 
 ## External Dependencies
