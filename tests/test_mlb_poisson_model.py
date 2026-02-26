@@ -394,3 +394,53 @@ class TestFromDB:
 
         model = PoissonModel.from_db(str(MLB_DB_PATH), seasons=[2024])
         assert len(model.team_ratings) == 30
+
+
+# =============================================================================
+# TestWalkForward
+# =============================================================================
+
+
+class TestWalkForward:
+    """Test walk-forward backtesting logic."""
+
+    def test_train_predict_split(self):
+        """Train on season 1, predict season 2 -- accuracy should be 40-65%."""
+        rng = np.random.RandomState(42)
+        games = []
+        teams = list(range(100, 110))
+        for season in [2023, 2024]:
+            for i in range(200):
+                h, a = rng.choice(teams, 2, replace=False)
+                games.append(
+                    {
+                        "game_pk": season * 1000 + i,
+                        "game_date": f"{season}-06-15",
+                        "season": season,
+                        "home_team_id": int(h),
+                        "away_team_id": int(a),
+                        "home_score": int(rng.poisson(4.5)),
+                        "away_score": int(rng.poisson(4.3)),
+                    }
+                )
+        df = pd.DataFrame(games)
+
+        train = df[df["season"] == 2023]
+        model = PoissonModel()
+        model.fit(train)
+
+        test = df[df["season"] == 2024]
+        correct = 0
+        total = 0
+        for _, row in test.iterrows():
+            if row["home_score"] == row["away_score"]:
+                continue
+            result = model.predict(row["home_team_id"], row["away_team_id"])
+            pred_home = result["moneyline_home"] > 0.5
+            actual_home = row["home_score"] > row["away_score"]
+            if pred_home == actual_home:
+                correct += 1
+            total += 1
+
+        accuracy = correct / total if total > 0 else 0
+        assert 0.40 < accuracy < 0.65
