@@ -1,62 +1,96 @@
 ## Active Task
-Session 23 COMPLETE — KellySizer Platt calibration bug fix + explanation docs.
+Session 24 — MLB expansion: brainstorming + skeleton file architecture
 
 ## Last Completed Step
-All work done. Bug fixed, docs created, analysis run. NOT YET COMMITTED.
+All skeleton files created (45 files across models, features, pipelines, scripts, tests, docs).
+Design document written. Research docs copied. NOT YET COMMITTED.
 
 ## Completed This Session
-- [x] Diagnosed KellySizer calibration bug: edge-based Platt gave P(win)=18.7% for -410 favorites
-- [x] Root cause: `calibrated_win_prob(edge)` ignores base probability; edge alone doesn't determine win rate
-- [x] Fixed: changed calibration feature from `edge` to `model_prob` (standard Platt scaling)
-- [x] Updated `betting/odds_converter.py`: KellySizer.calibrate(), calibrated_win_prob(), size_bet(), build_calibration_data()
-- [x] Updated `scripts/daily_run.py`: variable rename edges -> model_probs
-- [x] Updated `scripts/backtest_ncaab_elo.py`: variable rename edges -> model_probs
-- [x] Updated `tests/test_kelly_sizer.py`: fixtures use model_prob, added test_stakes_vary_with_edge_size (16 tests)
-- [x] All 103 tests pass (16 kelly + 29 daily_run + 5 fetch_odds + 53 elo), zero regressions
-- [x] Ruff lint + format clean on all 4 modified files
-- [x] Created `docs/explanation/platt-calibration.md` (520 lines, Diataxis explanation)
-- [x] Created `docs/explanation/platt-calibration-explorer.html` (1209 lines, 4-tab interactive visualization)
-- [x] Ran backtest distribution analysis (3,710 bets, 6 seasons)
+- [x] Brainstormed MLB expansion design (15 questions, all answered)
+- [x] Wrote design doc: `docs/plans/2026-02-25-mlb-expansion-design.md`
+- [x] Created 4 model skeletons: `models/sport_specific/mlb/` (poisson, pitcher, lineup, projection_blender)
+- [x] Created 6 feature skeletons: `features/sport_specific/mlb/` (pitcher, lineup, bullpen, weather, park, umpire)
+- [x] Created 7 pipeline skeletons: `pipelines/mlb_*.py` (stats_api, pybaseball, weather, projections, odds, lineup_monitor, park_factors)
+- [x] Created 6 script skeletons: `scripts/mlb_*.py` (daily_run, fetch_historical, backtest, train, fetch_projections, init_db)
+- [x] Created 5 test skeletons: `tests/test_mlb_*.py` (poisson, pitcher, stats_api, weather, daily_run)
+- [x] Created 5 doc files: `docs/mlb/` (README, DATA_SOURCES, DATA_DICTIONARY, MODEL_ARCHITECTURE, PIPELINE_DESIGN)
+- [x] Created 8 research stubs: `docs/mlb/research/` (pitching-metrics, bullpen-fatigue, weather-effects, park-factors, platoon-splits, umpire-zones, market-strategies, projection-systems)
+- [x] Copied 2 source research docs into `docs/mlb/research/source-research-*.md`
 
-## Verification Results
-- 16/16 test_kelly_sizer pass
-- 29/29 test_daily_run pass
-- 5/5 test_fetch_opening_odds pass
-- 53/53 test_elo pass
-- Ruff: all checks passed, 4 files already formatted
+## Key Design Decisions
+- Hybrid DB: shared betting.db (bets, bankroll) + separate mlb_data.db (14 tables)
+- Poisson run distribution model → single model outputs ML, RL, totals, F5
+- Pitcher-centric full regression (NOT Elo-based)
+- Event-driven pipeline (lineup confirmation triggers per-game predictions)
+- Open-Meteo for weather (free, historical back to 1940)
+- ZiPS + Steamer projection blending for early-season
+- Phase 1: moneylines, Phase 2: totals + RL + weather, Phase 3: player props
+- 3 seasons backtest (2023-2025), pre-2023 stretch goal
+- Timeline: paper betting Opening Day, live by early May
 
-## Key Context
-### The Bug
-- Old: `calibrated_win_prob(edge)` mapped edge -> P(win) via logistic regression
-- Edge alone ignores base win rate; 31.4% overall win rate, mostly longshots
-- A -410 favorite got cal_prob=0.187, Kelly returned $0 for EVERY bet
-- All 8 production bets used flat $150 from pre-Kelly fallback
+## Files Created This Session (47 total)
+### Design
+- docs/plans/2026-02-25-mlb-expansion-design.md
 
-### The Fix
-- New: `calibrated_win_prob(model_prob)` — standard Platt scaling preserving base rate
-- Platt coefficients: coef=6.4558, intercept=-3.8831 (from 3,710 backtest bets)
-- Stakes now range $0-$250 proportional to calibrated edge
-- Tomorrow's 7 AM pipeline will be FIRST to produce dynamically-sized bets
+### Models (4)
+- models/sport_specific/mlb/poisson_model.py
+- models/sport_specific/mlb/pitcher_model.py
+- models/sport_specific/mlb/lineup_model.py
+- models/sport_specific/mlb/projection_blender.py
 
-### Backtest Distribution (calibrated Kelly on 6 seasons)
-- 3,710 total bets, 97% on underdogs, 31.4% overall win rate
-- Kelly filters out 38% of bets (1,409 marginal bets with -0.037 avg cal_edge, only +1.2% ROI)
-- 2,301 surviving bets: mean stake $163, median $199, 45.5% at $250 cap
-- Kelly ROI +156.9% vs flat +93.2% (+64pp improvement, every season better)
-- Total Kelly P&L: +$587K on $374K staked
+### Features (7)
+- features/sport_specific/mlb/__init__.py
+- features/sport_specific/mlb/pitcher_features.py
+- features/sport_specific/mlb/lineup_features.py
+- features/sport_specific/mlb/bullpen_features.py
+- features/sport_specific/mlb/weather_features.py
+- features/sport_specific/mlb/park_features.py
+- features/sport_specific/mlb/umpire_features.py
 
-## Files Modified This Session
-- `betting/odds_converter.py` — KellySizer calibration feature: edge -> model_prob
-- `scripts/daily_run.py` — variable rename edges -> model_probs
-- `scripts/backtest_ncaab_elo.py` — variable rename edges -> model_probs
-- `tests/test_kelly_sizer.py` — fixtures updated, new test added (16 total)
-- `docs/explanation/platt-calibration.md` — NEW: Diataxis explanation (520 lines)
-- `docs/explanation/platt-calibration-explorer.html` — NEW: interactive visualization (1209 lines)
+### Pipelines (7)
+- pipelines/mlb_stats_api.py
+- pipelines/mlb_pybaseball_fetcher.py
+- pipelines/mlb_weather_fetcher.py
+- pipelines/mlb_projections_fetcher.py
+- pipelines/mlb_odds_provider.py
+- pipelines/mlb_lineup_monitor.py
+- pipelines/mlb_park_factors.py
 
-## Still Outstanding (carry forward)
-- [ ] Commit and push session 23 changes (awaiting user approval)
-- [ ] Monitor tomorrow's 7 AM pipeline for varied stake sizes (should NOT be flat $150)
-- [ ] Fix test_logger failures (8 regressions — sqlite3 schema mismatch)
-- [ ] Test coverage gaps (41.4% overall)
-- [ ] Monitor injury check thresholds (currently 10pp warn, 15pp block)
-- [ ] March Madness prep (bracket data Mar 15-16)
+### Scripts (6)
+- scripts/mlb_daily_run.py
+- scripts/mlb_fetch_historical.py
+- scripts/mlb_backtest.py
+- scripts/mlb_train_model.py
+- scripts/mlb_fetch_projections.py
+- scripts/mlb_init_db.py
+
+### Tests (5)
+- tests/test_mlb_poisson_model.py
+- tests/test_mlb_pitcher_model.py
+- tests/test_mlb_stats_api.py
+- tests/test_mlb_weather_fetcher.py
+- tests/test_mlb_daily_run.py
+
+### Docs (15)
+- docs/mlb/README.md
+- docs/mlb/DATA_SOURCES.md
+- docs/mlb/DATA_DICTIONARY.md
+- docs/mlb/MODEL_ARCHITECTURE.md
+- docs/mlb/PIPELINE_DESIGN.md
+- docs/mlb/research/pitching-metrics.md
+- docs/mlb/research/bullpen-fatigue.md
+- docs/mlb/research/weather-effects.md
+- docs/mlb/research/park-factors.md
+- docs/mlb/research/platoon-splits.md
+- docs/mlb/research/umpire-zones.md
+- docs/mlb/research/market-strategies.md
+- docs/mlb/research/projection-systems.md
+- docs/mlb/research/source-research-playbook.md
+- docs/mlb/research/source-research-quantitative.md
+
+## Still Outstanding
+- [ ] Commit and push skeleton (awaiting user approval)
+- [ ] Update CLAUDE.md with MLB file structure
+- [ ] Begin Phase 1 implementation (mlb_init_db.py first)
+- [ ] Fetch 2023-2025 historical data
+- [ ] Build Poisson model v1

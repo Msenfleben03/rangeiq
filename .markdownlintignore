@@ -15,6 +15,9 @@ docs/plans/
 # Decision log (established format)
 docs/DECISIONS.md
 
+# MLB source research docs (external, long lines)
+docs/mlb/research/source-research-*.md
+
 # External/generated content
 ELO-visual-dashboard.txt
 historical-odds-resources-research.txt
