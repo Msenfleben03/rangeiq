@@ -581,6 +581,106 @@ class TestSettlement:
 
     @patch("scripts.daily_run.ESPNCoreOddsFetcher")
     @patch("scripts.daily_run.fetch_espn_scoreboard")
+    def test_settle_sets_is_settled_flag(self, mock_fetch, mock_fetcher_cls):
+        """Settlement UPDATE must set is_settled=1 so bets aren't skipped next run."""
+        from scripts.daily_run import settle_yesterdays_bets
+
+        mock_fetch.return_value = [
+            {
+                "game_id": "401720001",
+                "home": "DUKE",
+                "away": "UNC",
+                "home_name": "Duke Blue Devils",
+                "away_name": "North Carolina Tar Heels",
+                "home_score": 85,
+                "away_score": 72,
+                "status": "STATUS_FINAL",
+            }
+        ]
+        mock_fetcher_cls.return_value = MagicMock()
+
+        updates = []
+
+        def mock_execute(q, p=None):
+            if "SELECT * FROM bets" in q:
+                return [
+                    {
+                        "id": 1,
+                        "game_id": "401720001",
+                        "selection": "Duke Blue Devils ML",
+                        "bet_type": "moneyline",
+                        "odds_placed": -150,
+                        "stake": 100.0,
+                    }
+                ]
+            if "UPDATE bets" in q:
+                updates.append((q, p))
+            return None
+
+        db = MagicMock()
+        db.execute_query.side_effect = mock_execute
+
+        settle_yesterdays_bets(db, "2026-02-16")
+
+        bet_updates = [(q, p) for q, p in updates if "result" in q]
+        assert len(bet_updates) >= 1, "Expected at least one UPDATE bets call"
+        update_sql = bet_updates[0][0]
+        assert (
+            "is_settled" in update_sql
+        ), "Settlement UPDATE must include is_settled to prevent bets being orphaned"
+
+    @patch("scripts.daily_run.ESPNCoreOddsFetcher")
+    @patch("scripts.daily_run.fetch_espn_scoreboard")
+    def test_settle_writes_actual_profit_loss(self, mock_fetch, mock_fetcher_cls):
+        """Settlement UPDATE must write actual_profit_loss (not just profit_loss)."""
+        from scripts.daily_run import settle_yesterdays_bets
+
+        mock_fetch.return_value = [
+            {
+                "game_id": "401720001",
+                "home": "DUKE",
+                "away": "UNC",
+                "home_name": "Duke Blue Devils",
+                "away_name": "North Carolina Tar Heels",
+                "home_score": 85,
+                "away_score": 72,
+                "status": "STATUS_FINAL",
+            }
+        ]
+        mock_fetcher_cls.return_value = MagicMock()
+
+        updates = []
+
+        def mock_execute(q, p=None):
+            if "SELECT * FROM bets" in q:
+                return [
+                    {
+                        "id": 1,
+                        "game_id": "401720001",
+                        "selection": "Duke Blue Devils ML",
+                        "bet_type": "moneyline",
+                        "odds_placed": -150,
+                        "stake": 100.0,
+                    }
+                ]
+            if "UPDATE bets" in q:
+                updates.append((q, p))
+            return None
+
+        db = MagicMock()
+        db.execute_query.side_effect = mock_execute
+
+        settle_yesterdays_bets(db, "2026-02-16")
+
+        bet_updates = [(q, p) for q, p in updates if "result" in q]
+        assert len(bet_updates) >= 1, "Expected at least one UPDATE bets call"
+        update_sql = bet_updates[0][0]
+        assert (
+            "actual_profit_loss" in update_sql
+        ), "Settlement UPDATE must write actual_profit_loss so reporting has valid data"
+
+    @patch("scripts.daily_run.ESPNCoreOddsFetcher")
+    @patch("scripts.daily_run.fetch_espn_scoreboard")
     def test_settle_stores_closing_snapshot(self, mock_fetch, mock_fetcher_cls):
         from pipelines.espn_core_odds_provider import OddsSnapshot
         from scripts.daily_run import settle_yesterdays_bets

@@ -214,9 +214,10 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
             try:
                 db.execute_query(
                     """UPDATE bets
-                       SET result = ?, profit_loss = ?
+                       SET result = ?, profit_loss = ?, actual_profit_loss = ?,
+                           is_settled = 1, settled_at = CURRENT_TIMESTAMP
                        WHERE id = ?""",
-                    (result, profit, bet["id"]),
+                    (result, profit, profit, bet["id"]),
                 )
                 settled_count += 1
                 settled_game_ids.add(game_id)
