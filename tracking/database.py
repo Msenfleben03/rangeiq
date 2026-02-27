@@ -93,13 +93,23 @@ class BettingDatabase:
                     -- Results
                     result TEXT,
                     profit_loss REAL,
+                    actual_profit_loss REAL,
                     clv REAL,
+
+                    -- Settlement
+                    is_settled BOOLEAN DEFAULT FALSE,
+                    settled_at TIMESTAMP,
+
+                    -- Position building
+                    position_entry INTEGER DEFAULT 1,
 
                     -- Metadata
                     notes TEXT,
                     is_live BOOLEAN DEFAULT FALSE,
+                    bet_uuid TEXT,
+                    placed_at TIMESTAMP,
 
-                    UNIQUE(game_id, bet_type, selection, sportsbook)
+                    UNIQUE(game_id, bet_type, selection, sportsbook, position_entry)
                 )
             """
             )
@@ -192,6 +202,118 @@ class BettingDatabase:
             cursor.execute(
                 "UPDATE odds_snapshots SET snapshot_type = 'current' WHERE snapshot_type IS NULL"
             )
+
+            # Migration: add position_entry and missing columns to bets
+            for col_def in [
+                "actual_profit_loss REAL",
+                "is_settled BOOLEAN DEFAULT FALSE",
+                "settled_at TIMESTAMP",
+                "bet_uuid TEXT",
+                "placed_at TIMESTAMP",
+                "position_entry INTEGER DEFAULT 1",
+            ]:
+                try:
+                    col_name = col_def.split()[0]
+                    cursor.execute(f"ALTER TABLE bets ADD COLUMN {col_def}")
+                    logger.info("Added %s column to bets", col_name)
+                except Exception:
+                    pass  # Column already exists
+
+            # Migration: rebuild bets table to update UNIQUE constraint
+            # (SQLite cannot ALTER constraints, so we rebuild)
+            try:
+                # Check if old constraint exists (without position_entry)
+                cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='bets'")
+                create_sql = cursor.fetchone()["sql"]
+                # Find the UNIQUE constraint and check if position_entry is in it
+                needs_rebuild = False
+                if "UNIQUE" in create_sql:
+                    unique_part = create_sql[create_sql.index("UNIQUE") :]
+                    if "position_entry" not in unique_part:
+                        needs_rebuild = True
+                else:
+                    # No UNIQUE constraint at all -- rebuild to add it
+                    needs_rebuild = True
+                if needs_rebuild:
+                    logger.info("Rebuilding bets table to update UNIQUE constraint")
+                    # Get existing column names
+                    cursor.execute("PRAGMA table_info(bets)")
+                    existing_cols = [row["name"] for row in cursor.fetchall()]
+
+                    # Target schema columns
+                    target_cols = [
+                        "id",
+                        "created_at",
+                        "sport",
+                        "league",
+                        "game_date",
+                        "game_id",
+                        "bet_type",
+                        "selection",
+                        "line",
+                        "odds_placed",
+                        "odds_closing",
+                        "model_probability",
+                        "model_edge",
+                        "stake",
+                        "sportsbook",
+                        "result",
+                        "profit_loss",
+                        "actual_profit_loss",
+                        "clv",
+                        "is_settled",
+                        "settled_at",
+                        "position_entry",
+                        "notes",
+                        "is_live",
+                        "bet_uuid",
+                        "placed_at",
+                    ]
+
+                    # Shared columns (exist in both old and new)
+                    shared = [c for c in target_cols if c in existing_cols]
+                    shared_csv = ", ".join(shared)
+
+                    cursor.execute(
+                        """CREATE TABLE bets_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            sport TEXT NOT NULL,
+                            league TEXT,
+                            game_date DATE NOT NULL,
+                            game_id TEXT,
+                            bet_type TEXT NOT NULL,
+                            selection TEXT NOT NULL,
+                            line REAL,
+                            odds_placed INTEGER NOT NULL,
+                            odds_closing INTEGER,
+                            model_probability REAL,
+                            model_edge REAL,
+                            stake REAL NOT NULL,
+                            sportsbook TEXT NOT NULL,
+                            result TEXT,
+                            profit_loss REAL,
+                            actual_profit_loss REAL,
+                            clv REAL,
+                            is_settled BOOLEAN DEFAULT FALSE,
+                            settled_at TIMESTAMP,
+                            position_entry INTEGER DEFAULT 1,
+                            notes TEXT,
+                            is_live BOOLEAN DEFAULT FALSE,
+                            bet_uuid TEXT,
+                            placed_at TIMESTAMP,
+                            UNIQUE(game_id, bet_type, selection, sportsbook, position_entry)
+                        )"""
+                    )
+                    cursor.execute(
+                        f"INSERT INTO bets_new ({shared_csv}) "  # nosec B608
+                        f"SELECT {shared_csv} FROM bets"
+                    )
+                    cursor.execute("DROP TABLE bets")
+                    cursor.execute("ALTER TABLE bets_new RENAME TO bets")
+                    logger.info("Bets table rebuilt with updated UNIQUE constraint")
+            except Exception as e:
+                logger.warning("Bets constraint migration skipped: %s", e)
 
             # KenPom daily ratings snapshots
             cursor.execute(
