@@ -112,13 +112,13 @@ $steps = [ordered]@{
         script    = "daily_run.py"
         args      = @("--skip-settle")
         critical  = $false
-        timeout   = 300
+        timeout   = 600  # Increased: lookahead scans 7+ days of games
     }
     fetch_opening_odds = @{
         script    = "fetch_opening_odds.py"
-        args      = @()
+        args      = @()  # Now scans full lookahead window by default
         critical  = $false
-        timeout   = 180
+        timeout   = 300  # Increased: scanning 7+ days of odds
     }
     generate_dashboard = @{
         script    = "generate_dashboard_data.py"
