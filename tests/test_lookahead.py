@@ -6,7 +6,11 @@ import pytest
 
 from betting.odds_converter import get_days_out_multiplier
 from tracking.database import BettingDatabase
-from tracking.logger import calculate_entry_stake, get_position_summary
+from tracking.logger import (
+    auto_record_bets_from_predictions,
+    calculate_entry_stake,
+    get_position_summary,
+)
 
 
 @pytest.fixture
@@ -207,3 +211,148 @@ class TestCalculateEntryStake:
         # Day-2 multiplier = 0.65, allowed = 200 * 0.65 = 130
         # Room = 130 - 70 = 60
         assert stake == pytest.approx(60.0)
+
+
+class TestAutoRecordPositionBuilding:
+    """Test that auto_record handles multi-entry positions correctly."""
+
+    def _make_predictions_df(self, games):
+        """Build a predictions DataFrame from game dicts."""
+        import pandas as pd
+
+        return pd.DataFrame(games)
+
+    def test_first_entry_recorded_with_position_entry_1(self, db):
+        """First bet on a game should get position_entry=1."""
+        preds = self._make_predictions_df(
+            [
+                {
+                    "game_id": "401720001",
+                    "home": "DUKE",
+                    "away": "UNC",
+                    "home_name": "Duke Blue Devils",
+                    "away_name": "North Carolina Tar Heels",
+                    "home_prob": 0.65,
+                    "away_prob": 0.35,
+                    "predicted_spread": -5.0,
+                    "bart_adj": 0.01,
+                    "rec_side": "HOME",
+                    "rec_odds": 150,
+                    "rec_kelly": 0.04,
+                    "rec_stake": 200.0,
+                    "home_edge": 0.10,
+                    "away_edge": -0.05,
+                }
+            ]
+        )
+        recorded = auto_record_bets_from_predictions(
+            db,
+            preds,
+            "2026-03-05",
+            days_out=5,
+        )
+        assert len(recorded) == 1
+        # Check DB has position_entry=1
+        bets = db.execute_query("SELECT position_entry, stake FROM bets WHERE game_id='401720001'")
+        assert len(bets) == 1
+        assert bets[0]["position_entry"] == 1
+        # Stake should be speculative (200 * 0.35 = 70)
+        assert bets[0]["stake"] == pytest.approx(70.0)
+
+    def test_second_entry_gets_position_entry_2(self, db):
+        """Adding to a position should increment position_entry."""
+        # Pre-existing entry 1
+        db.insert_bet(
+            {
+                "sport": "ncaab",
+                "game_date": "2026-03-05",
+                "game_id": "401720001",
+                "bet_type": "moneyline",
+                "selection": "Duke Blue Devils ML",
+                "odds_placed": 150,
+                "stake": 70.0,
+                "sportsbook": "paper",
+                "position_entry": 1,
+            }
+        )
+        # Entry 2 via auto_record at day-3
+        preds = self._make_predictions_df(
+            [
+                {
+                    "game_id": "401720001",
+                    "home": "DUKE",
+                    "away": "UNC",
+                    "home_name": "Duke Blue Devils",
+                    "away_name": "North Carolina Tar Heels",
+                    "home_prob": 0.65,
+                    "away_prob": 0.35,
+                    "predicted_spread": -5.0,
+                    "bart_adj": 0.01,
+                    "rec_side": "HOME",
+                    "rec_odds": 140,
+                    "rec_kelly": 0.04,
+                    "rec_stake": 200.0,
+                    "home_edge": 0.12,
+                    "away_edge": -0.05,
+                }
+            ]
+        )
+        recorded = auto_record_bets_from_predictions(
+            db,
+            preds,
+            "2026-03-05",
+            days_out=3,
+        )
+        assert len(recorded) == 1
+        bets = db.execute_query(
+            "SELECT position_entry, stake FROM bets WHERE game_id='401720001' "
+            "ORDER BY position_entry"
+        )
+        assert len(bets) == 2
+        assert bets[1]["position_entry"] == 2
+        # Day-3 multiplier=0.50, allowed=100, existing=70, add=30
+        assert bets[1]["stake"] == pytest.approx(30.0)
+
+    def test_position_full_skips_recording(self, db):
+        """Should skip if existing position already meets Kelly cap."""
+        db.insert_bet(
+            {
+                "sport": "ncaab",
+                "game_date": "2026-03-05",
+                "game_id": "401720001",
+                "bet_type": "moneyline",
+                "selection": "Duke Blue Devils ML",
+                "odds_placed": 150,
+                "stake": 250.0,
+                "sportsbook": "paper",
+                "position_entry": 1,
+            }
+        )
+        preds = self._make_predictions_df(
+            [
+                {
+                    "game_id": "401720001",
+                    "home": "DUKE",
+                    "away": "UNC",
+                    "home_name": "Duke Blue Devils",
+                    "away_name": "North Carolina Tar Heels",
+                    "home_prob": 0.65,
+                    "away_prob": 0.35,
+                    "predicted_spread": -5.0,
+                    "bart_adj": 0.01,
+                    "rec_side": "HOME",
+                    "rec_odds": 140,
+                    "rec_kelly": 0.04,
+                    "rec_stake": 200.0,
+                    "home_edge": 0.10,
+                    "away_edge": -0.05,
+                }
+            ]
+        )
+        recorded = auto_record_bets_from_predictions(
+            db,
+            preds,
+            "2026-03-05",
+            days_out=0,
+        )
+        assert len(recorded) == 0

@@ -181,11 +181,16 @@ def auto_record_bets_from_predictions(
     game_date: str,
     dry_run: bool = False,
     max_bets: int = 10,
+    days_out: int = 0,
 ) -> list[dict]:
     """Automatically record paper bets from prediction DataFrame.
 
     Filters predictions to those with recommendations (rec_side is set),
-    validates limits, and inserts as paper bets.
+    validates limits, checks existing position size, and inserts as paper bets.
+
+    When days_out > 0 the stake is sized speculatively using the days-out
+    multiplier and the existing position is queried so that repeated calls
+    build up to the full Kelly allocation over time.
 
     Args:
         db: BettingDatabase instance.
@@ -193,11 +198,15 @@ def auto_record_bets_from_predictions(
         game_date: Date string in YYYY-MM-DD format.
         dry_run: If True, return bets without inserting into database.
         max_bets: Maximum number of bets to record per day.
+        days_out: Days until gameday (0 = gameday, full Kelly). Used for
+            speculative position building on lookahead predictions.
 
     Returns:
         List of bet dicts that were recorded (or would be in dry_run mode).
     """
     import pandas as pd
+
+    from config.constants import PAPER_BETTING
 
     if predictions_df.empty:
         return []
@@ -240,6 +249,9 @@ def auto_record_bets_from_predictions(
         side = row["rec_side"]
         team = row["home"] if side == "HOME" else row["away"]
         team_name = row.get("home_name", team) if side == "HOME" else row.get("away_name", team)
+        selection = f"{team_name} ML"
+        game_id = str(row.get("game_id", ""))
+        rec_stake = float(row.get("rec_stake", 0))
 
         # Build notes with ESPN context if available
         notes_parts = [f"Auto-recorded paper bet. Bart adj: {row.get('bart_adj', 0):.4f}"]
@@ -248,23 +260,24 @@ def auto_record_bets_from_predictions(
             div_val = row.get("prob_divergence", 0) or 0
             notes_parts.append(f"ESPN prob: {espn_prob:.0%}, divergence: {div_val:+.0%}")
 
-        bet_data = {
-            "sport": "ncaab",
-            "game_date": game_date,
-            "game_id": str(row.get("game_id", "")),
-            "bet_type": "moneyline",
-            "selection": f"{team_name} ML",
-            "odds_placed": int(row.get("rec_odds", 0)),
-            "stake": float(row.get("rec_stake", 0)),
-            "sportsbook": "paper",
-            "model_probability": float(row["home_prob"] if side == "HOME" else row["away_prob"]),
-            "model_edge": float(
-                row.get("home_edge", 0) if side == "HOME" else row.get("away_edge", 0)
-            ),
-            "notes": ". ".join(notes_parts),
-        }
-
         if dry_run:
+            bet_data = {
+                "sport": "ncaab",
+                "game_date": game_date,
+                "game_id": game_id,
+                "bet_type": "moneyline",
+                "selection": selection,
+                "odds_placed": int(row.get("rec_odds", 0)),
+                "stake": rec_stake,
+                "sportsbook": "paper",
+                "model_probability": float(
+                    row["home_prob"] if side == "HOME" else row["away_prob"]
+                ),
+                "model_edge": float(
+                    row.get("home_edge", 0) if side == "HOME" else row.get("away_edge", 0)
+                ),
+                "notes": ". ".join(notes_parts),
+            }
             logger.info(
                 "[DRY RUN] Would record: %s @ %+d (edge: %.1f%%, stake: $%.0f)",
                 bet_data["selection"],
@@ -273,6 +286,47 @@ def auto_record_bets_from_predictions(
                 bet_data["stake"],
             )
         else:
+            # Query existing position for this game+side
+            position = get_position_summary(db, game_id, selection)
+            entry_stake = calculate_entry_stake(
+                kelly_optimal=rec_stake,
+                existing_staked=position["total_staked"],
+                days_out=days_out,
+                min_bet=PAPER_BETTING.MIN_BET_DOLLARS,
+            )
+
+            if entry_stake <= 0:
+                logger.info(
+                    "Position full for %s (staked=$%.0f, kelly=$%.0f, days_out=%d) — skipping",
+                    selection,
+                    position["total_staked"],
+                    rec_stake,
+                    days_out,
+                )
+                continue
+
+            next_entry = position["max_entry"] + 1
+            notes_parts.append(f"Position entry #{next_entry}, days_out={days_out}")
+
+            bet_data = {
+                "sport": "ncaab",
+                "game_date": game_date,
+                "game_id": game_id,
+                "bet_type": "moneyline",
+                "selection": selection,
+                "odds_placed": int(row.get("rec_odds", 0)),
+                "stake": entry_stake,
+                "sportsbook": "paper",
+                "model_probability": float(
+                    row["home_prob"] if side == "HOME" else row["away_prob"]
+                ),
+                "model_edge": float(
+                    row.get("home_edge", 0) if side == "HOME" else row.get("away_edge", 0)
+                ),
+                "position_entry": next_entry,
+                "notes": ". ".join(notes_parts),
+            }
+
             # Validate limits
             limits = validate_bet_limits(bet_data["stake"], db)
             if not limits["allowed"]:
@@ -283,11 +337,15 @@ def auto_record_bets_from_predictions(
                 bet_id = log_paper_bet(db, bet_data)
                 bet_data["bet_id"] = bet_id
                 logger.info(
-                    "Recorded bet #%d: %s @ %+d (edge: %.1f%%)",
+                    "Recorded bet #%d: %s entry #%d @ %+d "
+                    "(edge: %.1f%%, stake: $%.0f, days_out=%d)",
                     bet_id,
                     bet_data["selection"],
+                    next_entry,
                     bet_data["odds_placed"],
                     bet_data["model_edge"] * 100,
+                    bet_data["stake"],
+                    days_out,
                 )
             except Exception as e:
                 logger.error("Failed to record bet: %s — %s", bet_data["selection"], e)
