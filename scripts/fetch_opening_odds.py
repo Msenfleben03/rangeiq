@@ -1,15 +1,16 @@
-"""Fetch Opening Odds for Tomorrow's Games.
+"""Fetch Opening Odds across Lookahead Window.
 
-Queries ESPN Scoreboard API for tomorrow's game IDs, then fetches
-current odds from ESPN Core API. At 11pm (nightly run), current
-odds represent the opening/early lines for next day's games.
+Queries ESPN Scoreboard API for game IDs across the lookahead window
+(today through today+N), then fetches current odds from ESPN Core API.
+At nightly run time, current odds represent opening/early lines.
 
 All three markets captured: moneyline, spread, total.
 
 Usage:
-    python scripts/fetch_opening_odds.py                    # Tomorrow
-    python scripts/fetch_opening_odds.py --date 2026-02-25  # Specific date
-    python scripts/fetch_opening_odds.py --dry-run           # Preview only
+    python scripts/fetch_opening_odds.py                        # Today + lookahead window
+    python scripts/fetch_opening_odds.py --date 2026-02-25      # Start from specific date
+    python scripts/fetch_opening_odds.py --lookahead-days 3     # Override window size
+    python scripts/fetch_opening_odds.py --dry-run              # Preview only
 """
 
 from __future__ import annotations
@@ -175,14 +176,51 @@ def fetch_opening_odds(
     return result
 
 
+def fetch_opening_odds_lookahead(
+    db: BettingDatabase,
+    today: datetime,
+    lookahead_days: int | None = None,
+) -> list[dict]:
+    """Fetch opening odds for all games in the lookahead window.
+
+    Args:
+        db: BettingDatabase instance.
+        today: Current date (start of window).
+        lookahead_days: Days to scan. Default from config.
+
+    Returns:
+        List of result dicts, one per day scanned.
+    """
+    from config.constants import PAPER_BETTING
+
+    if lookahead_days is None:
+        lookahead_days = PAPER_BETTING.LOOKAHEAD_DAYS
+
+    results = []
+    for offset in range(lookahead_days + 1):
+        target = today + timedelta(days=offset)
+        result = fetch_opening_odds(db, target)
+        results.append(result)
+
+    return results
+
+
 def main() -> None:
     """CLI entry point."""
-    parser = argparse.ArgumentParser(description="Fetch opening odds for tomorrow's NCAAB games")
+    parser = argparse.ArgumentParser(
+        description="Fetch opening odds for NCAAB games across lookahead window"
+    )
     parser.add_argument(
         "--date",
         type=str,
         default=None,
-        help="Target date (YYYY-MM-DD). Default: tomorrow.",
+        help="Start date (YYYY-MM-DD). Default: today.",
+    )
+    parser.add_argument(
+        "--lookahead-days",
+        type=int,
+        default=None,
+        help="Days to scan ahead. Default from config.",
     )
     parser.add_argument(
         "--dry-run",
@@ -192,27 +230,45 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.date:
-        target = datetime.strptime(args.date, "%Y-%m-%d")
+        today = datetime.strptime(args.date, "%Y-%m-%d")
     else:
-        target = datetime.now() + timedelta(days=1)
+        today = datetime.now()
+
+    from config.constants import PAPER_BETTING
+
+    lookahead = (
+        args.lookahead_days if args.lookahead_days is not None else PAPER_BETTING.LOOKAHEAD_DAYS
+    )
 
     if args.dry_run:
-        games = fetch_espn_scoreboard(target)
-        print(f"Games for {target.strftime('%Y-%m-%d')}: {len(games)}")
-        for g in games:
-            print(f"  {g['away_name']} @ {g['home_name']} ({g['game_id']})")
+        for offset in range(lookahead + 1):
+            target = today + timedelta(days=offset)
+            games = fetch_espn_scoreboard(target)
+            date_str = target.strftime("%Y-%m-%d")
+            print(f"Day+{offset} ({date_str}): {len(games)} games")
+            for g in games:
+                print(f"  {g['away_name']} @ {g['home_name']} ({g['game_id']})")
         return
 
     db = BettingDatabase(str(DATABASE_PATH))
-    result = fetch_opening_odds(db, target)
+    results = fetch_opening_odds_lookahead(db, today, args.lookahead_days)
 
-    print(f"\n{'=' * 50}")
-    print(f"Opening Odds Fetch -- {result['date']}")
-    print(f"{'=' * 50}")
-    print(f"Games found:     {result['games_found']}")
-    print(f"Odds fetched:    {result['odds_fetched']}")
-    print(f"Already existed: {result['skipped_existing']}")
-    print(f"Failed:          {result['odds_failed']}")
+    print(f"\n{'=' * 60}")
+    print("Opening Odds Fetch -- Lookahead Window")
+    print(f"{'=' * 60}")
+    total_fetched = 0
+    total_failed = 0
+    for r in results:
+        total_fetched += r["odds_fetched"]
+        total_failed += r["odds_failed"]
+        if r["games_found"] > 0:
+            print(
+                f"  {r['date']}: {r['games_found']} games, "
+                f"{r['odds_fetched']} fetched, "
+                f"{r['skipped_existing']} existing, "
+                f"{r['odds_failed']} failed"
+            )
+    print(f"\nTotal: {total_fetched} fetched, {total_failed} failed")
 
 
 if __name__ == "__main__":

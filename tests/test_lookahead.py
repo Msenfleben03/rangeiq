@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -410,3 +410,42 @@ class TestRunLookaheadPredictions:
         assert mock_run.call_count == 4
         for i, call in enumerate(mock_run.call_args_list):
             assert call.kwargs.get("days_out") == i
+
+
+class TestFetchOpeningOddsLookahead:
+    """Test multi-day opening odds fetch."""
+
+    @patch("scripts.fetch_opening_odds.fetch_espn_scoreboard")
+    @patch("scripts.fetch_opening_odds.ESPNCoreOddsFetcher")
+    def test_scans_full_window(self, mock_fetcher_cls, mock_scoreboard, db):
+        """Should scan all days in lookahead window."""
+        from scripts.fetch_opening_odds import fetch_opening_odds_lookahead
+
+        mock_scoreboard.return_value = []
+
+        today = datetime(2026, 3, 1)
+        result = fetch_opening_odds_lookahead(db, today, lookahead_days=3)
+
+        # today + 3 = 4 calls
+        assert mock_scoreboard.call_count == 4
+        assert len(result) == 4  # One result dict per day
+
+    @patch("scripts.fetch_opening_odds.fetch_espn_scoreboard")
+    @patch("scripts.fetch_opening_odds.ESPNCoreOddsFetcher")
+    def test_aggregates_stats(self, mock_fetcher_cls, mock_scoreboard, db):
+        """Should return per-day stats."""
+        from scripts.fetch_opening_odds import fetch_opening_odds_lookahead
+
+        mock_scoreboard.side_effect = [
+            [{"game_id": "1", "away_name": "A", "home_name": "B", "away": "A", "home": "B"}],
+            [],
+        ]
+        mock_instance = MagicMock()
+        mock_instance.fetch_game_odds.return_value = []
+        mock_fetcher_cls.return_value = mock_instance
+
+        today = datetime(2026, 3, 1)
+        results = fetch_opening_odds_lookahead(db, today, lookahead_days=1)
+
+        assert results[0]["games_found"] == 1
+        assert results[1]["games_found"] == 0
