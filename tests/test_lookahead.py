@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from unittest.mock import patch
+
+import pandas as pd
 import pytest
 
 from betting.odds_converter import get_days_out_multiplier
+from scripts.daily_run import run_lookahead_predictions
 from tracking.database import BettingDatabase
 from tracking.logger import (
     auto_record_bets_from_predictions,
@@ -218,7 +223,6 @@ class TestAutoRecordPositionBuilding:
 
     def _make_predictions_df(self, games):
         """Build a predictions DataFrame from game dicts."""
-        import pandas as pd
 
         return pd.DataFrame(games)
 
@@ -356,3 +360,53 @@ class TestAutoRecordPositionBuilding:
             days_out=0,
         )
         assert len(recorded) == 0
+
+
+class TestRunLookaheadPredictions:
+    """Test multi-day lookahead prediction loop."""
+
+    @patch("scripts.daily_run.run_predictions")
+    @patch("scripts.daily_run.fetch_espn_scoreboard")
+    def test_scans_multiple_days(self, mock_fetch, mock_run, db):
+        """Should call fetch_espn_scoreboard for each day in window."""
+        mock_fetch.return_value = []  # No games
+        mock_run.return_value = pd.DataFrame()
+
+        today = datetime(2026, 3, 1)
+        run_lookahead_predictions(today, db, dry_run=True, lookahead_days=3)
+
+        # Should scan today + 3 future days = 4 calls
+        assert mock_fetch.call_count == 4
+
+    @patch("scripts.daily_run.run_predictions")
+    @patch("scripts.daily_run.fetch_espn_scoreboard")
+    def test_skips_days_with_no_games(self, mock_fetch, mock_run, db):
+        """Should not call run_predictions for days with no pre-game events."""
+        mock_fetch.side_effect = [
+            [{"game_id": "1", "status": "STATUS_SCHEDULED"}],  # today
+            [],  # tomorrow - no games
+            [{"game_id": "2", "status": "STATUS_SCHEDULED"}],  # day+2
+        ]
+        mock_run.return_value = pd.DataFrame()
+
+        today = datetime(2026, 3, 1)
+        run_lookahead_predictions(today, db, dry_run=True, lookahead_days=2)
+
+        assert mock_run.call_count == 2  # today and day+2, not tomorrow
+
+    @patch("scripts.daily_run.run_predictions")
+    @patch("scripts.daily_run.fetch_espn_scoreboard")
+    def test_passes_correct_days_out(self, mock_fetch, mock_run, db):
+        """Should pass days_out=0 for today, increasing for future days."""
+        mock_fetch.return_value = [
+            {"game_id": "1", "status": "STATUS_SCHEDULED"},
+        ]
+        mock_run.return_value = pd.DataFrame()
+
+        today = datetime(2026, 3, 1)
+        run_lookahead_predictions(today, db, dry_run=True, lookahead_days=3)
+
+        # Check days_out kwarg for each call
+        assert mock_run.call_count == 4
+        for i, call in enumerate(mock_run.call_args_list):
+            assert call.kwargs.get("days_out") == i

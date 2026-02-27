@@ -317,6 +317,7 @@ def run_predictions(
     target_date: datetime,
     db: BettingDatabase,
     dry_run: bool = False,
+    days_out: int = 0,
 ) -> pd.DataFrame:
     """Run the full prediction pipeline for a date.
 
@@ -324,6 +325,7 @@ def run_predictions(
         target_date: Date to generate predictions for.
         db: BettingDatabase instance.
         dry_run: If True, preview bets without recording.
+        days_out: Days until game day (0=today). Adjusts Kelly sizing.
 
     Returns:
         DataFrame of predictions.
@@ -465,6 +467,7 @@ def run_predictions(
         game_date=game_date_str,
         dry_run=dry_run,
         max_bets=PAPER_BETTING.MAX_BETS_PER_DAY,
+        days_out=days_out,
     )
 
     # Display
@@ -478,6 +481,71 @@ def run_predictions(
         print(f"Total stake: ${total_stake:.2f}")
 
     return predictions
+
+
+def run_lookahead_predictions(
+    today: datetime,
+    db: BettingDatabase,
+    dry_run: bool = False,
+    lookahead_days: int | None = None,
+) -> dict[str, pd.DataFrame]:
+    """Run predictions for today and all future dates with available games.
+
+    Scans ESPN Scoreboard for each day in the lookahead window. For each
+    day with pre-game events, runs the full prediction pipeline with
+    days-out adjusted Kelly sizing.
+
+    Args:
+        today: The current date (day 0).
+        db: BettingDatabase instance.
+        dry_run: If True, preview bets without recording.
+        lookahead_days: Days to scan ahead. Default from config.
+
+    Returns:
+        Dict mapping date string to predictions DataFrame.
+    """
+    if lookahead_days is None:
+        lookahead_days = PAPER_BETTING.LOOKAHEAD_DAYS
+
+    all_predictions: dict[str, pd.DataFrame] = {}
+
+    for offset in range(lookahead_days + 1):
+        target_date = today + timedelta(days=offset)
+        date_str = target_date.strftime("%Y-%m-%d")
+
+        # Discover games for this date
+        games = fetch_espn_scoreboard(target_date)
+        pre_game = [g for g in games if g["status"] in ("STATUS_SCHEDULED", "STATUS_PREGAME", "")]
+
+        if not pre_game:
+            if offset == 0 and games:
+                logger.info(
+                    "Day+%d (%s): %d games, all started/completed",
+                    offset,
+                    date_str,
+                    len(games),
+                )
+            elif not games:
+                logger.debug("Day+%d (%s): no games found", offset, date_str)
+            continue
+
+        logger.info(
+            "Day+%d (%s): %d pre-game / %d total",
+            offset,
+            date_str,
+            len(pre_game),
+            len(games),
+        )
+
+        predictions = run_predictions(
+            target_date=target_date,
+            db=db,
+            dry_run=dry_run,
+            days_out=offset,
+        )
+        all_predictions[date_str] = predictions
+
+    return all_predictions
 
 
 def generate_report(db: BettingDatabase) -> None:
@@ -649,13 +717,16 @@ def main() -> None:
         if settle_result.get("clv_failed", 0) > 0:
             print(f"CLV failed: {settle_result['clv_failed']} (no closing odds)")
 
-    # Step 2: Generate today's predictions and record bets
-    print("\n--- Generating today's predictions ---")
-    _predictions = run_predictions(target_date, db, dry_run=args.dry_run)
+    # Step 2: Generate predictions across lookahead window
+    print("\n--- Generating predictions (lookahead window) ---")
+    all_predictions = run_lookahead_predictions(
+        today=target_date,
+        db=db,
+        dry_run=args.dry_run,
+    )
 
-    if _predictions.empty and not args.dry_run:
-        logger.error("No predictions generated for %s", target_date.strftime("%Y-%m-%d"))
-        sys.exit(1)
+    if not all_predictions and not args.dry_run:
+        logger.warning("No predictions generated across lookahead window")
 
     # Step 3: Quick report
     print("\n--- Quick daily summary ---")
