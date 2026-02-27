@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-
 import pytest
 
+from betting.odds_converter import get_days_out_multiplier
 from tracking.database import BettingDatabase
 
 
@@ -61,3 +61,33 @@ class TestPositionEntrySchema:
         db.insert_bet(base)
         dup_id = db.insert_bet(base)
         assert dup_id == -1  # Duplicate rejected
+
+
+class TestDaysOutMultiplier:
+    """Test speculative sizing based on days until gameday."""
+
+    def test_gameday_full_multiplier(self):
+        assert get_days_out_multiplier(0) == 1.0
+
+    def test_one_day_out(self):
+        assert get_days_out_multiplier(1) == 0.85
+
+    def test_two_days_out(self):
+        assert get_days_out_multiplier(2) == 0.65
+
+    def test_three_days_out(self):
+        assert get_days_out_multiplier(3) == 0.50
+
+    def test_five_days_out(self):
+        assert get_days_out_multiplier(5) == 0.35
+
+    def test_seven_days_out(self):
+        assert get_days_out_multiplier(7) == 0.35
+
+    def test_beyond_window_clamps(self):
+        """Days beyond max should use the lowest multiplier."""
+        assert get_days_out_multiplier(14) == 0.35
+
+    def test_negative_days_treated_as_gameday(self):
+        """Games already started (negative days) use full multiplier."""
+        assert get_days_out_multiplier(-1) == 1.0

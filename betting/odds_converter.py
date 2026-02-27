@@ -297,6 +297,32 @@ def build_calibration_data(
     return model_probs, outcomes
 
 
+def get_days_out_multiplier(days_out: int) -> float:
+    """Get Kelly multiplier based on days until gameday.
+
+    Early bets are sized smaller (speculative). Gameday bets get full
+    Kelly allocation. Total position across all entries for a game is
+    capped at the Kelly-optimal amount for the current edge.
+
+    Args:
+        days_out: Days until game starts. 0 = gameday, negative = started.
+
+    Returns:
+        Multiplier to apply to Kelly fraction (0.0 to 1.0).
+    """
+    from config.constants import PAPER_BETTING
+
+    if days_out <= 0:
+        return 1.0
+
+    multipliers = PAPER_BETTING.DAYS_OUT_MULTIPLIERS
+    if days_out in multipliers:
+        return multipliers[days_out]
+
+    # Beyond max configured day — use smallest multiplier
+    return min(multipliers.values())
+
+
 # Break-even win rates for common odds
 BREAKEVEN_RATES = {-110: 0.5238, -105: 0.5122, +100: 0.5000, +150: 0.4000, -200: 0.6667}
 

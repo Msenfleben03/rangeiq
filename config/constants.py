@@ -449,6 +449,30 @@ class PaperBettingConfig:
     WEEKLY_REVIEW_WINDOW_DAYS: int = 7
     MIN_BETS_FOR_REPORT: int = 5
 
+    # Lookahead window
+    LOOKAHEAD_DAYS: int = 7  # Scan today through today+7
+
+    # Days-out Kelly multipliers (speculative sizing)
+    # Key = days until gameday, Value = fraction of full Kelly allocation
+    DAYS_OUT_MULTIPLIERS: dict = None  # Set in __post_init__
+
+    # Position building
+    MIN_BET_DOLLARS: float = 10.0  # Below this, skip the entry
+
+    def __post_init__(self):
+        """Initialize mutable defaults for lookahead multipliers."""
+        if self.DAYS_OUT_MULTIPLIERS is None:
+            self.DAYS_OUT_MULTIPLIERS = {
+                0: 1.0,  # Gameday — full conviction
+                1: 0.85,  # Near-complete info
+                2: 0.65,  # Good info, some uncertainty
+                3: 0.50,  # Moderate speculation
+                4: 0.50,
+                5: 0.35,  # High speculation
+                6: 0.35,
+                7: 0.35,
+            }
+
 
 PAPER_BETTING = PaperBettingConfig()
 
