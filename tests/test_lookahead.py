@@ -449,3 +449,88 @@ class TestFetchOpeningOddsLookahead:
 
         assert results[0]["games_found"] == 1
         assert results[1]["games_found"] == 0
+
+
+class TestEndToEndPositionBuilding:
+    """Integration test: simulate 3-day position build-up."""
+
+    def test_position_builds_over_multiple_days(self, db):
+        """Simulate day-3, day-1, and gameday entries for same game."""
+        game_id = "401720001"
+        selection = "Duke Blue Devils ML"
+
+        # Day-3 entry (speculative)
+        db.insert_bet(
+            {
+                "sport": "ncaab",
+                "game_date": "2026-03-05",
+                "game_id": game_id,
+                "bet_type": "moneyline",
+                "selection": selection,
+                "odds_placed": 160,
+                "stake": 50.0,
+                "sportsbook": "paper",
+                "position_entry": 1,
+            }
+        )
+
+        pos = get_position_summary(db, game_id, selection)
+        assert pos["total_staked"] == 50.0
+        assert pos["entry_count"] == 1
+
+        # Day-1 add (kelly_optimal=200, multiplier=0.85, allowed=170)
+        entry_stake = calculate_entry_stake(200.0, 50.0, days_out=1)
+        assert entry_stake == pytest.approx(120.0)  # 170 - 50
+
+        db.insert_bet(
+            {
+                "sport": "ncaab",
+                "game_date": "2026-03-05",
+                "game_id": game_id,
+                "bet_type": "moneyline",
+                "selection": selection,
+                "odds_placed": 140,
+                "stake": entry_stake,
+                "sportsbook": "paper",
+                "position_entry": 2,
+            }
+        )
+
+        pos = get_position_summary(db, game_id, selection)
+        assert pos["total_staked"] == 170.0
+        assert pos["entry_count"] == 2
+
+        # Gameday fill (kelly_optimal=200, multiplier=1.0, allowed=200)
+        entry_stake = calculate_entry_stake(200.0, 170.0, days_out=0)
+        assert entry_stake == pytest.approx(30.0)  # 200 - 170
+
+        db.insert_bet(
+            {
+                "sport": "ncaab",
+                "game_date": "2026-03-05",
+                "game_id": game_id,
+                "bet_type": "moneyline",
+                "selection": selection,
+                "odds_placed": 130,
+                "stake": entry_stake,
+                "sportsbook": "paper",
+                "position_entry": 3,
+            }
+        )
+
+        pos = get_position_summary(db, game_id, selection)
+        assert pos["total_staked"] == 200.0
+        assert pos["entry_count"] == 3
+        assert pos["max_entry"] == 3
+
+        # Verify CLV can be calculated per entry later
+        bets = db.execute_query(
+            "SELECT odds_placed, stake, position_entry FROM bets "
+            "WHERE game_id=? ORDER BY position_entry",
+            (game_id,),
+        )
+        assert [(b["odds_placed"], b["stake"]) for b in bets] == [
+            (160, 50.0),
+            (140, 120.0),
+            (130, 30.0),
+        ]
