@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Optional
 if TYPE_CHECKING:
     import pandas as pd
 
+from betting.odds_converter import get_days_out_multiplier
 from config.constants import BANKROLL
 from tracking.database import BettingDatabase
 
@@ -302,3 +303,67 @@ def auto_record_bets_from_predictions(
         game_date,
     )
     return recorded
+
+
+def get_position_summary(
+    db: BettingDatabase,
+    game_id: str,
+    selection: str,
+) -> dict[str, Any]:
+    """Query the current position for a game+side.
+
+    Args:
+        db: BettingDatabase instance.
+        game_id: ESPN game ID.
+        selection: Bet selection string (e.g. "Duke Blue Devils ML").
+
+    Returns:
+        Dict with total_staked, entry_count, max_entry.
+    """
+    rows = db.execute_query(
+        """SELECT
+            COALESCE(SUM(stake), 0) as total_staked,
+            COUNT(*) as entry_count,
+            COALESCE(MAX(position_entry), 0) as max_entry
+        FROM bets
+        WHERE game_id = ? AND selection = ? AND result IS NULL""",
+        (game_id, selection),
+    )
+    if rows:
+        return {
+            "total_staked": float(rows[0]["total_staked"]),
+            "entry_count": int(rows[0]["entry_count"]),
+            "max_entry": int(rows[0]["max_entry"]),
+        }
+    return {"total_staked": 0.0, "entry_count": 0, "max_entry": 0}
+
+
+def calculate_entry_stake(
+    kelly_optimal: float,
+    existing_staked: float,
+    days_out: int,
+    min_bet: float = 10.0,
+) -> float:
+    """Calculate stake for a new position entry.
+
+    Uses the days-out multiplier to cap how much of the full Kelly
+    allocation is allowed at this point in time. Only the remaining
+    room (allowed minus already staked) is returned.
+
+    Args:
+        kelly_optimal: Full Kelly-optimal stake at current odds/edge.
+        existing_staked: Total already staked on this position.
+        days_out: Days until gameday (0 = gameday).
+        min_bet: Minimum bet size — below this returns 0.
+
+    Returns:
+        Stake for this entry, or 0.0 if position is full or below min.
+    """
+    multiplier = get_days_out_multiplier(days_out)
+    allowed_total = kelly_optimal * multiplier
+    remaining = allowed_total - existing_staked
+
+    if remaining < min_bet:
+        return 0.0
+
+    return round(remaining, 2)

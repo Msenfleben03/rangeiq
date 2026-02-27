@@ -6,6 +6,7 @@ import pytest
 
 from betting.odds_converter import get_days_out_multiplier
 from tracking.database import BettingDatabase
+from tracking.logger import calculate_entry_stake, get_position_summary
 
 
 @pytest.fixture
@@ -91,3 +92,118 @@ class TestDaysOutMultiplier:
     def test_negative_days_treated_as_gameday(self):
         """Games already started (negative days) use full multiplier."""
         assert get_days_out_multiplier(-1) == 1.0
+
+
+class TestPositionSummary:
+    """Test querying existing position for a game."""
+
+    def test_no_existing_position(self, db):
+        summary = get_position_summary(db, "401720001", "Duke Blue Devils ML")
+        assert summary["total_staked"] == 0.0
+        assert summary["entry_count"] == 0
+        assert summary["max_entry"] == 0
+
+    def test_single_entry_position(self, db):
+        db.insert_bet(
+            {
+                "sport": "ncaab",
+                "game_date": "2026-03-01",
+                "game_id": "401720001",
+                "bet_type": "moneyline",
+                "selection": "Duke Blue Devils ML",
+                "odds_placed": 150,
+                "stake": 70.0,
+                "sportsbook": "paper",
+                "position_entry": 1,
+            }
+        )
+        summary = get_position_summary(db, "401720001", "Duke Blue Devils ML")
+        assert summary["total_staked"] == 70.0
+        assert summary["entry_count"] == 1
+        assert summary["max_entry"] == 1
+
+    def test_multi_entry_position(self, db):
+        for i, (odds, stake) in enumerate([(150, 70), (140, 50), (130, 80)], 1):
+            db.insert_bet(
+                {
+                    "sport": "ncaab",
+                    "game_date": "2026-03-01",
+                    "game_id": "401720001",
+                    "bet_type": "moneyline",
+                    "selection": "Duke Blue Devils ML",
+                    "odds_placed": odds,
+                    "stake": float(stake),
+                    "sportsbook": "paper",
+                    "position_entry": i,
+                }
+            )
+        summary = get_position_summary(db, "401720001", "Duke Blue Devils ML")
+        assert summary["total_staked"] == 200.0
+        assert summary["entry_count"] == 3
+        assert summary["max_entry"] == 3
+
+
+class TestCalculateEntryStake:
+    """Test position-aware stake calculation."""
+
+    def test_new_position_uses_multiplier(self):
+        """First entry on day-5 game should apply 0.35x multiplier."""
+        stake = calculate_entry_stake(
+            kelly_optimal=200.0,
+            existing_staked=0.0,
+            days_out=5,
+            min_bet=10.0,
+        )
+        assert stake == pytest.approx(70.0)  # 200 * 0.35
+
+    def test_gameday_fills_remaining(self):
+        """Gameday entry should fill up to full Kelly."""
+        stake = calculate_entry_stake(
+            kelly_optimal=200.0,
+            existing_staked=70.0,
+            days_out=0,
+            min_bet=10.0,
+        )
+        assert stake == pytest.approx(130.0)  # 200 - 70
+
+    def test_position_already_full(self):
+        """Should return 0 if already at or above Kelly cap."""
+        stake = calculate_entry_stake(
+            kelly_optimal=200.0,
+            existing_staked=200.0,
+            days_out=0,
+            min_bet=10.0,
+        )
+        assert stake == 0.0
+
+    def test_over_positioned_returns_zero(self):
+        """If existing > Kelly optimal (line moved), return 0."""
+        stake = calculate_entry_stake(
+            kelly_optimal=60.0,
+            existing_staked=70.0,
+            days_out=0,
+            min_bet=10.0,
+        )
+        assert stake == 0.0
+
+    def test_below_min_bet_returns_zero(self):
+        """If remaining room is below min bet, skip."""
+        stake = calculate_entry_stake(
+            kelly_optimal=200.0,
+            existing_staked=195.0,
+            days_out=0,
+            min_bet=10.0,
+        )
+        assert stake == 0.0  # Only $5 room, below $10 min
+
+    def test_mid_week_partial_fill(self):
+        """Day-2 with existing position should fill to day-2 cap."""
+        stake = calculate_entry_stake(
+            kelly_optimal=200.0,
+            existing_staked=70.0,
+            days_out=2,
+            min_bet=10.0,
+        )
+        # Day-2 multiplier = 0.65, allowed = 200 * 0.65 = 130
+        # Room = 130 - 70 = 60
+        assert stake == pytest.approx(60.0)
