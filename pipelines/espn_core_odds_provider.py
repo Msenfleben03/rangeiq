@@ -459,9 +459,7 @@ class ESPNCoreOddsFetcher:
         """
         sport_path = ESPN_CORE_SPORT_PATHS.get(sport.lower())
         if not sport_path:
-            raise ValueError(
-                f"Unsupported sport '{sport}'. " f"Valid: {list(ESPN_CORE_SPORT_PATHS)}"
-            )
+            raise ValueError(f"Unsupported sport '{sport}'. Valid: {list(ESPN_CORE_SPORT_PATHS)}")
         self._sport = sport.lower()
         self._sport_path = sport_path
         self._base = f"{ESPN_CORE_BASE}/{sport_path}"
@@ -478,7 +476,7 @@ class ESPNCoreOddsFetcher:
         Returns:
             List of OddsSnapshot (one per provider). Empty if no odds.
         """
-        odds_url = f"{self._base}/events/{event_id}" f"/competitions/{event_id}/odds"
+        odds_url = f"{self._base}/events/{event_id}/competitions/{event_id}/odds"
 
         try:
             data = self._client.get(odds_url)
@@ -497,18 +495,19 @@ class ESPNCoreOddsFetcher:
         snapshots: list[OddsSnapshot] = []
         for item in items:
             ref_url = item.get("$ref")
-            if not ref_url:
-                continue
-
-            try:
-                odds_data = self._client.get(ref_url)
-            except requests.RequestException as exc:
-                logger.warning(
-                    "Failed to follow $ref for event %s: %s",
-                    event_id,
-                    exc,
-                )
-                continue
+            if ref_url:
+                try:
+                    odds_data = self._client.get(ref_url)
+                except requests.RequestException as exc:
+                    logger.warning(
+                        "Failed to follow $ref for event %s: %s",
+                        event_id,
+                        exc,
+                    )
+                    continue
+            else:
+                # Some sports (e.g. MLB) return inline odds data without $ref
+                odds_data = item
 
             snapshot = parse_odds_response(odds_data, event_id)
             if snapshot is not None:
@@ -530,7 +529,7 @@ class ESPNCoreOddsFetcher:
         Returns:
             OddsSnapshot or None if not available.
         """
-        url = f"{self._base}/events/{event_id}" f"/competitions/{event_id}/odds/{provider_id}"
+        url = f"{self._base}/events/{event_id}/competitions/{event_id}/odds/{provider_id}"
 
         try:
             data = self._client.get(url)
@@ -680,9 +679,7 @@ class ESPNCoreOddsProvider(OddsProvider):
 
         # Get event IDs from Site API scoreboard
         date_compact = date.replace("-", "")
-        scoreboard_url = (
-            f"{ESPN_SITE_BASE}/{sport_path}" f"/scoreboard?dates={date_compact}&limit=500"
-        )
+        scoreboard_url = f"{ESPN_SITE_BASE}/{sport_path}/scoreboard?dates={date_compact}&limit=500"
 
         try:
             client = ESPNCoreClient(requests_per_second=2.0)

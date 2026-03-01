@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from pipelines.espn_core_odds_provider import (
-    ESPNCoreOddsProvider,
+    ESPNCoreOddsFetcher,
     OddsSnapshot,
 )
 
@@ -200,7 +200,7 @@ def pick_best_snapshot(snapshots: list[OddsSnapshot]) -> OddsSnapshot | None:
 def backfill_date(
     game_date: str,
     db_conn: sqlite3.Connection,
-    odds_provider: ESPNCoreOddsProvider,
+    odds_provider: ESPNCoreOddsFetcher,
     dry_run: bool = False,
 ) -> tuple[int, int]:
     """Backfill odds for all games on a single date.
@@ -295,7 +295,7 @@ def main() -> None:
     dates = get_dates_needing_odds(conn, args.seasons)
     logger.info("Found %d dates needing odds for seasons %s", len(dates), args.seasons)
 
-    odds_provider = ESPNCoreOddsProvider(sport="mlb", requests_per_second=2.0)
+    odds_provider = ESPNCoreOddsFetcher(sport="mlb", requests_per_second=2.0)
 
     total_matched = 0
     total_games = 0
