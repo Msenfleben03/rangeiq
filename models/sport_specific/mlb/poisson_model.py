@@ -140,6 +140,39 @@ def total_prob(matrix: np.ndarray, total: float = 8.5) -> float:
     return float(over)
 
 
+def compute_pitcher_adj(
+    xfip: float | None,
+    league_avg_xfip: float,
+    ip: float,
+    stabilization_ip: float = 50.0,
+    clamp_low: float = 2.0,
+    clamp_high: float = 7.0,
+) -> float:
+    """Compute a multiplicative lambda modifier from a pitcher's xFIP.
+
+    The adjustment is the ratio of the pitcher's clamped xFIP to the league
+    average, dampened toward 1.0 for low-IP pitchers.
+
+    Args:
+        xfip: Pitcher's xFIP from the prior season. None for unknown pitchers.
+        league_avg_xfip: League-average xFIP for the prior season.
+        ip: Innings pitched by the pitcher in the prior season.
+        stabilization_ip: IP threshold for full weight (no dampening).
+        clamp_low: Minimum allowed xFIP value (prevents unrealistic outliers).
+        clamp_high: Maximum allowed xFIP value.
+
+    Returns:
+        Multiplicative adjustment factor. 1.0 means no effect, <1.0 means
+        the pitcher suppresses runs, >1.0 means allows more runs.
+    """
+    if xfip is None or league_avg_xfip <= 0:
+        return 1.0
+    clamped = max(clamp_low, min(clamp_high, xfip))
+    raw = clamped / league_avg_xfip
+    weight = min(ip / stabilization_ip, 1.0) if stabilization_ip > 0 else 1.0
+    return 1.0 + (raw - 1.0) * weight
+
+
 # =============================================================================
 # Data Structures
 # =============================================================================

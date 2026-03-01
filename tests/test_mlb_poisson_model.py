@@ -444,3 +444,85 @@ class TestWalkForward:
 
         accuracy = correct / total if total > 0 else 0
         assert 0.40 < accuracy < 0.65
+
+
+# =============================================================================
+# TestComputePitcherAdj
+# =============================================================================
+
+
+class TestComputePitcherAdj:
+    """Tests for compute_pitcher_adj() pure function."""
+
+    def test_league_average_pitcher_returns_one(self):
+        """xFIP == league avg => adj == 1.0."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=4.2, league_avg_xfip=4.2, ip=100.0)
+        assert result == pytest.approx(1.0, abs=1e-6)
+
+    def test_elite_pitcher_below_one(self):
+        """xFIP 3.0, avg 4.2 => adj < 1.0 (reduces opposing runs)."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=3.0, league_avg_xfip=4.2, ip=100.0)
+        assert result == pytest.approx(3.0 / 4.2, abs=1e-6)
+
+    def test_bad_pitcher_above_one(self):
+        """xFIP 5.5, avg 4.2 => adj > 1.0 (increases opposing runs)."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=5.5, league_avg_xfip=4.2, ip=100.0)
+        assert result == pytest.approx(5.5 / 4.2, abs=1e-6)
+
+    def test_low_ip_dampened_toward_one(self):
+        """25 IP / 50 stab = 50% weight toward 1.0."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=3.0, league_avg_xfip=4.2, ip=25.0)
+        raw = 3.0 / 4.2
+        expected = 1.0 + (raw - 1.0) * 0.5  # 50% dampening
+        assert result == pytest.approx(expected, abs=1e-6)
+
+    def test_zero_ip_returns_one(self):
+        """0 IP => full dampening => adj == 1.0."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=3.0, league_avg_xfip=4.2, ip=0.0)
+        assert result == pytest.approx(1.0, abs=1e-6)
+
+    def test_none_xfip_returns_one(self):
+        """Unknown pitcher (None xFIP) => adj == 1.0."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=None, league_avg_xfip=4.2, ip=100.0)
+        assert result == pytest.approx(1.0, abs=1e-6)
+
+    def test_xfip_clamped_low(self):
+        """xFIP 0.5 clamped to 2.0."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=0.5, league_avg_xfip=4.2, ip=100.0)
+        assert result == pytest.approx(2.0 / 4.2, abs=1e-6)
+
+    def test_xfip_clamped_high(self):
+        """xFIP 12.0 clamped to 7.0."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=12.0, league_avg_xfip=4.2, ip=100.0)
+        assert result == pytest.approx(7.0 / 4.2, abs=1e-6)
+
+    def test_above_stabilization_ip_full_weight(self):
+        """50 IP and 200 IP should both give full weight (no dampening)."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result_50 = compute_pitcher_adj(xfip=3.0, league_avg_xfip=4.2, ip=50.0)
+        result_200 = compute_pitcher_adj(xfip=3.0, league_avg_xfip=4.2, ip=200.0)
+        assert result_50 == pytest.approx(result_200, abs=1e-6)
+
+    def test_league_avg_zero_returns_one(self):
+        """Edge case: league avg xFIP = 0 => adj == 1.0."""
+        from models.sport_specific.mlb.poisson_model import compute_pitcher_adj
+
+        result = compute_pitcher_adj(xfip=3.0, league_avg_xfip=0.0, ip=100.0)
+        assert result == pytest.approx(1.0, abs=1e-6)
