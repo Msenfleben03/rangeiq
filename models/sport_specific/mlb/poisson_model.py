@@ -228,6 +228,48 @@ class PoissonModel:
         self.team_ratings: dict[int, TeamStrength] = {}
         self.league_avg: float = 0.0
         self.home_advantage: float = hfa
+        self._calibrator = None
+
+    @property
+    def is_calibrated(self) -> bool:
+        """Whether Platt calibration has been fitted."""
+        return self._calibrator is not None
+
+    def calibrate(self, raw_probs: np.ndarray, outcomes: np.ndarray) -> None:
+        """Fit Platt scaling on raw model probabilities vs actual outcomes.
+
+        Uses logistic regression (2 parameters) to map raw moneyline
+        probabilities to calibrated win probabilities.
+
+        Args:
+            raw_probs: Array of raw moneyline_home probabilities from predict().
+            outcomes: Array of 1 (home won) / 0 (home lost).
+        """
+        from sklearn.linear_model import LogisticRegression
+
+        X = raw_probs.reshape(-1, 1) if raw_probs.ndim == 1 else raw_probs
+        self._calibrator = LogisticRegression(random_state=42)
+        self._calibrator.fit(X, outcomes)
+        logger.info(
+            "Platt calibration fitted on %d games (coef=%.4f, intercept=%.4f)",
+            len(outcomes),
+            self._calibrator.coef_[0][0],
+            self._calibrator.intercept_[0],
+        )
+
+    def calibrate_prob(self, raw_prob: float) -> float:
+        """Return calibrated probability, or raw if uncalibrated.
+
+        Args:
+            raw_prob: Raw moneyline probability from predict().
+
+        Returns:
+            Calibrated probability if calibrate() has been called,
+            otherwise returns raw_prob unchanged.
+        """
+        if self._calibrator is None:
+            return raw_prob
+        return float(self._calibrator.predict_proba(np.array([[raw_prob]]))[0][1])
 
     def fit(self, games: pd.DataFrame) -> None:
         """Estimate team strengths from historical game data.

@@ -567,6 +567,84 @@ class TestComputePitcherAdj:
 
 
 # =============================================================================
+# TestPlattCalibration
+# =============================================================================
+
+
+class TestPlattCalibration:
+    """Tests for PoissonModel Platt calibration methods."""
+
+    def test_uncalibrated_returns_raw(self):
+        """calibrate_prob() returns raw prob when uncalibrated."""
+        model, team_ids = _fit_model()
+        pred = model.predict(team_ids[0], team_ids[1])
+        raw = pred["moneyline_home"]
+        assert model.calibrate_prob(raw) == raw
+
+    def test_is_calibrated_default_false(self):
+        """New model is not calibrated."""
+        model = PoissonModel()
+        assert model.is_calibrated is False
+
+    def test_calibrate_sets_is_calibrated(self):
+        """After calibrate(), is_calibrated is True."""
+        model, _ = _fit_model()
+        probs = np.array([0.4, 0.5, 0.6, 0.7])
+        outcomes = np.array([0, 0, 1, 1])
+        model.calibrate(probs, outcomes)
+        assert model.is_calibrated is True
+
+    def test_calibrate_changes_probabilities(self):
+        """Calibrated prob differs from raw prob for non-trivial input."""
+        model, _ = _fit_model()
+        # Create biased training data: model says 0.7 but actual win rate is ~50%
+        probs = np.array([0.7] * 50 + [0.3] * 50)
+        outcomes = np.array([1] * 25 + [0] * 25 + [1] * 25 + [0] * 25)
+        model.calibrate(probs, outcomes)
+        # 0.7 should be pulled toward 0.5
+        calibrated = model.calibrate_prob(0.7)
+        assert calibrated != pytest.approx(0.7, abs=0.01)
+        assert 0.0 < calibrated < 1.0
+
+    def test_calibrate_preserves_ordering(self):
+        """Calibration preserves probability ordering (monotonic)."""
+        model, _ = _fit_model()
+        rng = np.random.RandomState(99)
+        probs = rng.uniform(0.3, 0.7, 200)
+        outcomes = (rng.random(200) < probs).astype(int)
+        model.calibrate(probs, outcomes)
+        cal_low = model.calibrate_prob(0.35)
+        cal_mid = model.calibrate_prob(0.50)
+        cal_high = model.calibrate_prob(0.65)
+        assert cal_low < cal_mid < cal_high
+
+    def test_calibrate_improves_log_loss(self):
+        """Calibration should improve log loss on miscalibrated predictions."""
+        model, _ = _fit_model()
+        rng = np.random.RandomState(42)
+        n = 1000
+        raw_probs = rng.uniform(0.3, 0.7, n)
+        # Bias: inflate probs by 10pp (simulates model overconfidence)
+        biased_probs = np.clip(raw_probs + 0.10, 0.01, 0.99)
+        outcomes = (rng.random(n) < raw_probs).astype(int)
+
+        # Log loss before calibration
+        eps = 1e-10
+        ll_before = -(
+            outcomes * np.log(biased_probs + eps) + (1 - outcomes) * np.log(1 - biased_probs + eps)
+        ).mean()
+
+        # Calibrate and compute log loss after
+        model.calibrate(biased_probs, outcomes)
+        cal_probs = np.array([model.calibrate_prob(p) for p in biased_probs])
+        ll_after = -(
+            outcomes * np.log(cal_probs + eps) + (1 - outcomes) * np.log(1 - cal_probs + eps)
+        ).mean()
+
+        assert ll_after < ll_before
+
+
+# =============================================================================
 # TestBacktestHelpers (integration, requires real data)
 # =============================================================================
 
