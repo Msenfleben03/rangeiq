@@ -566,7 +566,9 @@ class InjuryCheckConfig:
 
     # Divergence thresholds (in probability, e.g., 0.10 = 10 percentage points)
     DIVERGENCE_WARN_THRESHOLD: float = 0.10  # 10pp = warning in output
-    DIVERGENCE_BLOCK_THRESHOLD: float = 0.15  # 15pp = suppress bet
+    DIVERGENCE_BLOCK_THRESHOLD: float = (
+        1.0  # Disabled — Phase 1 backtest showed kill switch destroys value
+    )
 
     # Keywords to scan in ESPN game news headlines
     INJURY_KEYWORDS: tuple = (

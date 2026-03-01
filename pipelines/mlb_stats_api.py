@@ -447,36 +447,33 @@ class MLBStatsAPIClient:
         home_team_id = int(home.get("team", {}).get("id", 0))
         away_team_id = int(away.get("team", {}).get("id", 0))
 
-        # Find starters (battingOrder position 0 = pitcher who started)
+        # Find starters: pitchers[0] is always the starter in MLB boxscores
         home_starter_id: Optional[int] = None
         away_starter_id: Optional[int] = None
         home_starter_ip: Optional[float] = None
         away_starter_ip: Optional[float] = None
 
-        for side, starter_id_ref, starter_ip_ref in [
-            (home, "home_starter_id", "home_starter_ip"),
-            (away, "away_starter_id", "away_starter_ip"),
-        ]:
-            for _key, p in side.get("players", {}).items():
-                stats = p.get("stats", {}).get("pitching", {})
-                if p.get("gameStatus", {}).get("isCurrentPitcher") is False:
-                    if (
-                        stats.get("note", "").startswith("W")
-                        or p.get("allPositions", [{}])[0].get("type") == "Pitcher"
-                    ):
-                        pid = p.get("person", {}).get("id")
-                        ip_str = stats.get("inningsPitched", "0.0")
-                        try:
-                            ip = float(ip_str)
-                        except ValueError:
-                            ip = 0.0
-                        if side is home:
-                            home_starter_id = pid
-                            home_starter_ip = ip
-                        else:
-                            away_starter_id = pid
-                            away_starter_ip = ip
-                        break
+        for side, label in [(home, "home"), (away, "away")]:
+            pitchers = side.get("pitchers", [])
+            if not pitchers:
+                continue
+            starter_pid = pitchers[0]
+            player_data = side.get("players", {}).get(f"ID{starter_pid}", {})
+            if not player_data:
+                continue
+            pid = player_data.get("person", {}).get("id", starter_pid)
+            stats = player_data.get("stats", {}).get("pitching", {})
+            ip_str = stats.get("inningsPitched", "0.0")
+            try:
+                ip = float(ip_str)
+            except ValueError:
+                ip = 0.0
+            if label == "home":
+                home_starter_id = pid
+                home_starter_ip = ip
+            else:
+                away_starter_id = pid
+                away_starter_ip = ip
 
         info = boxscore.get("gameBoxInfo", [])
         innings = 9
