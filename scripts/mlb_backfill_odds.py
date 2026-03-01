@@ -221,7 +221,6 @@ def backfill_date(
             continue
 
         snapshots = odds_provider.fetch_game_odds(ev["event_id"])
-        time.sleep(0.5)
 
         best = pick_best_snapshot(snapshots)
         if best is None:
