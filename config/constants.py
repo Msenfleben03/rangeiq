@@ -632,5 +632,12 @@ class MLBModelConfig:
     # Database path
     DB_PATH: str = "data/mlb_data.db"
 
+    # Pitcher adjustment parameters
+    PITCHER_ADJ_ENABLED: bool = True
+    PITCHER_XFIP_STABILIZATION_IP: float = 50.0
+    PITCHER_XFIP_CLAMP_LOW: float = 2.0
+    PITCHER_XFIP_CLAMP_HIGH: float = 7.0
+    PITCHER_MIN_GS_FOR_LEAGUE_AVG: int = 5
+
 
 MLB_MODEL = MLBModelConfig()
