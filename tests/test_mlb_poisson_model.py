@@ -483,6 +483,39 @@ class TestWalkForward:
         accuracy = correct / total if total > 0 else 0
         assert 0.40 < accuracy < 0.65
 
+    def test_calibrated_backtest_runs(self):
+        """Calibrated backtest completes and returns valid probabilities."""
+        from scripts.mlb_backtest import run_backtest
+
+        rng = np.random.RandomState(42)
+        games = []
+        teams = list(range(100, 110))
+        for season in [2023, 2024]:
+            for i in range(200):
+                h, a = rng.choice(teams, 2, replace=False)
+                games.append(
+                    {
+                        "game_pk": season * 1000 + i,
+                        "game_date": f"{season}-06-15",
+                        "season": season,
+                        "home_team_id": int(h),
+                        "away_team_id": int(a),
+                        "home_score": int(rng.poisson(4.5)),
+                        "away_score": int(rng.poisson(4.3)),
+                        "home_starter_id": None,
+                        "away_starter_id": None,
+                    }
+                )
+        df = pd.DataFrame(games)
+
+        results = run_backtest(df, test_season=2024, calibrated=True)
+        assert len(results) > 0
+        assert "pred_home_prob" in results.columns
+        assert "pred_home_prob_raw" in results.columns
+        # Calibrated probs should still be valid probabilities
+        assert results["pred_home_prob"].between(0, 1).all()
+        assert results["pred_home_prob_raw"].between(0, 1).all()
+
 
 # =============================================================================
 # TestComputePitcherAdj

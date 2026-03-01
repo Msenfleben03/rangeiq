@@ -101,6 +101,7 @@ def run_backtest(
     test_season: int,
     pitcher_adj: bool = False,
     pitcher_stats: dict[tuple[int, int], dict] | None = None,
+    calibrated: bool = False,
 ) -> pd.DataFrame:
     """Run walk-forward: train on seasons < test_season, predict test_season."""
     train = games[games["season"] < test_season]
@@ -137,6 +138,23 @@ def run_backtest(
             prior_season,
             league_avg_xfip,
         )
+
+    # Platt calibration on training set predictions
+    if calibrated:
+        logger.info("Calibrating on %d training games...", len(train))
+        train_probs = []
+        train_outcomes = []
+        for _, trow in train.iterrows():
+            h_id = int(trow["home_team_id"])
+            a_id = int(trow["away_team_id"])
+            if h_id not in model.team_ratings or a_id not in model.team_ratings:
+                continue
+            if trow["home_score"] == trow["away_score"]:
+                continue
+            tpred = model.predict(h_id, a_id)
+            train_probs.append(tpred["moneyline_home"])
+            train_outcomes.append(1 if trow["home_score"] > trow["away_score"] else 0)
+        model.calibrate(np.array(train_probs), np.array(train_outcomes))
 
     results = []
     skipped_ties = 0
@@ -206,6 +224,8 @@ def run_backtest(
             away_pitcher_adj=away_padj,
         )
         home_won = row["home_score"] > row["away_score"]
+        raw_prob = pred["moneyline_home"]
+        cal_prob = model.calibrate_prob(raw_prob) if calibrated else raw_prob
 
         results.append(
             {
@@ -215,11 +235,12 @@ def run_backtest(
                 "away_team_id": away_id,
                 "home_score": row["home_score"],
                 "away_score": row["away_score"],
-                "pred_home_prob": pred["moneyline_home"],
+                "pred_home_prob": cal_prob,
+                "pred_home_prob_raw": raw_prob,
                 "pred_lambda_home": pred["lambda_home"],
                 "pred_lambda_away": pred["lambda_away"],
                 "home_won": home_won,
-                "correct": (pred["moneyline_home"] > 0.5) == home_won,
+                "correct": (cal_prob > 0.5) == home_won,
                 "home_pitcher_adj": home_padj,
                 "away_pitcher_adj": away_padj,
             }
@@ -312,6 +333,12 @@ def main() -> None:
         default=False,
         help="Enable starting pitcher xFIP adjustment",
     )
+    parser.add_argument(
+        "--calibrated",
+        action="store_true",
+        default=False,
+        help="Apply Platt calibration on training set predictions",
+    )
     args = parser.parse_args()
 
     db_path = Path(args.db_path)
@@ -333,13 +360,18 @@ def main() -> None:
         args.test_season,
         pitcher_adj=args.pitcher_adj,
         pitcher_stats=pitcher_stats,
+        calibrated=args.calibrated,
     )
     print_report(results, args.test_season, pitcher_adj=args.pitcher_adj)
 
     # Save results
     out_dir = PROJECT_ROOT / "data" / "processed"
     out_dir.mkdir(parents=True, exist_ok=True)
-    suffix = "_pitcher" if args.pitcher_adj else ""
+    suffix = ""
+    if args.pitcher_adj:
+        suffix += "_pitcher"
+    if args.calibrated:
+        suffix += "_calibrated"
     out_path = out_dir / f"mlb_backtest_{args.test_season}{suffix}.parquet"
     results.to_parquet(out_path, index=False)
     logger.info("Saved results to %s", out_path)
