@@ -564,3 +564,41 @@ class TestComputePitcherAdj:
 
         result = compute_pitcher_adj(xfip=3.0, league_avg_xfip=0.0, ip=100.0)
         assert result == pytest.approx(1.0, abs=1e-6)
+
+
+# =============================================================================
+# TestBacktestHelpers (integration, requires real data)
+# =============================================================================
+
+
+@pytest.mark.slow
+class TestBacktestHelpers:
+    """Tests for backtest pitcher helper functions."""
+
+    def test_load_pitcher_stats_returns_dict(self):
+        """load_pitcher_stats returns dict keyed by (player_id, season) with xfip/ip."""
+        if not MLB_DB_PATH.exists():
+            pytest.skip("mlb_data.db not found")
+
+        from scripts.mlb_backtest import load_pitcher_stats
+
+        stats = load_pitcher_stats(MLB_DB_PATH)
+        assert len(stats) > 100
+        # Check structure of a random entry
+        key, val = next(iter(stats.items()))
+        assert isinstance(key, tuple) and len(key) == 2  # (player_id, season)
+        assert "xfip" in val
+        assert "ip" in val
+        assert "games_started" in val
+
+    def test_league_avg_xfip_reasonable(self):
+        """League avg xFIP should be in [3.5, 5.5] for each season."""
+        if not MLB_DB_PATH.exists():
+            pytest.skip("mlb_data.db not found")
+
+        from scripts.mlb_backtest import compute_league_avg_xfip, load_pitcher_stats
+
+        stats = load_pitcher_stats(MLB_DB_PATH)
+        for season in [2023, 2024, 2025]:
+            avg = compute_league_avg_xfip(stats, season)
+            assert 3.5 <= avg <= 5.5, f"Season {season} avg xFIP = {avg}"
