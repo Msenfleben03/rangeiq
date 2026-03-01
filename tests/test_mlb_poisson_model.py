@@ -357,6 +357,44 @@ class TestPoissonModelPredict:
         pred = self.model.predict(self.team_ids[0], self.team_ids[1], run_line=-1.5)
         assert 0 < pred["run_line_home"] < 1
 
+    def test_predict_with_pitcher_adj_good_away_pitcher(self):
+        """Good away pitcher (adj 0.8) reduces lambda_home."""
+        pred_base = self.model.predict(self.team_ids[0], self.team_ids[1])
+        pred_adj = self.model.predict(self.team_ids[0], self.team_ids[1], away_pitcher_adj=0.8)
+        assert pred_adj["lambda_home"] < pred_base["lambda_home"]
+        assert pred_adj["lambda_away"] == pytest.approx(pred_base["lambda_away"], abs=1e-6)
+
+    def test_predict_with_pitcher_adj_bad_home_pitcher(self):
+        """Bad home pitcher (adj 1.3) increases lambda_away."""
+        pred_base = self.model.predict(self.team_ids[0], self.team_ids[1])
+        pred_adj = self.model.predict(self.team_ids[0], self.team_ids[1], home_pitcher_adj=1.3)
+        assert pred_adj["lambda_away"] > pred_base["lambda_away"]
+        assert pred_adj["lambda_home"] == pytest.approx(pred_base["lambda_home"], abs=1e-6)
+
+    def test_predict_with_both_pitcher_adjs(self):
+        """Both adjustments applied simultaneously."""
+        pred_base = self.model.predict(self.team_ids[0], self.team_ids[1])
+        pred_adj = self.model.predict(
+            self.team_ids[0],
+            self.team_ids[1],
+            home_pitcher_adj=1.2,
+            away_pitcher_adj=0.9,
+        )
+        assert pred_adj["lambda_home"] < pred_base["lambda_home"]  # away pitcher good
+        assert pred_adj["lambda_away"] > pred_base["lambda_away"]  # home pitcher bad
+
+    def test_predict_pitcher_adj_one_means_no_change(self):
+        """Pitcher adj 1.0 produces identical results to no adjustment."""
+        pred_base = self.model.predict(self.team_ids[0], self.team_ids[1])
+        pred_adj = self.model.predict(
+            self.team_ids[0],
+            self.team_ids[1],
+            home_pitcher_adj=1.0,
+            away_pitcher_adj=1.0,
+        )
+        assert pred_adj["lambda_home"] == pytest.approx(pred_base["lambda_home"], abs=1e-10)
+        assert pred_adj["lambda_away"] == pytest.approx(pred_base["lambda_away"], abs=1e-10)
+
 
 # =============================================================================
 # TestFromDB (integration, requires real data)

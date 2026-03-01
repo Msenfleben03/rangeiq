@@ -366,6 +366,8 @@ class PoissonModel:
         park_factor: float = 1.0,
         total_line: float = 8.5,
         run_line: float = -1.5,
+        home_pitcher_adj: float = 1.0,
+        away_pitcher_adj: float = 1.0,
     ) -> dict:
         """Predict game outcome probabilities.
 
@@ -379,6 +381,10 @@ class PoissonModel:
                 <1.0 = pitcher-friendly. Applied equally to both teams.
             total_line: The total (over/under) line. Default 8.5.
             run_line: The run line from home perspective. Default -1.5.
+            home_pitcher_adj: Multiplicative modifier from home starter's xFIP.
+                <1.0 = good pitcher (suppresses away runs), >1.0 = bad pitcher.
+            away_pitcher_adj: Multiplicative modifier from away starter's xFIP.
+                <1.0 = good pitcher (suppresses home runs), >1.0 = bad pitcher.
 
         Returns:
             Dictionary with keys:
@@ -400,10 +406,20 @@ class PoissonModel:
         away = self.team_ratings[away_team_id]
 
         lambda_home = (
-            self.league_avg * home.attack * away.defense * self.home_advantage * park_factor
+            self.league_avg
+            * home.attack
+            * away.defense
+            * self.home_advantage
+            * park_factor
+            * away_pitcher_adj
         )
         lambda_away = (
-            self.league_avg * away.attack * home.defense / self.home_advantage * park_factor
+            self.league_avg
+            * away.attack
+            * home.defense
+            / self.home_advantage
+            * park_factor
+            * home_pitcher_adj
         )
 
         matrix = build_score_matrix(lambda_home, lambda_away)
