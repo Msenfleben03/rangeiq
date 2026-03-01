@@ -300,6 +300,21 @@ CREATE TABLE IF NOT EXISTS bullpen_usage (
 
 CREATE INDEX IF NOT EXISTS idx_bullpen_player_date ON bullpen_usage(player_id, game_date);
 CREATE INDEX IF NOT EXISTS idx_bullpen_team_date ON bullpen_usage(team_id, game_date);
+
+-- Historical odds from ESPN Core API
+CREATE TABLE IF NOT EXISTS odds (
+    game_pk         INTEGER NOT NULL REFERENCES games(game_pk),
+    provider        TEXT NOT NULL,
+    home_ml_open    INTEGER,
+    away_ml_open    INTEGER,
+    home_ml_close   INTEGER,
+    away_ml_close   INTEGER,
+    total_open      REAL,
+    total_close     REAL,
+    fetched_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_pk, provider)
+);
+CREATE INDEX IF NOT EXISTS idx_odds_game ON odds(game_pk);
 """
 
 VIEW_SQL = """
