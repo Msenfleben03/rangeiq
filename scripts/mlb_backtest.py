@@ -537,10 +537,129 @@ def print_report(results: pd.DataFrame, test_season: int, pitcher_adj: bool = Fa
             print(f"  Edges >= {EDGE_THRESHOLD:.0%}: {len(pos_edges)}")
             if len(pos_edges) > 0:
                 print(f"  Avg positive edge: {pos_edges.mean():+.2%}")
+            # 4-cell breakdown
+            breakdown = compute_cell_breakdown(bets)
+            print("\n4-Cell Breakdown (home/away x fav/dog, de-vigged CLV):")
+            hdr = (
+                f"{'Cell':<12} {'Bets':>6} {'Win%':>7} {'ROI':>7} "
+                f"{'AvgCLV':>8} {'CLVn':>6} {'AvgEdge':>9}"
+            )
+            print(hdr)
+            print("-" * len(hdr))
+            for _, r in breakdown.iterrows():
+                win_r = f"{r['win_rate']:.1%}" if r["win_rate"] is not None else "—"
+                roi_s = f"{r['roi']:+.1%}" if r["roi"] is not None else "—"
+                clv_s = f"{r['avg_clv']:+.2%}" if r["avg_clv"] is not None else "—"
+                clv_n = str(int(r["clv_n"])) if r["clv_n"] else "—"
+                edge_s = f"{r['avg_edge']:+.2%}" if r["avg_edge"] is not None else "—"
+                print(
+                    f"{r['cell']:<12} {r['count']:>6} {win_r:>7} {roi_s:>7} "
+                    f"{clv_s:>8} {clv_n:>6} {edge_s:>9}"
+                )
         else:
             print(f"No bets met {EDGE_THRESHOLD:.0%} edge threshold")
 
     print(f"{'=' * 60}")
+
+
+def _classify_cell(bet_side: str, bet_odds: float) -> str:
+    """Classify a bet into one of four cells: home/away × fav/dog."""
+    is_fav = float(bet_odds) < 0
+    if bet_side == "home":
+        return "home_fav" if is_fav else "home_dog"
+    return "away_fav" if is_fav else "away_dog"
+
+
+def compute_cell_breakdown(bets: pd.DataFrame) -> pd.DataFrame:
+    """Compute per-cell CLV, ROI, and edge stats for the 4-cell diagnostic.
+
+    Args:
+        bets: Placed-bet rows (stake > 0) containing bet_side, bet_odds, pnl,
+            stake, clv, edge_home, and edge_away columns.
+
+    Returns:
+        DataFrame with one row per cell (home_fav, home_dog, away_fav, away_dog)
+        and columns: cell, count, win_rate, roi, avg_clv, clv_n, avg_edge,
+        edge_p25, edge_p50, edge_p75.
+    """
+    bets = bets.copy()
+    bets["cell"] = bets.apply(lambda r: _classify_cell(r["bet_side"], r["bet_odds"]), axis=1)
+    bets["bet_edge"] = bets.apply(
+        lambda r: r["edge_home"] if r["bet_side"] == "home" else r["edge_away"], axis=1
+    )
+    bets["won"] = bets["pnl"] > 0
+
+    rows = []
+    for cell in ["home_fav", "home_dog", "away_fav", "away_dog"]:
+        sub = bets[bets["cell"] == cell]
+        if sub.empty:
+            rows.append(
+                {
+                    "cell": cell,
+                    "count": 0,
+                    "win_rate": None,
+                    "roi": None,
+                    "avg_clv": None,
+                    "clv_n": 0,
+                    "avg_edge": None,
+                    "edge_p25": None,
+                    "edge_p50": None,
+                    "edge_p75": None,
+                }
+            )
+            continue
+        clv_sub = sub["clv"].dropna()
+        edge_sub = sub["bet_edge"].dropna()
+        rows.append(
+            {
+                "cell": cell,
+                "count": len(sub),
+                "win_rate": sub["won"].mean(),
+                "roi": sub["pnl"].sum() / sub["stake"].sum() if sub["stake"].sum() > 0 else None,
+                "avg_clv": clv_sub.mean() if not clv_sub.empty else None,
+                "clv_n": len(clv_sub),
+                "avg_edge": edge_sub.mean() if not edge_sub.empty else None,
+                "edge_p25": edge_sub.quantile(0.25) if not edge_sub.empty else None,
+                "edge_p50": edge_sub.quantile(0.50) if not edge_sub.empty else None,
+                "edge_p75": edge_sub.quantile(0.75) if not edge_sub.empty else None,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def format_cell_markdown(breakdown: pd.DataFrame, test_season: int) -> str:
+    """Format 4-cell breakdown as a Markdown table.
+
+    Args:
+        breakdown: Output of compute_cell_breakdown().
+        test_season: The season being reported.
+
+    Returns:
+        Markdown string containing the diagnostic table.
+    """
+    lines = [
+        f"## MLB 4-Cell CLV Diagnostic (De-Vigged) — Season {test_season}",
+        "",
+        "| Cell | Bets | Win% | ROI | Avg CLV (n) | Avg Edge | p25/p50/p75 Edge |",
+        "|------|------|------|-----|-------------|----------|-----------------|",
+    ]
+    for _, row in breakdown.iterrows():
+        win_rate = f"{row['win_rate']:.1%}" if row["win_rate"] is not None else "—"
+        roi = f"{row['roi']:+.1%}" if row["roi"] is not None else "—"
+        avg_clv = (
+            f"{row['avg_clv']:+.2%} ({int(row['clv_n'])})" if row["avg_clv"] is not None else "—"
+        )
+        avg_edge = f"{row['avg_edge']:+.2%}" if row["avg_edge"] is not None else "—"
+        edge_pct = (
+            f"{row['edge_p25']:+.1%}/{row['edge_p50']:+.1%}/{row['edge_p75']:+.1%}"
+            if row["edge_p25"] is not None
+            else "—"
+        )
+        lines.append(
+            f"| {row['cell']} | {row['count']} | {win_rate} | {roi} | "
+            f"{avg_clv} | {avg_edge} | {edge_pct} |"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
@@ -607,6 +726,18 @@ def main() -> None:
         odds_df=odds_df,
     )
     print_report(results, args.test_season, pitcher_adj=args.pitcher_adj)
+
+    # Save 4-cell diagnostic markdown when odds are loaded
+    if args.odds and not results.empty:
+        bets = results[results["stake"] > 0].copy()
+        if not bets.empty:
+            breakdown = compute_cell_breakdown(bets)
+            md = format_cell_markdown(breakdown, args.test_season)
+            md_dir = PROJECT_ROOT / "docs" / "mlb"
+            md_dir.mkdir(parents=True, exist_ok=True)
+            md_path = md_dir / f"4-cell-diagnostic-{args.test_season}.md"
+            md_path.write_text(md, encoding="utf-8")
+            logger.info("Saved 4-cell diagnostic to %s", md_path)
 
     # Save results
     out_dir = PROJECT_ROOT / "data" / "processed"
