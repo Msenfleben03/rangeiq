@@ -539,9 +539,11 @@ def print_report(
     # F5 accuracy (only when f5 column present and populated)
     if "f5_correct" in results.columns and results["f5_correct"].notna().any():
         f5_valid = results[results["f5_correct"].notna()]
-        f5_acc = f5_valid["f5_correct"].mean()
+        # Force bool dtype to handle mixed np.bool_/None object columns correctly
+        f5_bool = f5_valid["f5_correct"].astype(bool)
+        f5_acc = f5_bool.mean()
         f5_ties = results["f5_correct"].isna().sum()
-        print(f"F5 Accuracy: {f5_acc:.1%} ({int(f5_valid['f5_correct'].sum())}/{len(f5_valid)})")
+        print(f"F5 Accuracy: {f5_acc:.1%} ({int(f5_bool.sum())}/{len(f5_valid)})")
         print(f"F5 Ties (pushes excluded): {f5_ties} ({f5_ties / len(results):.1%})")
         print(f"Full-game accuracy (same games): {accuracy:.1%}")
         print(f"F5 vs full-game delta: {f5_acc - accuracy:+.1%}")
@@ -815,7 +817,8 @@ def main() -> None:
             md = format_cell_markdown(breakdown, args.test_season)
             md_dir = PROJECT_ROOT / "docs" / "mlb"
             md_dir.mkdir(parents=True, exist_ok=True)
-            md_path = md_dir / f"4-cell-diagnostic-{args.test_season}.md"
+            f5_suffix = "-f5" if args.f5 else ""
+            md_path = md_dir / f"4-cell-diagnostic-{args.test_season}{f5_suffix}.md"
             md_path.write_text(md, encoding="utf-8")
             logger.info("Saved 4-cell diagnostic to %s", md_path)
 
