@@ -21,7 +21,7 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from betting.odds_converter import american_to_decimal, american_to_implied_prob
+from betting.odds_converter import american_to_decimal, american_to_implied_prob, devig_prob
 from config.constants import MLB_MODEL
 from models.sport_specific.mlb.poisson_model import PoissonModel, compute_pitcher_adj
 
@@ -322,25 +322,28 @@ def run_backtest(
 
         edge_home = None
         edge_away = None
-        implied_home_close = None
-        implied_away_close = None
         bet_side = None
         bet_odds = None
         stake = 0.0
         pnl = None
         clv = None
 
-        if home_ml_close is not None:
+        if home_ml_close is not None and away_ml_close is not None:
             try:
-                implied_home_close = american_to_implied_prob(int(home_ml_close))
-                edge_home = cal_prob - implied_home_close
+                fair_home_close = devig_prob(int(home_ml_close), int(away_ml_close))
+                fair_away_close = 1.0 - fair_home_close
+                edge_home = cal_prob - fair_home_close
+                edge_away = (1 - cal_prob) - fair_away_close
             except (ValueError, TypeError):
                 pass
-
-        if away_ml_close is not None:
+        elif home_ml_close is not None:
             try:
-                implied_away_close = american_to_implied_prob(int(away_ml_close))
-                edge_away = (1 - cal_prob) - implied_away_close
+                edge_home = cal_prob - american_to_implied_prob(int(home_ml_close))
+            except (ValueError, TypeError):
+                pass
+        elif away_ml_close is not None:
+            try:
+                edge_away = (1 - cal_prob) - american_to_implied_prob(int(away_ml_close))
             except (ValueError, TypeError):
                 pass
 
