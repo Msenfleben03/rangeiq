@@ -161,7 +161,7 @@ def devig_prob(american_side: int, american_other: int) -> float:
         >>> devig_prob(-110, -110)
         0.5
         >>> devig_prob(-120, +105)  # favorite side
-        0.5279...
+        0.5279503105590062
     """
     raw_side = american_to_implied_prob(american_side)
     raw_other = american_to_implied_prob(american_other)
