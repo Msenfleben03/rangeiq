@@ -214,7 +214,7 @@ sports_betting/
 │           └── umpire_features.py    # Zone size, K/BB rates, run impact
 │
 ├── betting/
-│   ├── odds_converter.py     # American/decimal/implied prob, CLV calc, Kelly
+│   ├── odds_converter.py     # American/decimal/implied prob, CLV calc, Kelly, devig_prob()
 │   └── arb_detector.py       # Cross-book arbitrage detection
 │
 ├── tracking/
@@ -267,9 +267,10 @@ sports_betting/
 ├── dashboards/
 │   └── ncaab_dashboard.html       # Unified NCAAB dashboard (9 tabs)
 │
-├── tests/                         # 35 test files, ~629 tests + 35 planned MLB
+├── tests/                         # 36 test files, ~635 tests + 35 planned MLB
 │   ├── conftest.py                # Shared fixtures
 │   ├── test_elo.py                # Elo model tests
+│   ├── test_odds_converter.py     # 6 tests for devig_prob() + odds utilities
 │   ├── test_daily_run.py          # 29 tests for paper betting pipeline (incl. CLV)
 │   ├── test_fetch_opening_odds.py # 5 tests for opening odds fetcher
 │   ├── test_feature_engineering.py   # 30 tests for feature engine
@@ -303,7 +304,9 @@ sports_betting/
 │   ├── test_mlb_pitcher_model.py    # Pitcher evaluation tests
 │   ├── test_mlb_stats_api.py        # MLB Stats API client tests
 │   ├── test_mlb_weather_fetcher.py  # Open-Meteo weather tests
-│   └── test_mlb_daily_run.py        # MLB daily pipeline tests
+│   ├── test_mlb_daily_run.py        # MLB daily pipeline tests
+│   ├── test_mlb_backfill_starters.py # Starter ID backfill tests (23 tests)
+│   └── test_mlb_backfill_odds.py     # MLB odds backfill tests (7 tests)
 │
 ├── scripts/
 │   │   # === Core Pipeline ===
@@ -346,6 +349,8 @@ sports_betting/
 │   ├── mlb_train_model.py             # Model training
 │   ├── mlb_fetch_projections.py       # Preseason projections pull
 │   ├── mlb_init_db.py                 # Initialize mlb_data.db schema
+│   ├── mlb_backfill_starters.py       # Backfill starter IDs from boxscore API
+│   ├── mlb_backfill_odds.py           # Backfill 2023-2025 ML odds from ESPN Core API
 │   │   # === Exploratory ===
 │   └── test_cbbdata_api.py            # CBBData API exploratory testing
 │
@@ -372,7 +377,12 @@ sports_betting/
     ├── KENPOM_EFFICIENCY_RESEARCH.md  # KenPom/Barttorvik data options
     ├── reports/                       # Generated analysis reports
     ├── plans/                         # Design documents
-    │   └── 2026-02-25-mlb-expansion-design.md  # MLB expansion design
+    │   ├── 2026-02-25-mlb-expansion-design.md  # MLB expansion design
+    │   ├── 2026-02-26-poisson-model-v1.md      # Poisson model v1 design
+    │   ├── 2026-02-27-lookahead-predictions.md  # Lookahead predictions design
+    │   ├── 2026-02-28-injury-divergence-system.md # Injury/divergence overhaul (3 phases)
+    │   ├── 2026-03-02-mlb-measurement-fix-design.md  # CLV/edge de-vig design
+    │   └── 2026-03-02-mlb-measurement-fix-impl.md    # CLV/edge de-vig implementation plan
     ├── mlb/                           # MLB-specific documentation
     │   ├── README.md                  # MLB model overview + NCAAB comparison
     │   ├── DATA_SOURCES.md            # MLB Stats API, pybaseball, Open-Meteo
@@ -457,7 +467,16 @@ sports_betting/
 - [ ] Backfill 2026 odds (0% coverage currently)
 - [x] MLB Phase 1a: init_db — mlb_data.db schema (13 tables, 30 teams, 360 park factors)
 - [x] MLB Phase 1b: historical data — 7,511 games + 2,193 pitcher stat rows (2023-2025)
-- [ ] MLB Phase 1c: Poisson model v1 (models/sport_specific/mlb/poisson_model.py)
+- [x] MLB Phase 1c: Poisson model v1 — 54.1% accuracy, log loss 0.697 (2025 test)
+- [x] MLB Phase 1d: Starter backfill + pitcher adjustment (backfill running, parser fixed)
+- [x] MLB measurement fix: de-vig CLV + edge (`devig_prob()` in `betting/odds_converter.py`)
+  (2025 results: -3.0% ROI, -1.74% de-vigged CLV)
+
+### Injury/Divergence System Overhaul
+
+- [ ] Phase 1: Backtest ESPN divergence (2023-2025, ~18K games) — plan: `docs/plans/2026-02-28-injury-divergence-system.md`
+- [ ] Phase 2: Graduated sizing (replace binary kill switch with data-driven curve)
+- [ ] Phase 3: Injury data enrichment (ESPN injuries API + cross-reference sources)
 
 ### Prediction Markets Integration
 
