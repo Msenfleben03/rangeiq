@@ -5,6 +5,11 @@
 Document significant technical and strategic decisions with rationale.
 This helps Claude Code understand not just *what* was decided, but *why*.
 
+## Scope
+
+This file covers **cross-sport and NCAAB-specific** decisions (ADR-001 through ADR-020).
+MLB-specific decisions are in [`docs/mlb/DECISIONS.md`](mlb/DECISIONS.md).
+
 ---
 
 ## ADR-001: Primary Success Metric is CLV, Not Win Rate

@@ -363,7 +363,7 @@ sports_betting/
 │
 └── docs/
     ├── DATA_DICTIONARY.md             # Field definitions
-    ├── DECISIONS.md                   # Architecture decisions (20 ADRs)
+    ├── DECISIONS.md                   # Architecture decisions (20 cross-sport + NCAAB ADRs; MLB → docs/mlb/DECISIONS.md)
     ├── ARCHITECTURE.md                # System architecture overview
     ├── DATA_SOURCES.md                # Master data source reference
     ├── RUNBOOK.md                     # Daily/weekly/monthly operations
@@ -385,10 +385,13 @@ sports_betting/
     │   └── 2026-03-02-mlb-measurement-fix-impl.md    # CLV/edge de-vig implementation plan
     ├── mlb/                           # MLB-specific documentation
     │   ├── README.md                  # MLB model overview + NCAAB comparison
+    │   ├── DECISIONS.md               # MLB ADRs (11 decisions: Poisson, de-vig, F5, etc.)
     │   ├── DATA_SOURCES.md            # MLB Stats API, pybaseball, Open-Meteo
     │   ├── DATA_DICTIONARY.md         # mlb_data.db schema (14 tables)
     │   ├── MODEL_ARCHITECTURE.md      # Poisson model design, feature hierarchy
     │   ├── PIPELINE_DESIGN.md         # Event-driven pipeline architecture
+    │   ├── 4-cell-diagnostic-2024.md  # De-vigged CLV/ROI by cell (home/away × fav/dog)
+    │   ├── 4-cell-diagnostic-2025.md  # De-vigged CLV/ROI by cell (home/away × fav/dog)
     │   └── research/                  # MLB research by topic
     │       ├── pitching-metrics.md    # SIERA, K-BB%, Stuff+, stabilization
     │       ├── bullpen-fatigue.md     # Fatigue modeling, availability tracking
