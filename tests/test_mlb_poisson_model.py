@@ -328,6 +328,10 @@ class TestPoissonModelPredict:
             "total_over",
         }
         assert expected_keys.issubset(pred.keys())
+        assert "lambda_f5_home" in pred
+        assert "lambda_f5_away" in pred
+        assert "f5_moneyline_home" in pred
+        assert 0 < pred["f5_moneyline_home"] < 1
 
     def test_predict_moneyline_valid_range(self):
         """Moneyline probability is between 0 and 1."""
@@ -394,6 +398,36 @@ class TestPoissonModelPredict:
         )
         assert pred_adj["lambda_home"] == pytest.approx(pred_base["lambda_home"], abs=1e-10)
         assert pred_adj["lambda_away"] == pytest.approx(pred_base["lambda_away"], abs=1e-10)
+
+    def test_f5_lambda_is_scaled_from_full_game(self):
+        """lambda_f5 = lambda_full * F5_SCALE (≈ 0.567)."""
+        from models.sport_specific.mlb.poisson_model import _F5_SCALE
+
+        result = self.model.predict(self.team_ids[0], self.team_ids[1])
+
+        assert abs(result["lambda_f5_home"] - result["lambda_home"] * _F5_SCALE) < 1e-9
+        assert abs(result["lambda_f5_away"] - result["lambda_away"] * _F5_SCALE) < 1e-9
+
+    def test_f5_prob_closer_to_half_than_full_game(self):
+        """F5 probability is closer to 0.5 than full-game (smaller expected scoring gap)."""
+        result = self.model.predict(self.team_ids[0], self.team_ids[1])
+
+        full_game_dist = abs(result["moneyline_home"] - 0.5)
+        f5_dist = abs(result["f5_moneyline_home"] - 0.5)
+        assert f5_dist <= full_game_dist
+
+    def test_f5_prob_within_valid_range(self):
+        """f5_moneyline_home is a valid probability."""
+        result = self.model.predict(self.team_ids[0], self.team_ids[1])
+
+        assert 0.0 < result["f5_moneyline_home"] < 1.0
+
+    def test_f5_prob_independent_of_total_line_param(self):
+        """f5_moneyline_home is not affected by total_line parameter (moneyline market)."""
+        r1 = self.model.predict(self.team_ids[0], self.team_ids[1], total_line=8.5)
+        r2 = self.model.predict(self.team_ids[0], self.team_ids[1], total_line=10.5)
+
+        assert r1["f5_moneyline_home"] == r2["f5_moneyline_home"]
 
 
 # =============================================================================

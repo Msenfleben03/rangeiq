@@ -27,6 +27,13 @@ from scipy.stats import poisson
 
 logger = logging.getLogger(__name__)
 
+# F5 (First 5 Innings) lambda scaling
+# Base: 5 of 9 innings. Bump: first inning averages ~0.6 runs vs 0.48 per-inning average.
+# Sources: docs/mlb/research/market-strategies.md, ADR-MLB-010
+_F5_FRACTION = 5 / 9
+_F5_BUMP = 1.02
+_F5_SCALE = _F5_FRACTION * _F5_BUMP  # ≈ 0.567
+
 
 # =============================================================================
 # Pure Math Functions (stateless)
@@ -466,12 +473,20 @@ class PoissonModel:
 
         matrix = build_score_matrix(lambda_home, lambda_away)
 
+        lambda_f5_home = lambda_home * _F5_SCALE
+        lambda_f5_away = lambda_away * _F5_SCALE
+        f5_matrix = build_score_matrix(lambda_f5_home, lambda_f5_away)
+        f5_prob = moneyline_prob(f5_matrix)
+
         return {
             "lambda_home": lambda_home,
             "lambda_away": lambda_away,
             "moneyline_home": moneyline_prob(matrix),
             "run_line_home": run_line_prob(matrix, line=run_line),
             "total_over": total_prob(matrix, total=total_line),
+            "lambda_f5_home": lambda_f5_home,
+            "lambda_f5_away": lambda_f5_away,
+            "f5_moneyline_home": f5_prob,
         }
 
     @classmethod
