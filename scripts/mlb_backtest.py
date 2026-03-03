@@ -384,21 +384,24 @@ def run_backtest(
                     except ValueError:
                         stake = 0.0
 
-        # CLV: compare opening to closing (if opening available)
-        if bet_side == "home" and home_ml_open is not None and home_ml_close is not None:
+        # CLV: de-vigged open vs de-vigged close (requires all 4 odds)
+        has_all_four = all(
+            x is not None for x in [home_ml_open, away_ml_open, home_ml_close, away_ml_close]
+        )
+        if bet_side == "home" and has_all_four:
             try:
-                imp_open = american_to_implied_prob(int(home_ml_open))
-                imp_close = american_to_implied_prob(int(home_ml_close))
-                if imp_open > 0:
-                    clv = (imp_close - imp_open) / imp_open
+                fair_home_open = devig_prob(int(home_ml_open), int(away_ml_open))
+                fair_home_close = devig_prob(int(home_ml_close), int(away_ml_close))
+                if fair_home_open > 0:
+                    clv = (fair_home_close - fair_home_open) / fair_home_open
             except (ValueError, TypeError):
                 pass
-        elif bet_side == "away" and away_ml_open is not None and away_ml_close is not None:
+        elif bet_side == "away" and has_all_four:
             try:
-                imp_open = american_to_implied_prob(int(away_ml_open))
-                imp_close = american_to_implied_prob(int(away_ml_close))
-                if imp_open > 0:
-                    clv = (imp_close - imp_open) / imp_open
+                fair_away_open = devig_prob(int(away_ml_open), int(home_ml_open))
+                fair_away_close = devig_prob(int(away_ml_close), int(home_ml_close))
+                if fair_away_open > 0:
+                    clv = (fair_away_close - fair_away_open) / fair_away_open
             except (ValueError, TypeError):
                 pass
 
