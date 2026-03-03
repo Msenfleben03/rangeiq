@@ -141,6 +141,36 @@ def calculate_clv(odds_placed: int, odds_closing: int) -> float:
     return (prob_closing - prob_placed) / prob_placed
 
 
+def devig_prob(american_side: int, american_other: int) -> float:
+    """De-vig one side of a two-way market using multiplicative normalization.
+
+    Divides each side's raw implied probability by the sum of both sides,
+    yielding the fair (no-vig) probability. Industry standard (Pinnacle method).
+
+    Args:
+        american_side: American odds for the side to de-vig.
+        american_other: American odds for the opposing side.
+
+    Returns:
+        Fair probability for american_side (0 to 1).
+
+    Raises:
+        ValueError: If either odds value is 0, or the total is non-positive.
+
+    Examples:
+        >>> devig_prob(-110, -110)
+        0.5
+        >>> devig_prob(-120, +105)  # favorite side
+        0.5279...
+    """
+    raw_side = american_to_implied_prob(american_side)
+    raw_other = american_to_implied_prob(american_other)
+    total = raw_side + raw_other
+    if total <= 0:
+        raise ValueError(f"Sum of raw probabilities must be positive, got {total}")
+    return raw_side / total
+
+
 def fractional_kelly(
     win_prob: float, decimal_odds: float, fraction: float = 0.25, max_bet: float = 0.03
 ) -> float:
