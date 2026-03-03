@@ -37,11 +37,12 @@ DB_PATH = PROJECT_ROOT / "data" / "mlb_data.db"
 
 
 def load_games(db_path: Path) -> pd.DataFrame:
-    """Load all final games with starter IDs from the database."""
+    """Load all final games with starter IDs and F5 scores from the database."""
     conn = sqlite3.connect(str(db_path))
     df = pd.read_sql_query(
         "SELECT game_pk, game_date, season, home_team_id, away_team_id, "
-        "home_score, away_score, home_starter_id, away_starter_id "
+        "home_score, away_score, home_starter_id, away_starter_id, "
+        "home_f5_score, away_f5_score "
         "FROM games WHERE status = 'final'",
         conn,
     )
@@ -181,6 +182,8 @@ def run_backtest(
     pitcher_stats: dict[tuple[int, int], dict] | None = None,
     calibrated: bool = False,
     odds_df: pd.DataFrame | None = None,
+    f5: bool = False,
+    no_away_fav: bool = True,
 ) -> pd.DataFrame:
     """Run walk-forward: train on seasons < test_season, predict test_season."""
     train = games[games["season"] < test_season]
@@ -218,8 +221,16 @@ def run_backtest(
             league_avg_xfip,
         )
 
+    # F5 mode: warn and ignore --calibrated (use raw prob — ADR-MLB-010)
+    if f5 and calibrated:
+        logger.warning(
+            "--f5 and --calibrated are mutually exclusive. "
+            "Using raw F5 probability (uncalibrated). "
+            "Fit a dedicated F5 calibrator after ~500 F5 outcomes."
+        )
+
     # Platt calibration on training set predictions
-    if calibrated:
+    if calibrated and not f5:
         logger.info("Calibrating on %d training games...", len(train))
         train_probs = []
         train_outcomes = []
@@ -310,7 +321,30 @@ def run_backtest(
         )
         home_won = row["home_score"] > row["away_score"]
         raw_prob = pred["moneyline_home"]
-        cal_prob = model.calibrate_prob(raw_prob) if calibrated else raw_prob
+
+        if f5:
+            # Raw F5 probability — do NOT calibrate (ADR-MLB-010)
+            cal_prob = pred["f5_moneyline_home"]
+        else:
+            cal_prob = model.calibrate_prob(raw_prob) if calibrated else raw_prob
+
+        # F5 accuracy (requires F5 scores in games data)
+        f5_correct = None
+        home_f5_score = None
+        away_f5_score = None
+        if f5:
+            home_f5 = row.get("home_f5_score")
+            away_f5 = row.get("away_f5_score")
+            home_f5_score = home_f5
+            away_f5_score = away_f5
+            if (
+                home_f5 is not None
+                and away_f5 is not None
+                and not pd.isna(home_f5)
+                and not pd.isna(away_f5)
+                and int(home_f5) != int(away_f5)
+            ):
+                f5_correct = (cal_prob > 0.5) == (int(home_f5) > int(away_f5))
 
         # Odds integration
         game_pk = int(row["game_pk"])
@@ -375,6 +409,16 @@ def run_backtest(
             else:
                 bet_side = None
 
+            # Suppress away_fav bets in F5 mode (ADR-MLB-011: worst CLV cell)
+            if (
+                f5
+                and no_away_fav
+                and bet_side == "away"
+                and bet_odds is not None
+                and int(bet_odds) < 0
+            ):
+                bet_side = None
+
             if bet_side is not None and bet_odds is not None:
                 stake = _kelly_stake(win_prob, bet_odds)
                 if stake > 0:
@@ -433,6 +477,10 @@ def run_backtest(
                 "stake": stake,
                 "pnl": pnl,
                 "clv": clv,
+                "f5_moneyline_home": pred["f5_moneyline_home"] if f5 else None,
+                "home_f5_score": home_f5_score,
+                "away_f5_score": away_f5_score,
+                "f5_correct": f5_correct,
             }
         )
 
@@ -448,7 +496,12 @@ def run_backtest(
     return pd.DataFrame(results)
 
 
-def print_report(results: pd.DataFrame, test_season: int, pitcher_adj: bool = False) -> None:
+def print_report(
+    results: pd.DataFrame,
+    test_season: int,
+    pitcher_adj: bool = False,
+    f5: bool = False,
+) -> None:
     """Print backtest summary."""
     if results.empty:
         print(f"No results for season {test_season}")
@@ -474,12 +527,25 @@ def print_report(results: pd.DataFrame, test_season: int, pitcher_adj: bool = Fa
     )
 
     model_label = "v1+pitcher" if pitcher_adj else "v1"
+    if f5:
+        model_label += "+F5"
     print(f"\n{'=' * 60}")
     print(f"MLB Poisson Model {model_label} -- Backtest {test_season}")
     print(f"{'=' * 60}")
     print(f"Games:      {n}")
     print(f"Accuracy:   {accuracy:.1%} ({correct}/{n})")
     print(f"Log Loss:   {log_loss:.4f}")
+
+    # F5 accuracy (only when f5 column present and populated)
+    if "f5_correct" in results.columns and results["f5_correct"].notna().any():
+        f5_valid = results[results["f5_correct"].notna()]
+        f5_acc = f5_valid["f5_correct"].mean()
+        f5_ties = results["f5_correct"].isna().sum()
+        print(f"F5 Accuracy: {f5_acc:.1%} ({int(f5_valid['f5_correct'].sum())}/{len(f5_valid)})")
+        print(f"F5 Ties (pushes excluded): {f5_ties} ({f5_ties / len(results):.1%})")
+        print(f"Full-game accuracy (same games): {accuracy:.1%}")
+        print(f"F5 vs full-game delta: {f5_acc - accuracy:+.1%}")
+        print("  NOTE: CLV is a proxy — full-game close odds (F5-specific odds unavailable)")
 
     # Pitcher coverage stats
     if pitcher_adj and "home_pitcher_adj" in results.columns:
@@ -695,6 +761,18 @@ def main() -> None:
         default=False,
         help="Load odds table and compute edge/ROI/CLV",
     )
+    parser.add_argument(
+        "--f5",
+        action="store_true",
+        default=False,
+        help="Use F5 (first 5 innings) probabilities instead of full-game",
+    )
+    parser.add_argument(
+        "--no-away-fav",
+        action="store_true",
+        default=False,
+        help="Suppress away-favorite bets (default on in --f5 mode per ADR-MLB-011)",
+    )
     args = parser.parse_args()
 
     db_path = Path(args.db_path)
@@ -724,8 +802,10 @@ def main() -> None:
         pitcher_stats=pitcher_stats,
         calibrated=args.calibrated,
         odds_df=odds_df,
+        f5=args.f5,
+        no_away_fav=args.no_away_fav or args.f5,  # default on for --f5
     )
-    print_report(results, args.test_season, pitcher_adj=args.pitcher_adj)
+    print_report(results, args.test_season, pitcher_adj=args.pitcher_adj, f5=args.f5)
 
     # Save 4-cell diagnostic markdown when odds are loaded
     if args.odds and not results.empty:
@@ -749,6 +829,8 @@ def main() -> None:
         suffix += "_calibrated"
     if args.odds:
         suffix += "_odds"
+    if args.f5:
+        suffix += "_f5"
     out_path = out_dir / f"mlb_backtest_{args.test_season}{suffix}.parquet"
     results.to_parquet(out_path, index=False)
     logger.info("Saved results to %s", out_path)
