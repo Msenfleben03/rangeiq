@@ -38,6 +38,7 @@ on:
     types: [opened, synchronize]
 
 permissions:
+  id-token: write
   contents: write
   pull-requests: write
   issues: write
