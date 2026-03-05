@@ -3,6 +3,7 @@
 Centralizes configuration for the sports betting project including
 bankroll management, risk parameters, and API settings.
 """
+
 import os
 from pathlib import Path
 from typing import Dict
@@ -16,7 +17,9 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 ODDS_DATA_DIR = DATA_DIR / "odds"
-DATABASE_PATH = DATA_DIR / "betting.db"
+NCAAB_DATABASE_PATH = DATA_DIR / "ncaab_betting.db"
+MLB_DATABASE_PATH = DATA_DIR / "mlb_data.db"
+DATABASE_PATH = NCAAB_DATABASE_PATH  # backwards-compat alias — NCAAB consumers use this
 
 # =============================================================================
 # BANKROLL MANAGEMENT
