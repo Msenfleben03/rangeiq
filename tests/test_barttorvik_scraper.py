@@ -140,9 +140,9 @@ class TestParseTrankHtml:
         assert set(df["team"]) == {"Houston", "Duke", "Iowa St."}
 
     def test_correct_columns(self):
-        """Output has all expected columns."""
+        """Output has all expected columns (core set must be present)."""
         df = parse_trank_html(SAMPLE_TRANK_HTML, 2026)
-        expected_cols = {
+        core_cols = {
             "rank",
             "team",
             "conf",
@@ -154,7 +154,7 @@ class TestParseTrankHtml:
             "year",
             "date",
         }
-        assert set(df.columns) == expected_cols
+        assert core_cols.issubset(set(df.columns))
 
     def test_numeric_values_no_rank_subscripts(self):
         """AdjOE/AdjDE/etc. don't include rank subscript numbers."""
@@ -488,3 +488,32 @@ class TestFallbackChain:
         mock_api.assert_not_called()
         mock_curl.assert_not_called()
         assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: Four-Factor Columns
+# ---------------------------------------------------------------------------
+
+
+def test_scraper_output_has_four_factors():
+    """OUTPUT_COLUMNS must include all four-factor columns."""
+    from pipelines.barttorvik_scraper import OUTPUT_COLUMNS
+
+    four_factors = ["efg_o", "efg_d", "tov_o", "tov_d", "orb", "drb", "ftr_o", "ftr_d"]
+    for col in four_factors:
+        assert col in OUTPUT_COLUMNS, f"Missing four-factor column: {col}"
+
+
+def test_scraper_parses_four_factors_from_html():
+    """parse_trank_html must populate four-factor columns from the HTML fixture."""
+    df = parse_trank_html(SAMPLE_TRANK_HTML, 2026)
+    assert "efg_o" in df.columns
+    assert "tov_o" in df.columns
+    assert "orb" in df.columns
+    assert "drb" in df.columns
+    # Verify Houston row has numeric four-factor values
+    houston = df[df["team"] == "Houston"].iloc[0]
+    assert houston["efg_o"] == pytest.approx(52.4, abs=0.1)
+    assert houston["tov_o"] == pytest.approx(12.6, abs=0.1)
+    assert houston["orb"] == pytest.approx(36.8, abs=0.1)
+    assert houston["drb"] == pytest.approx(31.1, abs=0.1)

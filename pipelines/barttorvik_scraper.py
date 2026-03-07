@@ -49,6 +49,17 @@ COLUMN_INDICES = {
     "adj_o": 5,
     "adj_d": 6,
     "barthag": 7,
+    "efg_o": 8,
+    "efg_d": 9,
+    "tov_o": 10,
+    "tov_d": 11,
+    "orb": 12,
+    "drb": 13,
+    "ftr_o": 14,
+    "ftr_d": 15,
+    "two_pt_o": 16,
+    "three_pt_o": 18,
+    "three_pt_rate_o": 20,
     "adj_tempo": 22,
     "wab": 23,
 }
@@ -63,6 +74,17 @@ OUTPUT_COLUMNS = [
     "adj_d",
     "adj_tempo",
     "wab",
+    "efg_o",
+    "efg_d",
+    "tov_o",
+    "tov_d",
+    "orb",
+    "drb",
+    "ftr_o",
+    "ftr_d",
+    "two_pt_o",
+    "three_pt_o",
+    "three_pt_rate_o",
     "year",
     "date",
 ]
@@ -178,6 +200,17 @@ def parse_trank_html(html: str, year: int) -> pd.DataFrame:
             barthag_str = _extract_cell_value(tds[COLUMN_INDICES["barthag"]])
             adj_tempo_str = _extract_cell_value(tds[COLUMN_INDICES["adj_tempo"]])
             wab_str = _extract_cell_value(tds[COLUMN_INDICES["wab"]])
+            efg_o_str = _extract_cell_value(tds[COLUMN_INDICES["efg_o"]])
+            efg_d_str = _extract_cell_value(tds[COLUMN_INDICES["efg_d"]])
+            tov_o_str = _extract_cell_value(tds[COLUMN_INDICES["tov_o"]])
+            tov_d_str = _extract_cell_value(tds[COLUMN_INDICES["tov_d"]])
+            orb_str = _extract_cell_value(tds[COLUMN_INDICES["orb"]])
+            drb_str = _extract_cell_value(tds[COLUMN_INDICES["drb"]])
+            ftr_o_str = _extract_cell_value(tds[COLUMN_INDICES["ftr_o"]])
+            ftr_d_str = _extract_cell_value(tds[COLUMN_INDICES["ftr_d"]])
+            two_pt_o_str = _extract_cell_value(tds[COLUMN_INDICES["two_pt_o"]])
+            three_pt_o_str = _extract_cell_value(tds[COLUMN_INDICES["three_pt_o"]])
+            three_pt_rate_o_str = _extract_cell_value(tds[COLUMN_INDICES["three_pt_rate_o"]])
 
             records.append(
                 {
@@ -189,6 +222,17 @@ def parse_trank_html(html: str, year: int) -> pd.DataFrame:
                     "adj_d": _safe_float(adj_d_str),
                     "adj_tempo": _safe_float(adj_tempo_str),
                     "wab": _safe_float(wab_str),
+                    "efg_o": _safe_float(efg_o_str),
+                    "efg_d": _safe_float(efg_d_str),
+                    "tov_o": _safe_float(tov_o_str),
+                    "tov_d": _safe_float(tov_d_str),
+                    "orb": _safe_float(orb_str),
+                    "drb": _safe_float(drb_str),
+                    "ftr_o": _safe_float(ftr_o_str),
+                    "ftr_d": _safe_float(ftr_d_str),
+                    "two_pt_o": _safe_float(two_pt_o_str),
+                    "three_pt_o": _safe_float(three_pt_o_str),
+                    "three_pt_rate_o": _safe_float(three_pt_rate_o_str),
                     "year": year,
                     "date": today_str,
                 }
@@ -206,7 +250,24 @@ def parse_trank_html(html: str, year: int) -> pd.DataFrame:
     # Coerce types
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["rank"] = pd.to_numeric(df["rank"], errors="coerce").astype("Int64")
-    for col in ("adj_o", "adj_d", "adj_tempo", "barthag", "wab"):
+    for col in (
+        "adj_o",
+        "adj_d",
+        "adj_tempo",
+        "barthag",
+        "wab",
+        "efg_o",
+        "efg_d",
+        "tov_o",
+        "tov_d",
+        "orb",
+        "drb",
+        "ftr_o",
+        "ftr_d",
+        "two_pt_o",
+        "three_pt_o",
+        "three_pt_rate_o",
+    ):
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.sort_values(["rank", "team"]).reset_index(drop=True)
