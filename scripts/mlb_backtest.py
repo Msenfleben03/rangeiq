@@ -33,7 +33,7 @@ BANKROLL = 5000.0
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DB_PATH = PROJECT_ROOT / "data" / "mlb_data.db"
+from config.settings import MLB_DATABASE_PATH as DB_PATH
 
 
 def load_games(db_path: Path) -> pd.DataFrame:

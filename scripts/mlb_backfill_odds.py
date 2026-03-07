@@ -28,7 +28,7 @@ from pipelines.espn_core_odds_provider import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DB_PATH = PROJECT_ROOT / "data" / "mlb_data.db"
+from config.settings import MLB_DATABASE_PATH as DB_PATH
 
 ESPN_SITE_BASE = "https://site.api.espn.com/apis/site/v2/sports"
 ESPN_MLB_SCOREBOARD = f"{ESPN_SITE_BASE}/baseball/mlb/scoreboard"

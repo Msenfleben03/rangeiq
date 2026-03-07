@@ -29,7 +29,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_DB_PATH = BASE_DIR / "data" / "mlb_data.db"
+from config.settings import MLB_DATABASE_PATH as DEFAULT_DB_PATH
+
 CHECKPOINT_PATH = BASE_DIR / "data" / "mlb_backfill_starters_checkpoint.json"
 
 

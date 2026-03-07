@@ -26,7 +26,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DB_PATH = PROJECT_ROOT / "data" / "mlb_data.db"
+from config.settings import MLB_DATABASE_PATH as DB_PATH
+
 MLB_LINESCORE_URL = "https://statsapi.mlb.com/api/v1/game/{game_pk}/linescore"
 THROTTLE_SECONDS = 0.1
 CHECKPOINT_EVERY = 500
