@@ -32,7 +32,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.settings import (  # noqa: E402
     BARTTORVIK_DATA_DIR,
-    DATABASE_PATH,
+    NCAAB_DATABASE_PATH as DATABASE_PATH,
     PROCESSED_DATA_DIR,
 )
 

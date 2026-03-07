@@ -34,7 +34,7 @@ from features.sport_specific.ncaab.breadwinner import (
     BreadwinnerScores,
     get_breadwinner_adjustment,
 )
-from config.settings import DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
+from config.settings import NCAAB_DATABASE_PATH as DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
 from models.model_persistence import load_model
 from pipelines.barttorvik_fetcher import compute_barttorvik_differentials, load_cached_season
 from pipelines.kenpom_fetcher import (

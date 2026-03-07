@@ -24,7 +24,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from config.settings import DATABASE_PATH
+from config.settings import NCAAB_DATABASE_PATH as DATABASE_PATH
 from pipelines.espn_core_odds_provider import ESPNCoreOddsFetcher, OddsSnapshot
 from scripts.daily_predictions import fetch_espn_scoreboard
 from tracking.database import BettingDatabase

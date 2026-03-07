@@ -28,7 +28,7 @@ import pandas as pd
 
 from config.constants import ELO
 from config.settings import (
-    DATABASE_PATH,
+    NCAAB_DATABASE_PATH as DATABASE_PATH,
     NCAAB_SEASONS_END,
     NCAAB_SEASONS_START,
     PROCESSED_DATA_DIR,

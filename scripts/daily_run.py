@@ -30,7 +30,7 @@ from betting.odds_converter import (
     calculate_clv,
 )
 from config.constants import BREADWINNER, INJURY_CHECK, ODDS_CONFIG, PAPER_BETTING
-from config.settings import DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
+from config.settings import NCAAB_DATABASE_PATH as DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
 from features.sport_specific.ncaab.breadwinner import build_breadwinner_lookup
 from models.model_persistence import load_model
 from pipelines.barttorvik_fetcher import BarttovikFetcher, load_cached_season
@@ -214,10 +214,10 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
             try:
                 db.execute_query(
                     """UPDATE bets
-                       SET result = ?, profit_loss = ?, actual_profit_loss = ?,
+                       SET result = ?, profit_loss = ?,
                            is_settled = 1, settled_at = CURRENT_TIMESTAMP
                        WHERE id = ?""",
-                    (result, profit, profit, bet["id"]),
+                    (result, profit, bet["id"]),
                 )
                 settled_count += 1
                 settled_game_ids.add(game_id)

@@ -23,7 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 
 from betting.odds_converter import calculate_clv, american_to_decimal
-from config.settings import DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
+from config.settings import NCAAB_DATABASE_PATH as DATABASE_PATH, ODDS_API_KEY, PROCESSED_DATA_DIR
 from config.constants import ODDS_CONFIG
 from models.model_persistence import load_model, save_model, ModelMetadata
 from pipelines.odds_orchestrator import OddsOrchestrator

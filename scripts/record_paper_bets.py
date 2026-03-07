@@ -20,7 +20,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from config.settings import DATABASE_PATH
+from config.settings import NCAAB_DATABASE_PATH as DATABASE_PATH
 from tracking.database import BettingDatabase
 from tracking.logger import (
     get_bets_by_date,
