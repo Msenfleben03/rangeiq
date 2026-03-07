@@ -32,7 +32,7 @@ data/odds/
 *.db
 *.sqlite
 *.sqlite3
-data/betting.db
+data/ncaab_betting.db
 
 # Parquet/feather files
 *.parquet
