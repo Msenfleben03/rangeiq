@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DB_PATH = BASE_DIR / "data" / "mlb_data.db"
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # DDL
@@ -315,6 +315,114 @@ CREATE TABLE IF NOT EXISTS odds (
     PRIMARY KEY (game_pk, provider)
 );
 CREATE INDEX IF NOT EXISTS idx_odds_game ON odds(game_pk);
+
+-- MLB bet tracking (parallel to ncaab_betting.db bets table)
+CREATE TABLE IF NOT EXISTS bets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_pk         INTEGER REFERENCES games(game_pk),
+    game_date       DATE NOT NULL,
+    bet_type        TEXT NOT NULL,
+    market_type     TEXT NOT NULL DEFAULT 'full_game',
+    selection       TEXT NOT NULL,
+    line            REAL,
+    odds_placed     INTEGER NOT NULL,
+    odds_closing    INTEGER,
+    opening_odds    INTEGER,
+    model_probability   REAL,
+    model_edge          REAL,
+    devig_prob_placed   REAL,
+    devig_prob_closing  REAL,
+    pitcher_adj_home    REAL,
+    pitcher_adj_away    REAL,
+    stake           REAL NOT NULL,
+    sportsbook      TEXT NOT NULL,
+    result          TEXT,
+    profit_loss     REAL,
+    clv             REAL,
+    is_settled      BOOLEAN NOT NULL DEFAULT 0,
+    settled_at      TIMESTAMP,
+    is_live         BOOLEAN NOT NULL DEFAULT 0,
+    notes           TEXT,
+    bet_uuid        TEXT,
+    placed_at       TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_pk, bet_type, market_type, selection, sportsbook)
+);
+CREATE INDEX IF NOT EXISTS idx_mlb_bets_game ON bets(game_pk);
+CREATE INDEX IF NOT EXISTS idx_mlb_bets_date ON bets(game_date);
+
+-- MLB player props
+CREATE TABLE IF NOT EXISTS prop_bets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_pk         INTEGER REFERENCES games(game_pk),
+    game_date       DATE NOT NULL,
+    player_name     TEXT NOT NULL,
+    player_team     TEXT,
+    prop_type       TEXT NOT NULL,
+    line            REAL NOT NULL,
+    selection       TEXT NOT NULL,
+    odds_placed     INTEGER NOT NULL,
+    odds_closing    INTEGER,
+    model_prediction REAL,
+    model_prob       REAL,
+    model_edge       REAL,
+    stake            REAL,
+    sportsbook       TEXT,
+    result           TEXT,
+    actual_value     REAL,
+    profit_loss      REAL,
+    clv              REAL,
+    is_settled       BOOLEAN NOT NULL DEFAULT 0,
+    settled_at       TIMESTAMP,
+    is_live          BOOLEAN NOT NULL DEFAULT 0,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_pk, player_name, prop_type, line, selection, sportsbook)
+);
+
+-- Multi-book, multi-market odds snapshots (going-forward; backfill stays in odds table)
+CREATE TABLE IF NOT EXISTS odds_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_pk         INTEGER NOT NULL REFERENCES games(game_pk),
+    provider        TEXT NOT NULL,
+    market_type     TEXT NOT NULL DEFAULT 'full_game',
+    snapshot_type   TEXT NOT NULL DEFAULT 'current',
+    captured_at     TIMESTAMP NOT NULL,
+    spread_home     REAL,
+    spread_home_odds INTEGER,
+    spread_away_odds INTEGER,
+    total           REAL,
+    over_odds       INTEGER,
+    under_odds      INTEGER,
+    moneyline_home  INTEGER,
+    moneyline_away  INTEGER,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_pk, provider, market_type, snapshot_type)
+);
+CREATE INDEX IF NOT EXISTS idx_mlb_odds_game ON odds_snapshots(game_pk);
+
+-- Links HP/1B/2B/3B umpire to a specific game
+CREATE TABLE IF NOT EXISTS game_umpire (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_pk         INTEGER NOT NULL REFERENCES games(game_pk),
+    umpire_name     TEXT NOT NULL,
+    position        TEXT NOT NULL DEFAULT 'HP',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_pk, position)
+);
+CREATE INDEX IF NOT EXISTS idx_game_umpire_name ON game_umpire(umpire_name);
+CREATE INDEX IF NOT EXISTS idx_game_umpire_game ON game_umpire(game_pk);
+
+-- Inning-by-inning runs (needed for F5 research)
+CREATE TABLE IF NOT EXISTS linescore (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_pk         INTEGER NOT NULL REFERENCES games(game_pk),
+    inning          INTEGER NOT NULL,
+    home_runs       INTEGER NOT NULL DEFAULT 0,
+    away_runs       INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_pk, inning)
+);
+CREATE INDEX IF NOT EXISTS idx_linescore_game ON linescore(game_pk);
 """
 
 VIEW_SQL = """
@@ -725,6 +833,11 @@ def verify_schema(db_path: Path) -> dict:
         "umpire_stats",
         "projections",
         "bullpen_usage",
+        "bets",
+        "prop_bets",
+        "odds_snapshots",
+        "game_umpire",
+        "linescore",
     ]
     counts = {}
     with get_cursor(db_path) as cur:
