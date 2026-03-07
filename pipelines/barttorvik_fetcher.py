@@ -512,3 +512,75 @@ class BarttovikFetcher:
     def close(self) -> None:
         """Close the HTTP session."""
         self._session.close()
+
+
+# ---------------------------------------------------------------------------
+# DB Ingestion
+# ---------------------------------------------------------------------------
+
+
+def store_ratings_to_db(df: pd.DataFrame, db_path) -> int:
+    """Insert/replace Barttorvik ratings into barttorvik_ratings table.
+
+    Args:
+        df: Ratings DataFrame (must have at least team, year/season, date columns).
+        db_path: Path to the SQLite database (string or Path).
+
+    Returns:
+        Number of rows inserted.
+    """
+    import sqlite3 as _sqlite3
+
+    COLUMN_MAP = {
+        "team": "team",
+        "conf": "conf",
+        "year": "season",
+        "date": "rating_date",
+        "rank": "rank",
+        "barthag": "barthag",
+        "wab": "wab",
+        "adj_o": "adj_o",
+        "adj_d": "adj_d",
+        "adj_tempo": "adj_tempo",
+        "efg_o": "efg_o",
+        "tov_o": "tov_o",
+        "orb": "orb",
+        "ftr_o": "ftr_o",
+        "efg_d": "efg_d",
+        "tov_d": "tov_d",
+        "drb": "drb",
+        "ftr_d": "ftr_d",
+        "two_pt_o": "two_pt_o",
+        "three_pt_o": "three_pt_o",
+        "three_pt_rate_o": "three_pt_rate_o",
+    }
+
+    rows = []
+    for _, row in df.iterrows():
+        record: dict = {}
+        for src_col, dst_col in COLUMN_MAP.items():
+            val = row.get(src_col)
+            if val is not None and not (isinstance(val, float) and pd.isna(val)):
+                record[dst_col] = val
+        if "team" in record and "season" in record and "rating_date" in record:
+            if hasattr(record["rating_date"], "strftime"):
+                record["rating_date"] = record["rating_date"].strftime("%Y-%m-%d")
+            rows.append(record)
+
+    if not rows:
+        return 0
+
+    cols = list(rows[0].keys())
+    placeholders = ",".join("?" for _ in cols)
+    col_str = ",".join(cols)
+    sql = f"INSERT OR REPLACE INTO barttorvik_ratings ({col_str}) VALUES ({placeholders})"  # nosec B608
+
+    conn = _sqlite3.connect(str(db_path))
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.executemany(sql, [tuple(r.get(c) for c in cols) for r in rows])
+        conn.commit()
+    finally:
+        conn.close()
+
+    return len(rows)

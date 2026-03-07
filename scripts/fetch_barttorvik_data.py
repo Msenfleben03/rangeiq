@@ -30,8 +30,8 @@ from dotenv import load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-from config.settings import CBBDATA_API_KEY  # noqa: E402
-from pipelines.barttorvik_fetcher import BarttovikFetcher  # noqa: E402
+from config.settings import CBBDATA_API_KEY, NCAAB_DATABASE_PATH  # noqa: E402
+from pipelines.barttorvik_fetcher import BarttovikFetcher, store_ratings_to_db  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+    """Fetch Barttorvik T-Rank ratings for one or more seasons."""
     parser = argparse.ArgumentParser(description="Fetch Barttorvik T-Rank ratings")
     parser.add_argument(
         "--seasons",
@@ -65,6 +66,7 @@ def main() -> None:
     # Scrape mode: use barttorvik_scraper for in-progress seasons
     if args.scrape:
         from pipelines.barttorvik_scraper import scrape_and_cache
+        import pandas as pd
 
         for season in args.seasons:
             logger.info("Scraping barttorvik.com for season %d...", season)
@@ -72,8 +74,6 @@ def main() -> None:
             if df.empty:
                 logger.error("Scrape failed for season %d", season)
             else:
-                import pandas as pd
-
                 df["date"] = pd.to_datetime(df["date"])
                 n_dates = df["date"].nunique()
                 n_teams = df["team"].nunique()
@@ -84,6 +84,8 @@ def main() -> None:
                     f"{n_teams:>3} teams, {n_dates:>3} dates "
                     f"({date_min} to {date_max})"
                 )
+                stored = store_ratings_to_db(df, NCAAB_DATABASE_PATH)
+                logger.info("Stored %d Barttorvik rows to ncaab_betting.db", stored)
         return
 
     # API mode: use cbbdata API for completed seasons
@@ -105,6 +107,10 @@ def main() -> None:
         if combined.empty:
             logger.error("No data fetched. Check your API key.")
             sys.exit(1)
+
+        # Store to DB
+        stored = store_ratings_to_db(combined, NCAAB_DATABASE_PATH)
+        logger.info("Stored %d Barttorvik rows to ncaab_betting.db", stored)
 
         # Print summary
         print(f"\n{'=' * 60}")
