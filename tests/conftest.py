@@ -105,7 +105,6 @@ def sample_bet():
     return {
         "bet_uuid": "test_bet_001",
         "game_id": "test_game_001",
-        "sport": "NCAAB",
         "bet_type": "spread",
         "selection": "home",
         "line": -3.5,
@@ -117,7 +116,7 @@ def sample_bet():
         "sportsbook": "draftkings",
         "placed_at": datetime(2024, 1, 15, 18, 0, 0),
         "result": "win",
-        "actual_profit_loss": 90.91,
+        "profit_loss": 90.91,
         "clv": 0.012,
         "is_live": False,
     }

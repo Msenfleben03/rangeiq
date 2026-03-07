@@ -5,9 +5,9 @@ for tracking bets, predictions, and team ratings.
 """
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
-from contextlib import contextmanager
 import logging
 
 # Configure logging
@@ -21,7 +21,7 @@ class BettingDatabase:
     context managers for safe transaction handling.
     """
 
-    def __init__(self, db_path: str = "data/betting.db"):
+    def __init__(self, db_path: str = "data/ncaab_betting.db"):
         """Initialize database connection.
 
         Args:
@@ -70,7 +70,6 @@ class BettingDatabase:
                 """CREATE TABLE IF NOT EXISTS bets (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    sport TEXT NOT NULL,
                     league TEXT,
                     game_date DATE NOT NULL,
                     game_id TEXT,
@@ -81,6 +80,11 @@ class BettingDatabase:
                     line REAL,
                     odds_placed INTEGER NOT NULL,
                     odds_closing INTEGER,
+                    opening_odds INTEGER,
+
+                    -- CLV components
+                    devig_prob_placed REAL,
+                    devig_prob_closing REAL,
 
                     -- Model data
                     model_probability REAL,
@@ -93,7 +97,6 @@ class BettingDatabase:
                     -- Results
                     result TEXT,
                     profit_loss REAL,
-                    actual_profit_loss REAL,
                     clv REAL,
 
                     -- Settlement
@@ -135,7 +138,6 @@ class BettingDatabase:
                 """CREATE TABLE IF NOT EXISTS predictions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    sport TEXT NOT NULL,
                     game_id TEXT NOT NULL,
                     game_date DATE NOT NULL,
                     model_name TEXT NOT NULL,
@@ -184,136 +186,13 @@ class BettingDatabase:
                     moneyline_away INTEGER,
                     is_closing BOOLEAN DEFAULT FALSE,
                     confidence REAL DEFAULT 1.0,
-                    snapshot_type TEXT DEFAULT 'current'
+                    snapshot_type TEXT DEFAULT 'current',
+                    market_type TEXT NOT NULL DEFAULT 'full_game',
+
+                    UNIQUE(game_id, sportsbook, snapshot_type, market_type)
                 )
             """
             )
-
-            # Migration: add snapshot_type column if missing
-            try:
-                cursor.execute(
-                    "ALTER TABLE odds_snapshots ADD COLUMN snapshot_type TEXT DEFAULT 'current'"
-                )
-                logger.info("Added snapshot_type column to odds_snapshots")
-            except Exception:
-                pass  # Column already exists
-
-            # Backfill existing rows without snapshot_type
-            cursor.execute(
-                "UPDATE odds_snapshots SET snapshot_type = 'current' WHERE snapshot_type IS NULL"
-            )
-
-            # Migration: add position_entry and missing columns to bets
-            for col_def in [
-                "actual_profit_loss REAL",
-                "is_settled BOOLEAN DEFAULT FALSE",
-                "settled_at TIMESTAMP",
-                "bet_uuid TEXT",
-                "placed_at TIMESTAMP",
-                "position_entry INTEGER DEFAULT 1",
-            ]:
-                try:
-                    col_name = col_def.split()[0]
-                    cursor.execute(f"ALTER TABLE bets ADD COLUMN {col_def}")
-                    logger.info("Added %s column to bets", col_name)
-                except Exception:
-                    pass  # Column already exists
-
-            # Migration: rebuild bets table to update UNIQUE constraint
-            # (SQLite cannot ALTER constraints, so we rebuild)
-            try:
-                # Check if old constraint exists (without position_entry)
-                cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='bets'")
-                create_sql = cursor.fetchone()["sql"]
-                # Find the UNIQUE constraint and check if position_entry is in it
-                needs_rebuild = False
-                if "UNIQUE" in create_sql:
-                    unique_part = create_sql[create_sql.index("UNIQUE") :]
-                    if "position_entry" not in unique_part:
-                        needs_rebuild = True
-                else:
-                    # No UNIQUE constraint at all -- rebuild to add it
-                    needs_rebuild = True
-                if needs_rebuild:
-                    logger.info("Rebuilding bets table to update UNIQUE constraint")
-                    # Get existing column names
-                    cursor.execute("PRAGMA table_info(bets)")
-                    existing_cols = [row["name"] for row in cursor.fetchall()]
-
-                    # Target schema columns
-                    target_cols = [
-                        "id",
-                        "created_at",
-                        "sport",
-                        "league",
-                        "game_date",
-                        "game_id",
-                        "bet_type",
-                        "selection",
-                        "line",
-                        "odds_placed",
-                        "odds_closing",
-                        "model_probability",
-                        "model_edge",
-                        "stake",
-                        "sportsbook",
-                        "result",
-                        "profit_loss",
-                        "actual_profit_loss",
-                        "clv",
-                        "is_settled",
-                        "settled_at",
-                        "position_entry",
-                        "notes",
-                        "is_live",
-                        "bet_uuid",
-                        "placed_at",
-                    ]
-
-                    # Shared columns (exist in both old and new)
-                    shared = [c for c in target_cols if c in existing_cols]
-                    shared_csv = ", ".join(shared)
-
-                    cursor.execute(
-                        """CREATE TABLE bets_new (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            sport TEXT NOT NULL,
-                            league TEXT,
-                            game_date DATE NOT NULL,
-                            game_id TEXT,
-                            bet_type TEXT NOT NULL,
-                            selection TEXT NOT NULL,
-                            line REAL,
-                            odds_placed INTEGER NOT NULL,
-                            odds_closing INTEGER,
-                            model_probability REAL,
-                            model_edge REAL,
-                            stake REAL NOT NULL,
-                            sportsbook TEXT NOT NULL,
-                            result TEXT,
-                            profit_loss REAL,
-                            actual_profit_loss REAL,
-                            clv REAL,
-                            is_settled BOOLEAN DEFAULT FALSE,
-                            settled_at TIMESTAMP,
-                            position_entry INTEGER DEFAULT 1,
-                            notes TEXT,
-                            is_live BOOLEAN DEFAULT FALSE,
-                            bet_uuid TEXT,
-                            placed_at TIMESTAMP,
-                            UNIQUE(game_id, bet_type, selection, sportsbook, position_entry)
-                        )"""
-                    )
-                    cursor.execute(
-                        f"INSERT INTO bets_new ({shared_csv}) "  # nosec B608
-                        f"SELECT {shared_csv} FROM bets"
-                    )
-                    cursor.execute("DROP TABLE bets")
-                    cursor.execute("ALTER TABLE bets_new RENAME TO bets")
-                    logger.info("Bets table rebuilt with updated UNIQUE constraint")
-            except Exception as e:
-                logger.warning("Bets constraint migration skipped: %s", e)
 
             # KenPom daily ratings snapshots
             cursor.execute(
@@ -348,6 +227,88 @@ class BettingDatabase:
                     UNIQUE(team, season, snapshot_date)
                 )
             """
+            )
+
+            # Barttorvik daily ratings with four-factor columns
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS barttorvik_ratings (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team        TEXT NOT NULL,
+                    conf        TEXT,
+                    season      INTEGER NOT NULL,
+                    rating_date DATE NOT NULL,
+                    rank        INTEGER,
+                    barthag     REAL,
+                    wab         REAL,
+                    adj_o       REAL,
+                    adj_d       REAL,
+                    adj_tempo   REAL,
+                    efg_o       REAL,
+                    tov_o       REAL,
+                    orb         REAL,
+                    ftr_o       REAL,
+                    efg_d       REAL,
+                    tov_d       REAL,
+                    drb         REAL,
+                    ftr_d       REAL,
+                    two_pt_o    REAL,
+                    three_pt_o  REAL,
+                    three_pt_rate_o REAL,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(team, season, rating_date)
+                )
+            """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_bart_team_date "
+                "ON barttorvik_ratings(team, season, rating_date)"
+            )
+
+            # Player prop bets
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS prop_bets (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id         TEXT NOT NULL,
+                    game_date       DATE NOT NULL,
+                    player_name     TEXT NOT NULL,
+                    player_team     TEXT,
+                    prop_type       TEXT NOT NULL,
+                    line            REAL NOT NULL,
+                    selection       TEXT NOT NULL,
+                    odds_placed     INTEGER NOT NULL,
+                    odds_closing    INTEGER,
+                    model_prediction REAL,
+                    model_prob      REAL,
+                    model_edge      REAL,
+                    stake           REAL,
+                    sportsbook      TEXT,
+                    result          TEXT,
+                    actual_value    REAL,
+                    profit_loss     REAL,
+                    clv             REAL,
+                    is_settled      BOOLEAN DEFAULT FALSE,
+                    settled_at      TIMESTAMP,
+                    is_live         BOOLEAN DEFAULT FALSE,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(game_id, player_name, prop_type, line, selection, sportsbook)
+                )
+            """
+            )
+
+            # Schema version tracking
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS schema_version (
+                    version     INTEGER PRIMARY KEY,
+                    applied_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    description TEXT
+                )
+            """
+            )
+            cursor.execute(
+                """INSERT OR IGNORE INTO schema_version (version, applied_at, description)
+                   VALUES (2, CURRENT_TIMESTAMP,
+                           'per-sport split + CLV components + barttorvik four factors')
+                """
             )
 
             logger.info(f"Database initialized at {self.db_path}")
@@ -387,6 +348,33 @@ class BettingDatabase:
             logger.warning("Duplicate bet skipped: %s", bet_data.get("game_id", "unknown"))
             return -1
 
+    def insert_prop_bet(self, data: dict) -> int:
+        """Insert a new player prop bet record.
+
+        Args:
+            data: Dictionary containing prop bet information. Required keys:
+                game_id, game_date, player_name, prop_type, line, selection, odds_placed.
+                Optional: player_team, sportsbook, stake, model_prob, model_edge, etc.
+
+        Returns:
+            ID of inserted prop bet, or -1 if duplicate (IntegrityError).
+        """
+        columns = ", ".join(data.keys())
+        placeholders = ", ".join(["?" for _ in data])
+        query = f"INSERT INTO prop_bets ({columns}) VALUES ({placeholders})"  # nosec B608
+
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(query, tuple(data.values()))
+                return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            logger.warning(
+                "Duplicate prop bet skipped: %s %s",
+                data.get("game_id", "unknown"),
+                data.get("player_name", ""),
+            )
+            return -1
+
     def update_bet_result(
         self, bet_id: int, result: str, profit_loss: float, clv: Optional[float] = None
     ):
@@ -409,25 +397,19 @@ class BettingDatabase:
         """Get all bets without results.
 
         Args:
-            sport: Filter by sport (optional)
+            sport: Unused — kept for backward compatibility.
 
         Returns:
             List of active bets
         """
         query = "SELECT * FROM bets WHERE result IS NULL"
-        params = ()
-
-        if sport:
-            query += " AND sport = ?"
-            params = (sport,)
-
-        return self.execute_query(query, params)
+        return self.execute_query(query)
 
     def get_performance_stats(self, sport: Optional[str] = None, days: int = 30) -> dict:
         """Calculate performance statistics.
 
         Args:
-            sport: Filter by sport (optional)
+            sport: Unused — kept for backward compatibility.
             days: Number of days to analyze
 
         Returns:
@@ -444,11 +426,7 @@ class BettingDatabase:
             WHERE result IS NOT NULL
             AND created_at >= date('now', '-' || ? || ' days')
         """
-        params = [days]
-
-        if sport:
-            query += " AND sport = ?"
-            params.append(sport)
+        params: list = [days]
 
         result = self.execute_query(query, tuple(params))
         if result and len(result) > 0:
@@ -475,7 +453,7 @@ class BettingDatabase:
         """Insert a model prediction.
 
         Args:
-            prediction_data: Dict with sport, game_id, game_date, model_name,
+            prediction_data: Dict with game_id, game_date, model_name,
                 prediction_type, predicted_value. Optional: market_value, closing_value.
 
         Returns:
@@ -494,16 +472,13 @@ class BettingDatabase:
 
         Args:
             game_date: Date string (YYYY-MM-DD).
-            sport: Optional sport filter.
+            sport: Unused — kept for backward compatibility.
 
         Returns:
             List of prediction records.
         """
         query = "SELECT * FROM predictions WHERE game_date = ?"
         params: list = [game_date]
-        if sport:
-            query += " AND sport = ?"
-            params.append(sport)
         return self.execute_query(query, tuple(params))
 
     def insert_odds_snapshot(self, odds_data: dict) -> int:

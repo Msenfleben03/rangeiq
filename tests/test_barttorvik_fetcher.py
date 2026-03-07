@@ -322,3 +322,101 @@ class TestEfficiencyFeatures:
         # Houston tempo=67.2, Duke tempo=70.5
         assert "adj_tempo_diff" in diffs
         assert diffs["adj_tempo_diff"] == pytest.approx(67.2 - 70.5)
+
+
+# --- Test: DB Ingestion ---
+
+
+def test_store_ratings_to_db(tmp_path):
+    """store_ratings_to_db inserts rows into barttorvik_ratings table."""
+    import sqlite3
+
+    from tracking.database import BettingDatabase
+    from pipelines.barttorvik_fetcher import store_ratings_to_db
+
+    db_path = tmp_path / "ncaab.db"
+    BettingDatabase(str(db_path))
+
+    df = pd.DataFrame(
+        [
+            {
+                "team": "Duke",
+                "conf": "ACC",
+                "year": 2026,
+                "date": pd.Timestamp("2026-03-01"),
+                "rank": 5,
+                "barthag": 0.95,
+                "wab": 8.2,
+                "adj_o": 120.1,
+                "adj_d": 95.3,
+                "adj_tempo": 68.5,
+                "efg_o": 0.551,
+                "tov_o": 14.2,
+                "orb": 32.1,
+                "ftr_o": 0.31,
+                "efg_d": 0.481,
+                "tov_d": 18.7,
+                "drb": 71.3,
+                "ftr_d": 0.28,
+            }
+        ]
+    )
+
+    count = store_ratings_to_db(df, db_path)
+    assert count == 1
+
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute(
+        "SELECT efg_o, tov_o, orb FROM barttorvik_ratings WHERE team='Duke'"
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert abs(row[0] - 0.551) < 0.001
+
+
+def test_store_ratings_to_db_is_idempotent(tmp_path):
+    """store_ratings_to_db uses INSERT OR REPLACE — same row twice = 1 record."""
+    import sqlite3
+
+    from tracking.database import BettingDatabase
+    from pipelines.barttorvik_fetcher import store_ratings_to_db
+
+    db_path = tmp_path / "ncaab.db"
+    BettingDatabase(str(db_path))
+
+    df = pd.DataFrame(
+        [
+            {
+                "team": "Duke",
+                "conf": "ACC",
+                "year": 2026,
+                "date": pd.Timestamp("2026-03-01"),
+                "rank": 5,
+                "barthag": 0.95,
+                "wab": 8.2,
+                "adj_o": 120.1,
+                "adj_d": 95.3,
+                "adj_tempo": 68.5,
+            }
+        ]
+    )
+
+    store_ratings_to_db(df, db_path)
+    store_ratings_to_db(df, db_path)
+
+    conn = sqlite3.connect(str(db_path))
+    count = conn.execute("SELECT COUNT(*) FROM barttorvik_ratings").fetchone()[0]
+    conn.close()
+    assert count == 1
+
+
+def test_store_ratings_to_db_empty_df(tmp_path):
+    """store_ratings_to_db with empty DataFrame returns 0."""
+    from tracking.database import BettingDatabase
+    from pipelines.barttorvik_fetcher import store_ratings_to_db
+
+    db_path = tmp_path / "ncaab.db"
+    BettingDatabase(str(db_path))
+
+    count = store_ratings_to_db(pd.DataFrame(), db_path)
+    assert count == 0

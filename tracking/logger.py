@@ -41,13 +41,15 @@ def log_paper_bet(
     Raises:
         ValueError: If required fields are missing.
     """
-    required = {"sport", "game_date", "bet_type", "selection", "odds_placed", "stake", "sportsbook"}
+    required = {"game_date", "bet_type", "selection", "odds_placed", "stake", "sportsbook"}
     missing = required - set(bet_data.keys())
     if missing:
         raise ValueError(f"Missing required bet fields: {missing}")
 
     # Ensure paper bet flag and required DB fields
     record = dict(bet_data)
+    # Remove 'sport' — per-sport DB split means the file name identifies sport
+    record.pop("sport", None)
     record["is_live"] = False
     if "bet_uuid" not in record:
         record["bet_uuid"] = str(uuid.uuid4())
@@ -95,11 +97,8 @@ def get_pending_bets(
         List of pending bet dicts.
     """
     query = "SELECT * FROM bets WHERE result IS NULL"
-    params: tuple = ()
-    if sport:
-        query += " AND sport = ?"
-        params = (sport,)
-    return db.execute_query(query, params)
+    # sport filter removed — per-sport DB split means file name identifies sport
+    return db.execute_query(query)
 
 
 def get_bets_by_date(
@@ -119,9 +118,7 @@ def get_bets_by_date(
     """
     query = "SELECT * FROM bets WHERE game_date = ?"
     params: list = [game_date]
-    if sport:
-        query += " AND sport = ?"
-        params.append(sport)
+    # sport filter removed — per-sport DB split means file name identifies sport
     return db.execute_query(query, tuple(params))
 
 

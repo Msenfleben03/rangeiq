@@ -273,7 +273,7 @@ class Bet(Base):
 
     # Results (filled after game)
     result = Column(String)  # 'win', 'loss', 'push', 'void'
-    actual_profit_loss = Column(Float)
+    profit_loss = Column(Float)
     clv = Column(Float)  # Closing line value
     settled_at = Column(DateTime)
 

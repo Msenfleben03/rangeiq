@@ -631,8 +631,8 @@ class TestSettlement:
 
     @patch("scripts.daily_run.ESPNCoreOddsFetcher")
     @patch("scripts.daily_run.fetch_espn_scoreboard")
-    def test_settle_writes_actual_profit_loss(self, mock_fetch, mock_fetcher_cls):
-        """Settlement UPDATE must write actual_profit_loss (not just profit_loss)."""
+    def test_settle_writes_profit_loss(self, mock_fetch, mock_fetcher_cls):
+        """Settlement UPDATE must write profit_loss."""
         from scripts.daily_run import settle_yesterdays_bets
 
         mock_fetch.return_value = [
@@ -676,8 +676,8 @@ class TestSettlement:
         assert len(bet_updates) >= 1, "Expected at least one UPDATE bets call"
         update_sql = bet_updates[0][0]
         assert (
-            "actual_profit_loss" in update_sql
-        ), "Settlement UPDATE must write actual_profit_loss so reporting has valid data"
+            "profit_loss" in update_sql
+        ), "Settlement UPDATE must write profit_loss so reporting has valid data"
 
     @patch("scripts.daily_run.ESPNCoreOddsFetcher")
     @patch("scripts.daily_run.fetch_espn_scoreboard")
