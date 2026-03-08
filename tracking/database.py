@@ -156,15 +156,16 @@ class BettingDatabase:
             cursor.execute(
                 """CREATE TABLE IF NOT EXISTS team_ratings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    sport TEXT NOT NULL,
                     team_id TEXT NOT NULL,
-                    team_name TEXT NOT NULL,
+                    sport TEXT NOT NULL,
                     season INTEGER NOT NULL,
                     rating_type TEXT NOT NULL,
                     rating_value REAL NOT NULL,
+                    as_of_date DATE NOT NULL,
+                    as_of_game_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-                    UNIQUE(sport, team_id, season, rating_type)
+                    UNIQUE(team_id, season, rating_type, as_of_date)
                 )
             """
             )

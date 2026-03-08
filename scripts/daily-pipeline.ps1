@@ -41,10 +41,14 @@
     Maximum retry attempts per step (default: 1).
 
 .EXAMPLE
-    .\scripts\daily-pipeline.ps1
-    .\scripts\daily-pipeline.ps1 -DryRun
-    .\scripts\daily-pipeline.ps1 -Force -MaxRetries 2
-    .\scripts\daily-pipeline.ps1 -SettleOnly
+    # From Task Scheduler (default, works as-is):
+    powershell.exe -ExecutionPolicy Bypass -File .\scripts\daily-pipeline.ps1
+
+    # From bash/Claude Code (MUST use -NoProfile to avoid profile interference):
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\daily-pipeline.ps1
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\daily-pipeline.ps1 -DryRun
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\daily-pipeline.ps1 -Force -MaxRetries 2
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\daily-pipeline.ps1 -SettleOnly
 #>
 
 [CmdletBinding()]
@@ -72,6 +76,12 @@ Write-Log "INFO" "Daily pipeline starting (DryRun=$DryRun, Force=$Force, SettleO
 
 # Define pipeline steps
 $steps = [ordered]@{
+    backup_databases = @{
+        script    = "backup_db.py"
+        args      = @()
+        critical  = $false   # Backup failure is non-critical: pipeline can still run
+        timeout   = 60
+    }
     health_check = @{
         script    = "pipeline_health_check.py"
         args      = @("--json")
