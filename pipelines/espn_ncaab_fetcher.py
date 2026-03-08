@@ -157,21 +157,35 @@ class ESPNDataFetcher:
                 logger.warning("Could not resolve ESPN ID for %s", team_id)
                 return pd.DataFrame()
 
+        games = []
+
+        # Fetch regular season + conference tournament (seasontype=2, default)
         data = _retry_request(
             f"{ESPN_BASE}/teams/{espn_id}/schedule",
             params={"season": season},
         )
-
-        events = data.get("events", [])
-        games = []
-
-        for event in events:
+        for event in data.get("events", []):
             game = self._parse_event(event, team_id, season)
             if game is not None:
                 games.append(game)
 
+        # Fetch postseason / NCAA Tournament (seasontype=3)
+        try:
+            post_data = _retry_request(
+                f"{ESPN_BASE}/teams/{espn_id}/schedule",
+                params={"season": season, "seasontype": 3},
+            )
+            for event in post_data.get("events", []):
+                game = self._parse_event(event, team_id, season)
+                if game is not None:
+                    games.append(game)
+        except Exception:
+            pass  # Many teams have no postseason — that's fine
+
         df = pd.DataFrame(games)
         if not df.empty:
+            # Deduplicate in case a game appears in both season types
+            df = df.drop_duplicates(subset=["game_id"], keep="first")
             logger.info("Fetched %d games for %s (%d)", len(df), team_id, season)
         return df
 
@@ -336,6 +350,13 @@ class ESPNDataFetcher:
         opponent_id = opp_team.get("team", {}).get("abbreviation", "")
         opponent_name = opp_team.get("team", {}).get("displayName", "")
 
+        # Season type: 2 = regular season / conf tournament, 3 = NCAA Tournament
+        season_type_obj = event.get("seasonType", {})
+        if isinstance(season_type_obj, dict):
+            season_type = season_type_obj.get("type", 2)
+        else:
+            season_type = 2
+
         return {
             "season": season,
             "date": game_date,
@@ -348,6 +369,7 @@ class ESPNDataFetcher:
             "points_for": points_for,
             "points_against": points_against,
             "conference": _extract_conference_from_competitor(our_team),
+            "season_type": int(season_type),
         }
 
 

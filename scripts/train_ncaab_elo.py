@@ -116,6 +116,21 @@ def prepare_games_for_elo(df: pd.DataFrame) -> list[dict]:
             except (ValueError, TypeError):
                 continue
 
+        # Detect NCAA Tournament games:
+        # - season_type == 3 (from ESPN API, if available)
+        # - Fallback: neutral site games in mid-March through early April
+        season_type = row.get("season_type")
+        is_tournament = False
+        if not pd.isna(season_type) if season_type is not None else False:
+            is_tournament = int(season_type) == 3
+        elif location != "home" and location != "away":
+            # Date-based heuristic for older data without season_type
+            if hasattr(game_date, "month"):
+                is_march_april = (
+                    game_date.month == 3 and game_date.day >= 14 or game_date.month == 4
+                )
+                is_tournament = is_march_april
+
         if location == "home":
             games.append(
                 {
@@ -126,6 +141,7 @@ def prepare_games_for_elo(df: pd.DataFrame) -> list[dict]:
                     "home_score": points_for,
                     "away_score": points_against,
                     "neutral_site": False,
+                    "is_tournament": is_tournament,
                 }
             )
         elif location == "away":
@@ -138,6 +154,7 @@ def prepare_games_for_elo(df: pd.DataFrame) -> list[dict]:
                     "home_score": points_against,
                     "away_score": points_for,
                     "neutral_site": False,
+                    "is_tournament": is_tournament,
                 }
             )
         else:
@@ -151,6 +168,7 @@ def prepare_games_for_elo(df: pd.DataFrame) -> list[dict]:
                     "home_score": points_for,
                     "away_score": points_against,
                     "neutral_site": True,
+                    "is_tournament": is_tournament,
                 }
             )
 
@@ -236,6 +254,7 @@ def train_model(
         # Prepare games and process
         games = prepare_games_for_elo(df)
 
+        tournament_count = 0
         for game in games:
             model.update_game(
                 home_team=game["home"],
@@ -243,6 +262,16 @@ def train_model(
                 home_score=game["home_score"],
                 away_score=game["away_score"],
                 neutral_site=game["neutral_site"],
+                is_tournament=game.get("is_tournament", False),
+            )
+            if game.get("is_tournament", False):
+                tournament_count += 1
+
+        if tournament_count > 0:
+            logger.info(
+                "  %d tournament games processed with K=%d",
+                tournament_count,
+                model.tournament_k_factor,
             )
 
         stats["seasons_processed"].append(season)

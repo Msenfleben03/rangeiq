@@ -119,6 +119,18 @@ def prepare_test_games(df: pd.DataFrame) -> list[dict]:
             except (ValueError, TypeError):
                 continue
 
+        # Detect NCAA Tournament games
+        season_type = row.get("season_type")
+        is_tournament = False
+        if season_type is not None and not pd.isna(season_type):
+            is_tournament = int(season_type) == 3
+        elif location not in ("home", "away"):
+            # Date-based heuristic for data without season_type
+            if hasattr(game_date, "month"):
+                is_tournament = (
+                    game_date.month == 3 and game_date.day >= 14
+                ) or game_date.month == 4
+
         if location == "home":
             home, away = team_id, opponent_id
             home_score, away_score = int(points_for), int(points_against)
@@ -141,6 +153,7 @@ def prepare_test_games(df: pd.DataFrame) -> list[dict]:
                 "home_score": home_score,
                 "away_score": away_score,
                 "neutral_site": neutral,
+                "is_tournament": is_tournament,
             }
         )
 
@@ -324,6 +337,7 @@ def run_backtest(
         away_score = game["away_score"]
         neutral = game["neutral_site"]
         game_id = game["game_id"]
+        is_tourn = game.get("is_tournament", False)
 
         # 1. PREDICT (before seeing result)
         home_win_prob = model.predict_win_probability(home, away, neutral)
@@ -339,7 +353,9 @@ def run_backtest(
             home_open, away_open, home_close, away_close = _get_real_odds(odds_lookup, game_id)
             if home_open is None or away_open is None:
                 # No odds for this game — still update model, skip betting
-                model.update_game(home, away, home_score, away_score, neutral)
+                model.update_game(
+                    home, away, home_score, away_score, neutral, is_tournament=is_tourn
+                )
                 skipped_no_odds += 1
                 continue
             market_odds_home = home_open
@@ -367,7 +383,9 @@ def run_backtest(
                 won = away_score > home_score
             else:
                 # Home edge is negative but above threshold on abs, skip
-                model.update_game(home, away, home_score, away_score, neutral)
+                model.update_game(
+                    home, away, home_score, away_score, neutral, is_tournament=is_tourn
+                )
                 continue
 
             # 5. SIZE BET (Kelly)
@@ -419,7 +437,7 @@ def run_backtest(
                 )
 
         # 8. UPDATE MODEL (always, regardless of bet)
-        model.update_game(home, away, home_score, away_score, neutral)
+        model.update_game(home, away, home_score, away_score, neutral, is_tournament=is_tourn)
 
     if skipped_no_odds > 0:
         logger.info("Skipped %d games with no odds data", skipped_no_odds)
@@ -642,6 +660,7 @@ def run_backtest_with_features(
         away_score = game["away_score"]
         neutral = game["neutral_site"]
         game_id = game["game_id"]
+        is_tourn = game.get("is_tournament", False)
 
         # 1. PREDICT (Elo baseline)
         home_win_prob = model.predict_win_probability(home, away, neutral)
@@ -767,7 +786,9 @@ def run_backtest_with_features(
         else:
             home_open, away_open, home_close, away_close = _get_real_odds(odds_lookup, game_id)
             if home_open is None or away_open is None:
-                model.update_game(home, away, home_score, away_score, neutral)
+                model.update_game(
+                    home, away, home_score, away_score, neutral, is_tournament=is_tourn
+                )
                 _append_game_to_logs(team_logs, game, model)
                 skipped_no_odds += 1
                 continue
@@ -795,7 +816,9 @@ def run_backtest_with_features(
                 closing_odds = closing_odds_away
                 won = away_score > home_score
             else:
-                model.update_game(home, away, home_score, away_score, neutral)
+                model.update_game(
+                    home, away, home_score, away_score, neutral, is_tournament=is_tourn
+                )
                 _append_game_to_logs(team_logs, game, model)
                 continue
 
@@ -848,7 +871,7 @@ def run_backtest_with_features(
                 )
 
         # 8. UPDATE MODEL and logs (always)
-        model.update_game(home, away, home_score, away_score, neutral)
+        model.update_game(home, away, home_score, away_score, neutral, is_tournament=is_tourn)
         _append_game_to_logs(team_logs, game, model)
 
     if skipped_no_odds > 0:
