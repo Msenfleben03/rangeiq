@@ -8,6 +8,11 @@ import os
 from pathlib import Path
 from typing import Dict
 
+from dotenv import load_dotenv
+
+# Load .env from project root so credentials are available regardless of
+# how scripts are invoked (directly, via PS pipeline, or from bash).
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # =============================================================================
 # PROJECT PATHS
