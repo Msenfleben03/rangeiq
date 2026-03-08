@@ -124,7 +124,7 @@ sports_betting/
 │   └── validators/           # 5-Dimension Framework: temporal, statistical, overfit, betting, gatekeeper
 ├── pipelines/                # ESPN fetchers, Barttorvik, MLB Stats API, odds providers, Kalshi/Polymarket
 ├── tracking/                 # BettingDatabase, logger, reports, ForecastingDatabase
-├── scripts/                  # daily_run.py, mlb_daily_run.py, backtest, train, backup/restore
+├── scripts/                  # daily_run.py, mlb_daily_run.py, backtest, train, backup/restore, collect_closing_odds
 ├── tests/                    # 36 files, ~635 tests (test_logger: 8 known failures)
 ├── dashboards/ncaab_dashboard.html
 └── docs/
@@ -132,6 +132,8 @@ sports_betting/
     ├── DATA_DICTIONARY.md     # Full DB schema
     ├── RUNBOOK.md             # Daily/weekly/monthly ops
     ├── mlb/                   # DECISIONS.md, MODEL_ARCHITECTURE.md, PIPELINE_DESIGN.md, research/
+    ├── plans/                 # Implementation plans (dated, per-feature)
+    ├── user-how-to/           # PIPELINE_GUIDE.md (daily pipeline reference)
     └── CODEMAPS/              # Module-level architecture docs
 ```
 
@@ -145,8 +147,8 @@ sports_betting/
 |-------|-------|-------|--------|
 | 1-2 | Jan 24 - Feb 6 | NCAAB foundation | Complete |
 | 3-4 | Feb 7 - Feb 20 | NCAAB paper betting + automation | Complete |
-| 5-6 | Feb 21 - Mar 6 | March Madness prep + MLB skeleton | In Progress |
-| 7-8 | Mar 7 - Mar 20 | Live testing (small stakes) + MLB data | Upcoming |
+| 5-6 | Feb 21 - Mar 6 | March Madness prep + MLB skeleton | Complete |
+| 7-8 | Mar 7 - Mar 20 | Live testing (small stakes) + MLB data | In Progress |
 | 9-10 | Mar 21 - Apr 3 | MLB model v1 + paper betting | Upcoming |
 
 ### Current Sprint Focus
@@ -155,14 +157,17 @@ sports_betting/
 historical odds backfill (91.6% coverage 2020-2025), Barttorvik integration, paper betting pipeline,
 CLV collection system, Dynamic Kelly + Platt calibration, Task Scheduler automation, ESPN predictor
 cross-check, MLB skeleton (47 files), MLB Poisson v1 (56.1% acc), F5 market, de-vig CLV fix,
-per-sport DB split (ncaab_betting.db + mlb_data.db), GFS backup system.
+per-sport DB split (ncaab_betting.db + mlb_data.db), GFS backup system,
+K=32 tournament fix, closing odds collector, `.claude/` untracked from git,
+MLB F5 Platt calibration, all seasons re-fetched with tournament data (2020-2025).
 
 **Active tasks:**
 
 - [ ] Begin live paper betting tracking (daily_run.py)
 - [ ] Backfill 2026 odds (0% coverage currently)
-- [ ] Schema overhaul Tasks 2-8 — `docs/plans/2026-03-05-schema-overhaul.md`
-- [ ] NCAAB: K=32 tournament fix for March Madness (bracket drops Mar 15-16)
+- [ ] Odds backfill 2022-2024 (in progress, 2025 complete)
+- [ ] Cross-season backtest validation (reproduce pre-wipe results with calibrated Kelly)
+- [x] ~~NCAAB: K=32 tournament fix~~ (done — session 49, committed `97cd6ec`)
 
 ### Injury/Divergence System Overhaul
 
