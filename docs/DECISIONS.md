@@ -1029,6 +1029,49 @@ Session continuity (2x), Context help (1.5x), Risk of breaking (1.5x), others (1
 
 ---
 
+## ADR-021: Per-Sport Database Architecture
+
+**Date:** March 2026
+**Status:** Accepted
+**Context:** The original `betting.db` was a single shared database for all sports with a `sport TEXT` column in every table. After a data wipe incident (Session 44), the rebuild moment presented an opportunity to reconsider whether this architecture served the project well.
+
+#### Decision
+
+Each sport gets its own SQLite database. No shared `betting.db`.
+
+| Database | Owner | Tables |
+|----------|-------|--------|
+| `data/ncaab_betting.db` | NCAAB pipeline | bets, predictions, odds_snapshots, bankroll_log, team_ratings, barttorvik_ratings, prop_bets, kenpom_ratings, schema_version |
+| `data/mlb_data.db` | MLB pipeline | all existing feature store tables + bets, prop_bets, odds_snapshots, game_umpire, linescore |
+
+`config/settings.py` exports `NCAAB_DATABASE_PATH`, `MLB_DATABASE_PATH`, and `DATABASE_PATH` (alias for NCAAB, backwards compat).
+
+#### Rationale
+
+- **No real benefit to sharing**: The `sport` column everywhere added complexity without enabling meaningful cross-sport queries — each pipeline already ran independently
+- **Schema divergence**: MLB bets need `pitcher_adj_home/away`, F5 `market_type`, `game_pk` FK — columns that make no sense in NCAAB. A shared table would accumulate NULL-heavy sport-specific columns over time.
+- **Season isolation**: NCAAB (Nov–Apr) and MLB (Mar–Oct) have minimal overlap. Cross-sport bankroll aggregation is trivially done at the application layer when needed.
+- **Blast radius reduction**: The Session 44 wipe zeroed `betting.db` and destroyed both NCAAB and MLB bet history. Per-sport DBs limit the damage of any single file corruption.
+- **Simplicity**: `WHERE sport = 'MLB'` on every query is replaced by just using the right connection.
+
+#### Alternatives Considered
+
+- **Keep shared `betting.db`**: Rejected. No upside; accumulates cross-sport schema complexity.
+- **Separate `betting.db` per sport + keep `mlb_data.db` as feature-store-only**: Rejected. Adds a third file with no benefit — `mlb_data.db` is already the natural home for MLB bets since it has FKs to `games`, `players`, `teams`.
+- **PostgreSQL with schema-per-sport**: Rejected per ADR-006 (SQLite sufficient at current scale).
+
+#### Consequences
+
+- `prop_bets` table defined in both DBs from day one (empty, ready for when props are modeled)
+- `barttorvik_ratings` wide table replaces EAV rows in `team_ratings` for Barttorvik data — stores all four-factor columns (efg_o/d, tov_o/d, orb, drb, ftr_o/d) fetched but previously discarded
+- MLB `odds_snapshots` includes `market_type` column (`full_game`, `f5`) enabling F5 odds storage without future schema migrations
+- MLB schema bumped to version 2 (`schema_version` table tracks this)
+- Backup covers both files: `C:\Users\msenf\sports-betting-backups\` (7 daily, 4 weekly via GFS rotation)
+
+**Implementation plan:** `docs/plans/2026-03-05-schema-overhaul.md`
+
+---
+
 ## Template for New Decisions
 
 ```markdown
