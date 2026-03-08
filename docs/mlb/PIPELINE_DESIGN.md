@@ -54,7 +54,8 @@ Lineup confirmed for game_pk=745632
     ├─▶ Derive P(home win) → compare to ML odds → edge?
     ├─▶ Derive P(home -1.5) → compare to RL odds → edge?
     ├─▶ Derive P(total > T) → compare to total odds → edge?
-    ├─▶ Derive F5 variants → compare to F5 odds → edge?
+    ├─▶ Derive F5 variants → compare to Pinnacle full-game close (proxy) → edge?
+    │        (ESPN Core API has no F5-specific odds; see ADR-MLB-010)
     │
     ▼
     For each market with positive calibrated edge:

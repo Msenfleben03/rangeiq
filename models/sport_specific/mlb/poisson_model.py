@@ -236,11 +236,17 @@ class PoissonModel:
         self.league_avg: float = 0.0
         self.home_advantage: float = hfa
         self._calibrator = None
+        self._f5_calibrator = None
 
     @property
     def is_calibrated(self) -> bool:
         """Whether Platt calibration has been fitted."""
         return self._calibrator is not None
+
+    @property
+    def is_f5_calibrated(self) -> bool:
+        """Whether F5-specific Platt calibration has been fitted."""
+        return self._f5_calibrator is not None
 
     def calibrate(self, raw_probs: np.ndarray, outcomes: np.ndarray) -> None:
         """Fit Platt scaling on raw model probabilities vs actual outcomes.
@@ -277,6 +283,42 @@ class PoissonModel:
         if self._calibrator is None:
             return raw_prob
         return float(self._calibrator.predict_proba(np.array([[raw_prob]]))[0][1])
+
+    def calibrate_f5(self, raw_probs: np.ndarray, outcomes: np.ndarray) -> None:
+        """Fit Platt scaling on F5-specific raw probabilities vs actual outcomes.
+
+        Uses logistic regression (2 parameters) to map raw F5 moneyline
+        probabilities to calibrated F5 win probabilities.
+
+        Args:
+            raw_probs: Array of raw f5_moneyline_home probabilities from predict().
+            outcomes: Array of 1 (home F5 won) / 0 (home F5 lost).
+        """
+        from sklearn.linear_model import LogisticRegression
+
+        X = raw_probs.reshape(-1, 1) if raw_probs.ndim == 1 else raw_probs
+        self._f5_calibrator = LogisticRegression(random_state=42)
+        self._f5_calibrator.fit(X, outcomes)
+        logger.info(
+            "F5 Platt calibration fitted on %d games (coef=%.4f, intercept=%.4f)",
+            len(outcomes),
+            self._f5_calibrator.coef_[0][0],
+            self._f5_calibrator.intercept_[0],
+        )
+
+    def calibrate_f5_prob(self, raw_prob: float) -> float:
+        """Return F5-calibrated probability, or raw if F5 uncalibrated.
+
+        Args:
+            raw_prob: Raw F5 moneyline probability from predict().
+
+        Returns:
+            Calibrated F5 probability if calibrate_f5() has been called,
+            otherwise returns raw_prob unchanged.
+        """
+        if self._f5_calibrator is None:
+            return raw_prob
+        return float(self._f5_calibrator.predict_proba(np.array([[raw_prob]]))[0][1])
 
     def fit(self, games: pd.DataFrame) -> None:
         """Estimate team strengths from historical game data.

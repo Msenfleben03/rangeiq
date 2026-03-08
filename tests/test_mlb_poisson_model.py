@@ -747,3 +747,62 @@ class TestBacktestHelpers:
         for season in [2023, 2024, 2025]:
             avg = compute_league_avg_xfip(stats, season)
             assert 3.5 <= avg <= 5.5, f"Season {season} avg xFIP = {avg}"
+
+
+class TestF5PlattCalibration:
+    """Tests for PoissonModel F5-specific Platt calibration methods."""
+
+    def test_uncalibrated_returns_raw_f5(self):
+        """calibrate_f5_prob() returns raw prob when F5 uncalibrated."""
+        model, team_ids = _fit_model()
+        pred = model.predict(team_ids[0], team_ids[1])
+        raw_f5 = pred["f5_moneyline_home"]
+        assert model.calibrate_f5_prob(raw_f5) == raw_f5
+
+    def test_is_f5_calibrated_default_false(self):
+        """New model is not F5 calibrated."""
+        model = PoissonModel()
+        assert model.is_f5_calibrated is False
+
+    def test_calibrate_f5_sets_is_f5_calibrated(self):
+        """After calibrate_f5(), is_f5_calibrated is True."""
+        model, _ = _fit_model()
+        probs = np.array([0.4, 0.5, 0.6, 0.7])
+        outcomes = np.array([0, 0, 1, 1])
+        model.calibrate_f5(probs, outcomes)
+        assert model.is_f5_calibrated is True
+
+    def test_calibrate_f5_changes_probabilities(self):
+        """F5 calibrated prob differs from raw prob for non-trivial input."""
+        model, _ = _fit_model()
+        # Create biased training data: model says 0.7 but actual win rate is ~50%
+        probs = np.array([0.7] * 50 + [0.3] * 50)
+        outcomes = np.array([1] * 25 + [0] * 25 + [1] * 25 + [0] * 25)
+        model.calibrate_f5(probs, outcomes)
+        # 0.7 should be pulled toward 0.5
+        calibrated = model.calibrate_f5_prob(0.7)
+        assert calibrated != pytest.approx(0.7, abs=0.01)
+        assert 0.0 < calibrated < 1.0
+
+    def test_calibrate_f5_preserves_ordering(self):
+        """F5 calibration preserves probability ordering (monotonic)."""
+        model, _ = _fit_model()
+        rng = np.random.RandomState(99)
+        probs = rng.uniform(0.3, 0.7, 200)
+        outcomes = (rng.random(200) < probs).astype(int)
+        model.calibrate_f5(probs, outcomes)
+        cal_low = model.calibrate_f5_prob(0.35)
+        cal_mid = model.calibrate_f5_prob(0.50)
+        cal_high = model.calibrate_f5_prob(0.65)
+        assert cal_low < cal_mid < cal_high
+
+    def test_calibrate_f5_valid_range(self):
+        """F5 calibrated probabilities are always in valid range."""
+        model, _ = _fit_model()
+        rng = np.random.RandomState(42)
+        probs = rng.uniform(0.2, 0.8, 100)
+        outcomes = (rng.random(100) < probs).astype(int)
+        model.calibrate_f5(probs, outcomes)
+        for test_prob in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            calibrated = model.calibrate_f5_prob(test_prob)
+            assert 0.0 < calibrated < 1.0

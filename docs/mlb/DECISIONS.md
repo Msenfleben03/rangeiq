@@ -407,13 +407,13 @@ parsing: MLB returns **inline odds data** (no `$ref` indirection).
 ## ADR-MLB-010: F5 Market as Primary Betting Target
 
 **Date:** March 2026
-**Status:** Proposed (Roadmap Item #2)
+**Status:** Accepted (implementation in progress, Session 41)
 **Context:** Full-game moneyline and totals include bullpen performance, which the current
 Poisson model does not predict. Bullpen blind spot causes negative CLV on full-game lines.
 
 ### Decision
 
-Implement First 5 Innings (F5) moneyline and totals as the primary betting market. Full-game
+Implement First 5 Innings (F5) moneyline as the primary betting market. Full-game
 lines are secondary until a bullpen model is built.
 
 ### Rationale
@@ -425,31 +425,82 @@ lines are secondary until a bullpen model is built.
 - **Market inefficiency.** F5 markets have fewer sharp bettors than full-game lines; books
   set F5 lines algorithmically from full-game lines, creating exploitable gaps.
 - **Validated in research.** `docs/mlb/research/market-strategies.md` identifies F5 as the
-  best fit for current model architecture.
+  best fit for current model architecture. `docs/mlb/research/poisson-regression-mlb.md`
+  confirms F5 is "a favorite tool of sharp bettors" for eliminating bullpen variance.
 
 ### Current State
 
 Model not yet implemented for F5. Poisson model outputs λ_home and λ_away for the full game.
-F5 lambda is roughly 55% of full-game lambda (starter typically pitches 5+ innings).
+F5 lambda is approximately 55% of full-game lambda, derived as `λ_full × 5/9` with a slight
+upward adjustment for the first-inning scoring bump (innings 1 average ~0.6 runs vs 0.48
+per-inning average — per `docs/mlb/research/poisson-regression-mlb.md`).
 
-### Implementation Plan
+### F5 Odds — Verified Finding (Session 41)
 
-1. Add F5 lambda parameters to `PoissonModel.predict()`.
-2. Add F5 odds columns to `mlb_data.db` odds table.
-3. Backfill F5 odds from ESPN Core API.
-4. Extend backtest to simulate F5 bets.
+**ESPN Core API does NOT provide F5-specific odds.** The `OddsSnapshot` dataclass in
+`pipelines/espn_core_odds_provider.py` captures only full-game markets (`home_ml_open/close`,
+`spread`, `over_under`). There are no F5 fields. The original assumption in this ADR that
+F5 odds could be backfilled from ESPN Core is incorrect.
+
+**Chosen approach: Pinnacle full-game closing line as CLV proxy.** The same starting pitcher
+drives both the F5 and full-game markets, so Pinnacle's de-vigged full-game close is a valid
+CLV reference. This is the "primary validation" method recommended by market-strategies.md.
+F5 lines are not identical to full-game lines, but are highly correlated for the portion of
+game value attributable to starting pitchers.
+
+Forward-looking F5 odds: The Odds API free tier (500 req/month) can supply Pinnacle full-game
+odds for ongoing CLV tracking. F5-specific odds from The Odds API require a paid plan
+($79/month); deferred until model demonstrates positive CLV.
+
+### Implementation Plan (revised)
+
+1. Add `home_f5_score`, `away_f5_score` columns to `games` table in `mlb_data.db`.
+2. Backfill F5 scores from MLB Stats API linescore (idempotent, ~7,500 games, ~12 min).
+3. Add `f5_moneyline_home` to `PoissonModel.predict()` output (`λ_full × 5/9`, first-inning
+   bump adjustment). F5 uses **raw uncalibrated probability** (see Calibration note below).
+4. Extend backtest: F5 accuracy + edge vs de-vigged ESPN Core full-game close (proxy CLV).
+5. Document proxy limitation explicitly in backtest output.
+
+### F5 Calibration (Evidence-Based Decision — Session 41)
+
+**Do NOT apply the full-game Platt calibrator to F5 predictions.**
+
+Research confirmed (NeurIPS 2020 TransCal; NeurIPS 2022 multi-domain temperature scaling;
+Walsh/Joshi 2024 sports betting calibration) that a calibrator trained on high-variance
+(full-game) outcomes systematically over-shrinks F5 probabilities toward 0.5. Mechanism:
+the Platt slope A absorbs post-5th-inning noise from the full-game training labels; when
+applied to F5 (which lacks that noise), it continues shrinking probabilities past the
+correct value. Example: 65% raw F5 prob → ~62% calibrated (correct is ~64%). Over a season
+of Kelly-sized bets, this means systematic understaking and understated edge.
+
+**Phase 1 (now → ~500 F5 outcomes):** Use raw Poisson probability for F5 — less biased
+than applying the wrong calibrator. Log all F5 raw probabilities and outcomes from day 1.
+
+**Phase 2 (after ~500 resolved F5 bets, ~1–1.5 seasons):** Fit a dedicated F5 Platt
+calibrator on F5 outcomes only. Validate with 5-fold walk-forward, 3 conditions: (a) raw,
+(b) full-game calibrator transferred, (c) F5-specific. Adopt F5 calibrator if Brier score
+improvement ≥ 0.003 vs transferred calibrator.
+
+Implementation: `--f5-calibrated` flag added but disabled (logs warning until threshold met).
 
 ### Alternatives Considered
 
-- **Full-game moneyline only:** Current state. Negative CLV suggests model has no edge
-  without bullpen adjustment.
-- **Totals:** Requires weather + park factors + umpire data (Phase 2).
+- **ESPN Core API for F5 odds:** Not available — `OddsSnapshot` has no F5 fields. Full-game
+  moneyline only. Verified in Session 41.
+- **The Odds API paid tier for F5 odds:** $79/month; deferred until positive CLV demonstrated.
+- **Full-game moneyline only:** Current state. Negative CLV (-1.74% avg) confirms model has
+  no edge on full-game lines without bullpen adjustment.
+- **Totals:** Requires weather + park factors + umpire data (Roadmap items #4, #6).
 
 ### Consequences
 
-- F5 backtest will show higher CLV than full-game (hypothesis to be validated).
-- Requires separate odds data (F5 lines != full-game lines).
-- Full-game betting remains as backup if F5 shows positive CLV first.
+- F5 backtest CLV is a proxy (Pinnacle full-game close, not F5-specific). Label accordingly.
+- F5 accuracy will exceed full-game accuracy (hypothesis to be validated in backtest).
+- "Listed pitcher" rule applies: F5 bet is void if the announced starter does not start.
+  Per market-strategies.md: *"ALWAYS bet listed pitcher — if pitcher changes, pricing basis
+  evaporates."*
+- 4-cell filtering (ADR-MLB-011): away_fav cell has strongly negative CLV; apply same filter
+  to F5 bets from the start.
 
 ---
 
