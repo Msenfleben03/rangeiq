@@ -11,10 +11,11 @@
     4. Scrape Barttorvik daily snapshot
     5. Scrape KenPom daily snapshot (store to SQLite)
     6. Settle yesterday's paper bets
-    7. Generate today's predictions and record paper bets
-    8. Fetch opening odds for today's games
-    9. Generate dashboard data bundle
-    10. Deploy dashboard to Vercel
+    7. Collect closing odds (ESPN Core + Odds API, multi-book)
+    8. Generate today's predictions and record paper bets
+    9. Fetch opening odds for today's games
+    10. Generate dashboard data bundle
+    11. Deploy dashboard to Vercel
 
     Supports checkpointing, retry, and notification on failure.
     Designed to run via Windows Task Scheduler at 7:00 AM ET daily.
@@ -117,6 +118,12 @@ $steps = [ordered]@{
         args      = @("--settle-only")
         critical  = $false
         timeout   = 120
+    }
+    collect_closing_odds = @{
+        script    = "collect_closing_odds.py"
+        args      = @("--hours", "48")
+        critical  = $false
+        timeout   = 300
     }
     predictions = @{
         script    = "daily_run.py"
