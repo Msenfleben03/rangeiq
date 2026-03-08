@@ -165,9 +165,8 @@ MLB F5 Platt calibration, all seasons re-fetched with tournament data (2020-2025
 
 - [ ] Begin live paper betting tracking (daily_run.py)
 - [ ] Backfill 2026 odds (0% coverage currently)
-- [ ] Odds backfill 2022-2024 (in progress, 2025 complete)
-- [ ] Cross-season backtest validation (reproduce pre-wipe results with calibrated Kelly)
-- [x] ~~NCAAB: K=32 tournament fix~~ (done — session 49, committed `97cd6ec`)
+- [ ] Schema overhaul Tasks 2-8 — `docs/plans/2026-03-05-schema-overhaul.md`
+- [ ] NCAAB: K=32 tournament fix for March Madness (bracket drops Mar 15-16)
 
 ### Injury/Divergence System Overhaul
 
