@@ -184,6 +184,24 @@ def load_odds_data(season: int, provider_id: int = 58) -> dict[str, dict]:
         logger.warning("Provider %d not found, using first available", provider_id)
         provider_df = df.drop_duplicates(subset=["game_id"], keep="first")
 
+    # Filter out exhibition/scrimmage games with unrealistic odds (books cap real games ~±1500)
+    MAX_ML = 1500
+    home_ml = pd.to_numeric(
+        provider_df["home_ml_open"].fillna(provider_df.get("home_moneyline")), errors="coerce"
+    )
+    away_ml = pd.to_numeric(
+        provider_df["away_ml_open"].fillna(provider_df.get("away_moneyline")), errors="coerce"
+    )
+    # If opening ML is unavailable for most rows, skip filtering (season may lack open/close split)
+    if home_ml.notna().mean() < 0.5:
+        valid_mask = pd.Series(True, index=provider_df.index)
+    else:
+        valid_mask = (home_ml.abs().le(MAX_ML) & away_ml.abs().le(MAX_ML)).fillna(False)
+    n_filtered = (~valid_mask).sum()
+    if n_filtered > 0:
+        logger.info("Filtered %d games with extreme odds (|ML| > %d)", n_filtered, MAX_ML)
+    provider_df = provider_df[valid_mask]
+
     odds_lookup: dict[str, dict] = {}
     for _, row in provider_df.iterrows():
         game_id = str(row["game_id"])
@@ -306,6 +324,7 @@ def run_backtest(
     odds_lookup: dict[str, dict] | None = None,
     use_simulated: bool = False,
     kelly_sizer=None,
+    fixed_bankroll: bool = True,
 ) -> pd.DataFrame:
     """Run walk-forward backtest.
 
@@ -328,6 +347,7 @@ def run_backtest(
     np.random.seed(42)  # Reproducibility
     results = []
     current_bankroll = bankroll
+    sizing_bankroll = bankroll  # Fixed for evaluation; only current_bankroll tracks actual P&L
     skipped_no_odds = 0
 
     for game in games:
@@ -398,7 +418,7 @@ def run_backtest(
                 )
             else:
                 bet_fraction = fractional_kelly(bet_prob, decimal_odds, kelly_fraction, max_bet)
-                stake = current_bankroll * bet_fraction
+                stake = sizing_bankroll * bet_fraction
 
             if stake > 0:
                 # 6. CALCULATE P/L
@@ -413,6 +433,8 @@ def run_backtest(
                 clv = calculate_clv(bet_odds, closing_odds)
 
                 current_bankroll += profit
+                if not fixed_bankroll:
+                    sizing_bankroll = current_bankroll
 
                 results.append(
                     {
@@ -462,9 +484,9 @@ def summarize_backtest(df: pd.DataFrame, initial_bankroll: float = 5000.0) -> di
     # ROI (Kelly-compound)
     roi = total_pnl / total_staked if total_staked > 0 else 0
 
-    # Flat-stake ROI: mean of per-bet returns (the valid metric for significance)
-    per_bet_returns = df["profit_loss"] / df["stake"]
-    flat_roi = float(per_bet_returns.mean())
+    # Flat-stake ROI: total net P/L divided by total staked.
+    # Simple and correct: sum all winnings, subtract all losses, divide by total wagered.
+    flat_roi = float(total_pnl / total_staked) if total_staked > 0 else 0.0
 
     # Sharpe ratio (annualized, ~150 betting days)
     daily_pnl = df.groupby(df["date"].dt.date)["profit_loss"].sum()
@@ -644,6 +666,7 @@ def run_backtest_with_features(
     np.random.seed(42)
     results = []
     current_bankroll = bankroll
+    sizing_bankroll = bankroll  # Fixed — never compounds; keeps bet sizes consistent
     skipped_no_odds = 0
     team_logs: dict[str, list[dict]] = {}
 
@@ -832,7 +855,7 @@ def run_backtest_with_features(
                 )
             else:
                 bet_fraction = fractional_kelly(bet_prob, decimal_odds, kelly_fraction, max_bet)
-                stake = current_bankroll * bet_fraction
+                stake = sizing_bankroll * bet_fraction
 
             if stake > 0:
                 if won:

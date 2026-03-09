@@ -125,7 +125,7 @@ sports_betting/
 ├── pipelines/                # ESPN fetchers, Barttorvik, MLB Stats API, odds providers, Kalshi/Polymarket
 ├── tracking/                 # BettingDatabase, logger, reports, ForecastingDatabase
 ├── scripts/                  # daily_run.py, mlb_daily_run.py, backtest, train, backup/restore, collect_closing_odds
-├── tests/                    # 36 files, ~635 tests (test_logger: 8 known failures)
+├── tests/                    # 47 files, ~987 tests (test_logger: 8 known failures)
 ├── dashboards/ncaab_dashboard.html
 └── docs/
     ├── DECISIONS.md           # 20+ cross-sport ADRs
@@ -153,7 +153,7 @@ sports_betting/
 
 ### Current Sprint Focus
 
-**Completed milestones**: NCAAB Elo model (ROI +24%, p=2.5e-6, 6 seasons), 5-dim validator (198 tests),
+**Completed milestones**: NCAAB Elo model (OOS flat ROI +27.09% pooled, p=0.0001, 5 seasons), 5-dim validator (198 tests),
 historical odds backfill (91.6% coverage 2020-2025), Barttorvik integration, paper betting pipeline,
 CLV collection system, Dynamic Kelly + Platt calibration, Task Scheduler automation, ESPN predictor
 cross-check, MLB skeleton (47 files), MLB Poisson v1 (56.1% acc), F5 market, de-vig CLV fix,
