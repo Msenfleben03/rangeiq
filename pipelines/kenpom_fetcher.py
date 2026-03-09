@@ -328,7 +328,7 @@ def append_to_cache(
 def store_snapshot_to_db(
     df: pd.DataFrame,
     season: int,
-    db_path: str = "data/betting.db",
+    db_path: str | None = None,
 ) -> int:
     """Store a KenPom ratings snapshot to the kenpom_ratings SQLite table.
 
@@ -347,6 +347,11 @@ def store_snapshot_to_db(
         return 0
 
     import sqlite3
+
+    if db_path is None:
+        from config.settings import NCAAB_DATABASE_PATH
+
+        db_path = str(NCAAB_DATABASE_PATH)
 
     snapshot_date = date.today().isoformat()
     if "date" in df.columns:

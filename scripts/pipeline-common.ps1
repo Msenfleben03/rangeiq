@@ -203,7 +203,7 @@ function Invoke-PipelineStep {
         }
     }
 
-    $scriptPath = Join-Path $Script:ProjectRoot "scripts" $Script
+    $scriptPath = Join-Path (Join-Path $Script:ProjectRoot "scripts") $Script
 
     for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
         Write-Log "INFO" "Step [$StepName] attempt $attempt/$MaxRetries -- $Script"

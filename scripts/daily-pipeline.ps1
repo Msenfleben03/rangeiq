@@ -84,16 +84,17 @@ $steps = [ordered]@{
         timeout   = 60
     }
     health_check = @{
-        script    = "pipeline_health_check.py"
-        args      = @("--json")
-        critical  = $true
-        timeout   = 30
+        script           = "pipeline_health_check.py"
+        args             = @("--json")
+        critical         = $true
+        timeout          = 30
+        accept_exit_codes = @(1)   # exit 1 = warnings (proceed), exit 2 = critical (abort)
     }
     fetch_scores = @{
         script    = "fetch_season_data.py"
         args      = @("--season", "2026", "--incremental", "--no-odds")
         critical  = $true
-        timeout   = 300
+        timeout   = 600
     }
     train_elo = @{
         script    = "train_ncaab_elo.py"
@@ -223,7 +224,7 @@ foreach ($stepName in $steps.Keys) {
     # Skip completed steps (checkpoint resume)
     if ($state.steps.ContainsKey($stepName)) {
         $existing = $state.steps[$stepName]
-        if ($existing.status -eq "completed") {
+        if ($existing.status -eq "completed" -or $existing.status -eq "completed_with_warnings") {
             Write-Log "INFO" "Step [$stepName] already completed (checkpoint) -- skipping"
             continue
         }
@@ -251,10 +252,18 @@ foreach ($stepName in $steps.Keys) {
         -MaxRetries $MaxRetries `
         -DryRun:$DryRun
 
-    if ($result.exit_code -eq 0) {
+    # A step passes if exit_code is 0, OR if it's listed in accept_exit_codes (e.g. warnings)
+    $acceptCodes = $stepConfig.accept_exit_codes
+    $stepPassed = ($result.exit_code -eq 0) -or ($acceptCodes -and $acceptCodes -contains $result.exit_code)
+
+    if ($stepPassed) {
+        $stepStatus = if ($result.exit_code -eq 0) { "completed" } else { "completed_with_warnings" }
+        if ($result.exit_code -ne 0) {
+            Write-Log "WARN" "Step [$stepName] exit=$($result.exit_code) (warnings) -- continuing"
+        }
         $state.steps[$stepName] = @{
-            status    = "completed"
-            exit_code = 0
+            status    = $stepStatus
+            exit_code = $result.exit_code
             attempt   = $result.attempt
             duration  = $result.duration
         }
@@ -331,10 +340,11 @@ foreach ($stepName in $steps.Keys) {
     if ($state.steps.ContainsKey($stepName)) {
         $s = $state.steps[$stepName]
         $icon = switch ($s.status) {
-            "completed" { "OK" }
-            "failed"    { "FAIL" }
-            "skipped"   { "SKIP" }
-            default     { "?" }
+            "completed"               { "OK" }
+            "completed_with_warnings" { "WARN" }
+            "failed"                  { "FAIL" }
+            "skipped"                 { "SKIP" }
+            default                   { "?" }
         }
         Write-Log "INFO" "  [$icon] $stepName (exit=$($s.exit_code), attempt=$($s.attempt))"
     }
