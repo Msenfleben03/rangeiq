@@ -156,7 +156,7 @@ python scripts/generate_report.py --daily --odds-health
 - [ ] If >20% down: pause and conduct full review
 
 ### 6. System Maintenance
-- [ ] Database backup: `cp data/betting.db data/backups/betting_$(date +%Y%m%d).db`
+- [ ] Database backup: `venv/Scripts/python.exe scripts/backup_db.py`
 - [ ] Check API credit reset (resets on month boundary)
 - [ ] Review `data/odds_api_usage.json` credits
 - [ ] Run `python scripts/verify_schema.py` to check DB health
@@ -353,7 +353,8 @@ If CLV drops below 0% for 50+ consecutive bets:
 
 | File | Location |
 |------|----------|
-| Database | `data/betting.db` |
+| NCAAB Database | `data/ncaab_betting.db` |
+| MLB Database | `data/mlb_data.db` |
 | Trained model | `data/processed/ncaab_elo_model.pkl` |
 | Model metadata | `data/processed/ncaab_elo_model.meta.json` |
 | Ratings CSV | `data/processed/ncaab_elo_ratings_current.csv` |

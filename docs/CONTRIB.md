@@ -41,7 +41,7 @@ cp .env.example .env
 |----------|----------|---------|---------|
 | `ODDS_API_KEY` | For live odds | _(none)_ | The Odds API key (500 free credits/mo) |
 | `CFBD_API_KEY` | For NCAAF | _(none)_ | CollegeFootballData.com API key |
-| `DATABASE_PATH` | No | `data/betting.db` | SQLite database location |
+| `DATABASE_PATH` | No | `data/ncaab_betting.db` | NCAAB SQLite database (alias for NCAAB_DATABASE_PATH) |
 | `ENVIRONMENT` | No | `development` | development / staging / production |
 | `DISPLAY_TIMEZONE` | No | `America/Chicago` | Display timezone (storage is UTC) |
 | `LOG_LEVEL` | No | `INFO` | Logging verbosity |

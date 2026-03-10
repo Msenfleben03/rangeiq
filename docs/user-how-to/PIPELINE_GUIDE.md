@@ -1,6 +1,6 @@
 # Daily Pipeline Guide
 
-Last updated: 2026-03-07
+Last updated: 2026-03-09
 
 ---
 
@@ -34,24 +34,26 @@ Here is how it is configured for this project:
 6. A lock file (`logs/pipeline.lock`) prevents two pipeline instances from running simultaneously
 7. On completion, a Slack notification is sent (if `SLACK_WEBHOOK_URL` is configured in `.env`)
 
-**The Task Scheduler invocation command:**
+**The Task Scheduler invocation command (uses pwsh.exe / PS 7):**
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File C:\Users\msenf\sports-betting\scripts\daily-pipeline.ps1
+pwsh.exe -ExecutionPolicy Bypass -File C:\Users\msenf\sports-betting\scripts\daily-pipeline.ps1
 ```
 
-**Running manually from Claude Code or Git Bash (MUST use `-NoProfile`):**
+**Running manually from Claude Code or Git Bash — MUST use `pwsh.exe` (PS 7):**
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1 -DryRun
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1 -SettleOnly
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1 -Force
+pwsh.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1
+pwsh.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1 -DryRun
+pwsh.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1 -SettleOnly
+pwsh.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1 -Force
 ```
 
-**Why `-NoProfile`?** The user's PowerShell profile loads modules that interfere
-with stdout capture. Task Scheduler does not load profiles by default, so it
-works as-is. But any manual invocation from a shell must include `-NoProfile`.
+**Why `pwsh.exe` and not `powershell.exe`?** The pipeline requires PowerShell 7
+(`pwsh.exe`). PowerShell 5.1 (`powershell.exe`) has two incompatibilities:
+`Join-Path` does not accept 3+ arguments, and `Start-Process` exit code capture
+has a race condition. Task Scheduler is configured to use `pwsh.exe`, so it
+works automatically. All manual runs must also use `pwsh.exe`.
 
 **Pipeline-level flags:**
 
@@ -111,7 +113,7 @@ venv/Scripts/python.exe scripts/backup_db.py --verify
 ### Step 2: health_check
 
 **Script:** `scripts/pipeline_health_check.py --json`
-**Critical:** Yes -- pipeline aborts if this fails
+**Critical:** Yes -- pipeline aborts only on exit 2 (critical errors)
 **Timeout:** 30 seconds
 
 - Pre-flight validation that all prerequisites are met
@@ -125,8 +127,8 @@ venv/Scripts/python.exe scripts/backup_db.py --verify
 
 **Exit codes:**
 
-- `0` = healthy
-- `1` = warnings (non-critical, pipeline proceeds)
+- `0` = healthy (pipeline continues normally)
+- `1` = warnings (pipeline continues -- non-critical issues like missing optional keys)
 - `2` = critical (pipeline aborts)
 
 **Runtime:** ~2-5 seconds
@@ -137,7 +139,7 @@ venv/Scripts/python.exe scripts/backup_db.py --verify
 
 **Script:** `scripts/fetch_season_data.py --season 2026 --incremental --no-odds`
 **Critical:** Yes -- pipeline aborts if this fails
-**Timeout:** 300 seconds (5 minutes)
+**Timeout:** 600 seconds (10 minutes)
 
 - Fetches latest game scores from the ESPN Scoreboard API
 - `--incremental` means it only fetches games not already in the database
@@ -452,7 +454,7 @@ Shared PowerShell functions used by the pipeline orchestrator:
 
 1. Open Task Scheduler, find the task, check "Last Run Result"
 2. Check `logs/pipeline-daily-YYYY-MM-DD.log` for errors
-3. Run manually: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1`
+3. Run manually: `pwsh.exe -NoProfile -ExecutionPolicy Bypass -File scripts/daily-pipeline.ps1`
 
 **Pipeline is stuck / lock file stale:**
 
