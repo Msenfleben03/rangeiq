@@ -122,8 +122,8 @@ sports_betting/
 ├── backtesting/
 │   ├── walk_forward.py       # Walk-forward validation engine
 │   └── validators/           # 5-Dimension Framework: temporal, statistical, overfit, betting, gatekeeper
-├── pipelines/                # ESPN fetchers, Barttorvik, MLB Stats API, odds providers, Kalshi/Polymarket
-├── tracking/                 # BettingDatabase, game_log, logger, reports, ForecastingDatabase
+├── pipelines/                # ESPN fetchers, Barttorvik, MLB Stats API, odds providers
+├── tracking/                 # BettingDatabase, game_log, logger, reports
 ├── scripts/                  # daily_run.py, mlb_daily_run.py, backtest, train, backup/restore, collect_closing_odds
 ├── tests/                    # 47 files, ~1002 tests (test_logger: 8 known failures)
 ├── dashboards/ncaab_dashboard.html, ncaab_game_log.html
@@ -174,29 +174,6 @@ game log feature (game_log table + dashboard + standalone script).
 - [ ] Phase 1: Backtest ESPN divergence (2023-2025, ~18K games) — plan: `docs/plans/2026-02-28-injury-divergence-system.md`
 - [ ] Phase 2: Graduated sizing (replace binary kill switch with data-driven curve)
 - [ ] Phase 3: Injury data enrichment (ESPN injuries API + cross-reference sources)
-
-### Prediction Markets Integration
-
-- [x] Polymarket + Kalshi fetchers, forecasting schema (7 tables)
-- [ ] Open Kalshi account (CFTC-regulated)
-- [ ] Paper trade 50+ positions
-- [ ] Achieve Brier score < 0.125
-
----
-
-## Prediction Markets Module
-
-Focus: Political/economic markets (3-10% CLV). Sports markets avoided — inferior to sportsbooks.
-
-| Platform | Use Case | Fees |
-|----------|----------|------|
-| **Kalshi** | Primary (US legal, CFTC-regulated) | 1.2% |
-| **Polymarket** | Data source | 0.01% |
-| **PredictIt** | Benchmark only | 16% |
-
-Targets: Brier score < 0.125, CLV > 3%, calibration error < 5%.
-Superforecasting: outside view first, granular estimates (65% not "likely"), Bayesian updating with tracked revisions.
-See `pipelines/kalshi_fetcher.py`, `pipelines/polymarket_fetcher.py`, `tracking/forecasting_db.py`.
 
 ---
 
