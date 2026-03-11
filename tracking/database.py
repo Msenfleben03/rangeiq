@@ -312,6 +312,38 @@ class BettingDatabase:
                 """
             )
 
+            # Game log — every D1 game with model predictions and odds
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS game_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_date DATE NOT NULL,
+                    game_id TEXT NOT NULL,
+                    home TEXT NOT NULL,
+                    away TEXT NOT NULL,
+                    home_score INTEGER,
+                    away_score INTEGER,
+                    model_prob_home REAL,
+                    edge REAL,
+                    odds_opening_home INTEGER,
+                    odds_opening_away INTEGER,
+                    odds_closing_home INTEGER,
+                    odds_closing_away INTEGER,
+                    bet_placed BOOLEAN DEFAULT 0,
+                    bet_side TEXT,
+                    result TEXT,
+                    settled_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(game_id)
+                )
+            """
+            )
+            cursor.execute(
+                """INSERT OR IGNORE INTO schema_version (version, applied_at, description)
+                   VALUES (3, CURRENT_TIMESTAMP,
+                           'game_log table for all D1 games with odds tracking')
+                """
+            )
+
             logger.info(f"Database initialized at {self.db_path}")
 
     def execute_query(self, query: str, params: Optional[tuple] = None):
