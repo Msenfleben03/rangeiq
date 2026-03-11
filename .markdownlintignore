@@ -18,6 +18,9 @@ docs/DECISIONS.md
 # MLB research docs (external/generated, long lines)
 docs/mlb/research/
 
+# Research reports (AI-generated, external content)
+docs/reports/
+
 # External/generated content
 ELO-visual-dashboard.txt
 historical-odds-resources-research.txt
