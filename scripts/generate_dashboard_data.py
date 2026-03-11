@@ -18,6 +18,7 @@ import argparse
 import json
 import logging
 import pickle
+import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
+from config.settings import NCAAB_DATABASE_PATH
 from pipelines.team_name_mapping import build_espn_barttorvik_mapping
 
 logging.basicConfig(
@@ -387,6 +389,28 @@ def _safe_int(val):
 
 
 # ---------------------------------------------------------------------------
+# Game log loader
+# ---------------------------------------------------------------------------
+
+
+def _load_game_log(db_path: Path) -> list[dict]:
+    """Load game_log table for dashboard export."""
+    if not db_path.exists():
+        return []
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("SELECT * FROM game_log ORDER BY game_date DESC, home").fetchall()
+        return [dict(row) for row in rows]
+    except sqlite3.OperationalError:
+        logger.warning("game_log table not found — run daily pipeline first")
+        return []
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Bundle generation
 # ---------------------------------------------------------------------------
 
@@ -523,6 +547,7 @@ def generate_bundle(season: int = 2026) -> dict:
     # Load trajectory data and all-team ratings from the model pickle
     trajectories = load_trajectories()
     all_teams = load_all_team_ratings()
+    game_log_data = _load_game_log(NCAAB_DATABASE_PATH)
 
     bart_coverage = sum(1 for t in teams if t["bart_name"])
     elo_date = datetime.now().strftime("%Y-%m-%d")
@@ -535,6 +560,7 @@ def generate_bundle(season: int = 2026) -> dict:
         "conference_lookup": CONFERENCE_FULL_NAMES,
         "trajectories": trajectories,
         "all_teams": all_teams,
+        "game_log": game_log_data,
         "meta": {
             "total_teams": len(teams),
             "all_teams_count": len(all_teams),
@@ -545,6 +571,7 @@ def generate_bundle(season: int = 2026) -> dict:
             "elo_model_date": elo_date,
             "barttorvik_date": bart_date,
             "barttorvik_season": "2024-25 (end-of-season)",
+            "game_log_count": len(game_log_data),
         },
     }
 
