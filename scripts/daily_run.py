@@ -46,6 +46,7 @@ from scripts.daily_predictions import (
     generate_predictions,
 )
 from tracking.database import BettingDatabase
+from tracking.game_log import insert_game_log_entries, settle_game_log_entries
 from tracking.logger import auto_record_bets_from_predictions
 from tracking.reports import daily_report, model_health_check, weekly_report
 
@@ -153,6 +154,40 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
 
     if not pending:
         logger.info("No pending bets to settle for %s", settle_date)
+        # Still settle game log even when no bets are pending
+        settle_dt_nb = datetime.strptime(settle_date, "%Y-%m-%d")
+        nb_games = fetch_espn_scoreboard(settle_dt_nb)
+        nb_completed = [g for g in nb_games if g["status"] in ("STATUS_FINAL", "STATUS_FINAL_OT")]
+        if nb_completed:
+            nb_closing: dict[str, dict] = {}
+            try:
+                nb_fetcher = ESPNCoreOddsFetcher(sport="ncaab")
+                try:
+                    for g in nb_completed:
+                        gid = g["game_id"]
+                        try:
+                            snapshots = nb_fetcher.fetch_game_odds(gid)
+                            if snapshots:
+                                pre_game_snaps = [s for s in snapshots if s.provider_id != 59]
+                                best = pre_game_snaps[0] if pre_game_snaps else snapshots[0]
+                                nb_closing[gid] = {
+                                    "home": best.home_ml_close or best.home_moneyline,
+                                    "away": best.away_ml_close or best.away_moneyline,
+                                }
+                                _store_closing_snapshot(db, best)
+                        except Exception as e:
+                            logger.debug("Closing odds failed for game %s: %s", gid, e)
+                finally:
+                    nb_fetcher.close()
+            except Exception as e:
+                logger.warning("Game log closing odds fetch failed: %s", e)
+
+            gl_settled = settle_game_log_entries(str(DATABASE_PATH), nb_completed, nb_closing)
+            logger.info(
+                "Game log: settled %d/%d completed games (no bets pending)",
+                gl_settled,
+                len(nb_completed),
+            )
         return {"date": settle_date, "settled": 0, "pending": 0}
 
     # Fetch final scores from ESPN
@@ -301,6 +336,55 @@ def settle_yesterdays_bets(db: BettingDatabase, settle_date: str | None = None) 
                 clv_failed += 1
 
     avg_clv = sum(clv_values) / len(clv_values) if clv_values else 0.0
+
+    # --- Game Log: settle ALL completed games (not just bets) ---
+    all_completed = [g for g in games if g["status"] in ("STATUS_FINAL", "STATUS_FINAL_OT")]
+    if all_completed:
+        gl_closing_odds: dict[str, dict] = {}
+        # Reuse closing odds already fetched for bet games
+        if settled_game_ids and closing_odds:
+            for gid, snapshot in closing_odds.items():
+                gl_closing_odds[gid] = {
+                    "home": snapshot.home_ml_close or snapshot.home_moneyline,
+                    "away": snapshot.away_ml_close or snapshot.away_moneyline,
+                }
+
+        # Fetch closing odds for non-bet completed games
+        non_bet_game_ids = [
+            g["game_id"] for g in all_completed if g["game_id"] not in gl_closing_odds
+        ]
+        if non_bet_game_ids:
+            try:
+                nb_fetcher = ESPNCoreOddsFetcher(sport="ncaab")
+                try:
+                    for gid in non_bet_game_ids:
+                        try:
+                            snapshots = nb_fetcher.fetch_game_odds(gid)
+                            if snapshots:
+                                pre_game_snaps = [s for s in snapshots if s.provider_id != 59]
+                                best = pre_game_snaps[0] if pre_game_snaps else snapshots[0]
+                                gl_closing_odds[gid] = {
+                                    "home": best.home_ml_close or best.home_moneyline,
+                                    "away": best.away_ml_close or best.away_moneyline,
+                                }
+                                _store_closing_snapshot(db, best)
+                        except Exception as e:
+                            logger.debug(
+                                "Closing odds failed for non-bet game %s: %s",
+                                gid,
+                                e,
+                            )
+                finally:
+                    nb_fetcher.close()
+            except Exception as e:
+                logger.warning("Non-bet closing odds fetch failed: %s", e)
+
+        gl_settled = settle_game_log_entries(str(DATABASE_PATH), all_completed, gl_closing_odds)
+        logger.info(
+            "Game log: settled %d/%d completed games",
+            gl_settled,
+            len(all_completed),
+        )
 
     return {
         "date": settle_date,
@@ -479,6 +563,47 @@ def run_predictions(
         print(f"{'=' * 60}")
         total_stake = sum(b["stake"] for b in recorded)
         print(f"Total stake: ${total_stake:.2f}")
+
+    # --- Game Log: record ALL games (bet or not) ---
+    if not dry_run:
+        game_date_str_log = target_date.strftime("%Y-%m-%d")
+        pred_lookup: dict[str, dict] = {}
+        bet_lookup: dict[str, str] = {}
+        for _, row in predictions.iterrows():
+            gid = row.get("game_id", "")
+            if not gid:
+                continue
+            home_edge = row.get("home_edge")
+            away_edge = row.get("away_edge")
+            if home_edge is not None and away_edge is not None:
+                best_edge = home_edge if home_edge >= away_edge else -away_edge
+            elif home_edge is not None:
+                best_edge = home_edge
+            elif away_edge is not None:
+                best_edge = -away_edge
+            else:
+                best_edge = None
+
+            pred_lookup[gid] = {
+                "model_prob_home": row.get("home_prob"),
+                "edge": best_edge,
+                "odds_opening_home": row.get("home_ml"),
+                "odds_opening_away": row.get("away_ml"),
+            }
+            rec_side = row.get("rec_side")
+            if rec_side:
+                bet_lookup[gid] = rec_side.lower()
+
+        all_games_for_log = fetch_espn_scoreboard(target_date)
+        log_count = insert_game_log_entries(
+            str(DATABASE_PATH),
+            game_date_str_log,
+            all_games_for_log,
+            pred_lookup,
+            bet_lookup,
+        )
+        if log_count > 0:
+            logger.info("Game log: recorded %d games for %s", log_count, game_date_str_log)
 
     return predictions
 
