@@ -77,7 +77,7 @@ def fetch_espn_scoreboard(target_date: datetime) -> list[dict]:
     """
     date_str = target_date.strftime("%Y%m%d")
     url = PAPER_BETTING.ESPN_SCOREBOARD_URL
-    params = {"dates": date_str, "limit": 200}
+    params = {"dates": date_str, "limit": 500, "groups": 50}
 
     try:
         resp = requests.get(url, params=params, timeout=15)

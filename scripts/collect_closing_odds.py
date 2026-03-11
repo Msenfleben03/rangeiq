@@ -109,7 +109,7 @@ def fetch_completed_games(
     """
     s = session or requests.Session()
     date_compact = date.replace("-", "")
-    url = f"{NCAAB_SCOREBOARD}?dates={date_compact}&limit=500"
+    url = f"{NCAAB_SCOREBOARD}?dates={date_compact}&limit=500&groups=50"
 
     try:
         resp = s.get(url, timeout=20)
