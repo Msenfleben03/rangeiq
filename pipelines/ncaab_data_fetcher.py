@@ -1,25 +1,52 @@
-"""NCAAB Data Fetcher using sportsipy.
+"""NCAAB Data Fetcher.
 
 Fetches NCAA Men's Basketball game data, team statistics,
 and schedules for model training and prediction.
+
+NOTE: sportsipy is broken as of 2025. fetch_games_by_date() now uses the
+ESPN Site API scoreboard directly. Other methods (fetch_teams, fetch_team_schedule,
+fetch_season_data) still depend on sportsipy and will fail — migrate as needed.
 """
+
 import pandas as pd
+import requests
 from datetime import datetime
-from typing import List, Dict
+from typing import Dict, List, Optional
 import logging
 from pathlib import Path
 import time
 
+# sportsipy is broken since 2025 — import silently so fetch_games_by_date
+# (ESPN-based) still works even when sportsipy is unavailable.
 try:
     from sportsipy.ncaab.teams import Teams
     from sportsipy.ncaab.schedule import Schedule
-    from sportsipy.ncaab.boxscore import Boxscores
-except ImportError:
-    raise ImportError("sportsipy not installed. Run: pip install sportsipy")
+
+    _SPORTSIPY_AVAILABLE = True
+except Exception:
+    Teams = None  # type: ignore[assignment,misc]
+    Schedule = None  # type: ignore[assignment,misc]
+    _SPORTSIPY_AVAILABLE = False
+
+ESPN_SITE_BASE = "https://site.api.espn.com/apis/site/v2/sports"
+_NCAAB_SCOREBOARD = f"{ESPN_SITE_BASE}/basketball/mens-college-basketball/scoreboard"
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _parse_score(competitor: dict) -> Optional[int]:
+    """Extract integer score from ESPN competitor dict."""
+    score = competitor.get("score", {})
+    if isinstance(score, dict):
+        val = score.get("value") or score.get("displayValue")
+    else:
+        val = score
+    try:
+        return int(float(val))
+    except (TypeError, ValueError):
+        return None
 
 
 class NCAABDataFetcher:
@@ -137,47 +164,78 @@ class NCAABDataFetcher:
             return pd.DataFrame()
 
     def fetch_games_by_date(self, date: datetime) -> List[Dict]:
-        """Fetch all games on a specific date.
+        """Fetch all completed games on a specific date via ESPN scoreboard API.
 
         Args:
-            date: Date to fetch games for
+            date: Date to fetch games for.
 
         Returns:
-            List of game dictionaries
+            List of game dicts with keys: date, home_team, home_abbr, home_score,
+            away_team, away_abbr, away_score, game_id.
         """
-        logger.info(f"Fetching games for {date.strftime('%Y-%m-%d')}...")
+        date_str = date.strftime("%Y%m%d")
+        logger.info("Fetching ESPN scoreboard for %s...", date.strftime("%Y-%m-%d"))
 
         try:
-            # Format: (Month, Day, Year)
-            boxscores = Boxscores(date.month, date.day, date.year)
-            games = boxscores.games
-
-            if not games:
-                logger.warning(f"No games found for {date}")
-                return []
-
-            game_list = []
-            for game_date, game_data in games.items():
-                for game in game_data:
-                    game_list.append(
-                        {
-                            "date": date,
-                            "home_team": game["home_name"],
-                            "home_abbr": game["home_abbr"],
-                            "home_score": game["home_score"],
-                            "away_team": game["away_name"],
-                            "away_abbr": game["away_abbr"],
-                            "away_score": game["away_score"],
-                            "game_id": game["boxscore"],
-                        }
-                    )
-
-            logger.info(f"Fetched {len(game_list)} games")
-            return game_list
-
+            resp = requests.get(
+                _NCAAB_SCOREBOARD,
+                params={"dates": date_str, "limit": 500, "groups": "50"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
         except Exception as e:
-            logger.error(f"Error fetching games for {date}: {e}")
+            logger.error("Error fetching ESPN scoreboard for %s: %s", date.strftime("%Y-%m-%d"), e)
             return []
+
+        game_list: List[Dict] = []
+        for event in data.get("events", []):
+            game_id = str(event.get("id", ""))
+            competitions = event.get("competitions", [])
+            if not competitions:
+                continue
+            comp = competitions[0]
+
+            # Only include completed games
+            status_type = event.get("status", {}).get("type", {})
+            if status_type.get("name", "") != "STATUS_FINAL":
+                continue
+
+            competitors = comp.get("competitors", [])
+            if len(competitors) < 2:
+                continue
+
+            home: Optional[Dict] = None
+            away: Optional[Dict] = None
+            for c in competitors:
+                if c.get("homeAway") == "home":
+                    home = c
+                else:
+                    away = c
+
+            if home is None or away is None:
+                continue
+
+            home_score = _parse_score(home)
+            away_score = _parse_score(away)
+            if home_score is None or away_score is None:
+                continue
+
+            game_list.append(
+                {
+                    "date": date,
+                    "game_id": game_id,
+                    "home_team": home.get("team", {}).get("displayName", ""),
+                    "home_abbr": home.get("team", {}).get("abbreviation", ""),
+                    "home_score": home_score,
+                    "away_team": away.get("team", {}).get("displayName", ""),
+                    "away_abbr": away.get("team", {}).get("abbreviation", ""),
+                    "away_score": away_score,
+                }
+            )
+
+        logger.info("Fetched %d completed games for %s", len(game_list), date.strftime("%Y-%m-%d"))
+        return game_list
 
     def fetch_season_data(self, season: int, delay: float = 1.0) -> pd.DataFrame:
         """Fetch complete season data for all teams.
@@ -239,9 +297,9 @@ class NCAABDataFetcher:
         all_seasons = []
 
         for season in range(start_season, end_season + 1):
-            logger.info(f"\n{'='*60}")
+            logger.info(f"\n{'=' * 60}")
             logger.info(f"Processing {season} season")
-            logger.info(f"{'='*60}")
+            logger.info(f"{'=' * 60}")
 
             season_df = self.fetch_season_data(season)
 

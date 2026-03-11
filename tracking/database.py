@@ -388,7 +388,8 @@ class BettingDatabase:
             clv: Closing line value (optional)
         """
         query = """UPDATE bets
-            SET result = ?, profit_loss = ?, clv = ?
+            SET result = ?, profit_loss = ?, clv = ?,
+                is_settled = TRUE, settled_at = datetime('now')
             WHERE id = ?
         """
         with self.get_cursor() as cursor:
