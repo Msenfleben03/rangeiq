@@ -468,6 +468,29 @@ models. Keep updated as new features are engineered.
 | `confidence` | float | Provider confidence score (0-1) |
 | `snapshot_type` | string | `opening`, `closing`, or `current` (default: current) |
 
+### Game Log (tracking.database.game_log)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Unique identifier (auto-increment) |
+| `game_date` | date | Game date (YYYY-MM-DD) |
+| `game_id` | string | ESPN event ID (UNIQUE) |
+| `home` | string | Home team abbreviation |
+| `away` | string | Away team abbreviation |
+| `home_score` | int | Final home score (NULL until settled) |
+| `away_score` | int | Final away score (NULL until settled) |
+| `model_prob_home` | float | Model win probability for home team |
+| `edge` | float | Best edge, signed (+home/-away) |
+| `odds_opening_home` | int | Opening consensus ML, American format |
+| `odds_opening_away` | int | Opening consensus ML, American format |
+| `odds_closing_home` | int | Closing consensus ML (populated at settlement) |
+| `odds_closing_away` | int | Closing consensus ML (populated at settlement) |
+| `bet_placed` | bool | 1 if we bet this game |
+| `bet_side` | string | "home"/"away" or NULL |
+| `result` | string | "home"/"away" (winner) or NULL |
+| `settled_at` | datetime | When game was settled |
+| `created_at` | datetime | Row creation timestamp |
+
 ---
 
 ## Injury & Roster Data

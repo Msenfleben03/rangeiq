@@ -123,10 +123,10 @@ sports_betting/
 │   ├── walk_forward.py       # Walk-forward validation engine
 │   └── validators/           # 5-Dimension Framework: temporal, statistical, overfit, betting, gatekeeper
 ├── pipelines/                # ESPN fetchers, Barttorvik, MLB Stats API, odds providers, Kalshi/Polymarket
-├── tracking/                 # BettingDatabase, logger, reports, ForecastingDatabase
+├── tracking/                 # BettingDatabase, game_log, logger, reports, ForecastingDatabase
 ├── scripts/                  # daily_run.py, mlb_daily_run.py, backtest, train, backup/restore, collect_closing_odds
-├── tests/                    # 47 files, ~987 tests (test_logger: 8 known failures)
-├── dashboards/ncaab_dashboard.html
+├── tests/                    # 47 files, ~1002 tests (test_logger: 8 known failures)
+├── dashboards/ncaab_dashboard.html, ncaab_game_log.html
 └── docs/
     ├── DECISIONS.md           # 20+ cross-sport ADRs
     ├── DATA_DICTIONARY.md     # Full DB schema
@@ -159,7 +159,8 @@ CLV collection system, Dynamic Kelly + Platt calibration, Task Scheduler automat
 cross-check, MLB skeleton (47 files), MLB Poisson v1 (56.1% acc), F5 market, de-vig CLV fix,
 per-sport DB split (ncaab_betting.db + mlb_data.db), GFS backup system,
 K=32 tournament fix, closing odds collector, `.claude/` untracked from git,
-MLB F5 Platt calibration, all seasons re-fetched with tournament data (2020-2025).
+MLB F5 Platt calibration, all seasons re-fetched with tournament data (2020-2025),
+game log feature (game_log table + dashboard + standalone script).
 
 **Active tasks:**
 

@@ -1,8 +1,10 @@
 # Tracking Module Codemap
 
-**Last Updated:** 2026-02-25
+**Last Updated:** 2026-03-11
 **Entry Point:** `tracking/__init__.py` (empty)
-**Test Coverage:** `tests/test_forecasting_db.py`, `tests/test_logger.py`, `tests/test_reports.py`, `tests/test_settlement.py`
+**Test Coverage:** `tests/test_forecasting_db.py`, `tests/test_game_log.py`,
+`tests/test_game_log_integration.py`, `tests/test_logger.py`, `tests/test_reports.py`,
+`tests/test_settlement.py`
 
 ## Architecture
 
@@ -10,6 +12,7 @@
 tracking/
   __init__.py           # Empty package marker
   database.py           # SQLite connection management, schema creation (BettingDatabase)
+  game_log.py           # Game log insert/settlement for all D1 games
   models.py             # SQLAlchemy ORM models (Team, Game, Bet, Prediction, etc.)
   logger.py             # Paper bet logging, validation, and batch operations
   reports.py            # Performance reports: daily, weekly, CLV, health, odds system
@@ -48,7 +51,19 @@ SQLite database management for the core betting tracking system.
 - `team_ratings` - Elo ratings by team, sport, season
 - `games` - Game schedule and results
 - `odds_snapshots` - Historical odds from multiple sportsbooks (`snapshot_type`: opening/closing/current)
-- Plus additional tables (22 total in full schema)
+- `game_log` - Every D1 game with model predictions, opening/closing odds, and results
+- Plus additional tables (23 total in full schema)
+
+### game_log.py
+
+Game log tracking — records every D1 NCAAB game with predictions and odds.
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `insert_game_log_entries(db_path, game_date, games, predictions, bets)` | function | Insert all games for a date (INSERT OR IGNORE) |
+| `settle_game_log_entries(db_path, completed_games, closing_odds)` | function | Update scores, closing odds, and results for completed games |
+
+**Dependencies:** sqlite3
 
 ### logger.py
 

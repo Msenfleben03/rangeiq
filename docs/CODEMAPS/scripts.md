@@ -1,6 +1,6 @@
 # Scripts Module Codemap
 
-**Last Updated:** 2026-02-26
+**Last Updated:** 2026-03-11
 
 ## Architecture
 
@@ -31,8 +31,9 @@ scripts/
   settle_paper_bets.py           # Settle completed games, compute P/L and CLV
   # === Phase 6: Reporting ===
   generate_report.py             # CLI for daily/weekly/CLV/health reports
-  # === Phase 7: Dashboard ===
-  generate_dashboard_data.py     # Merge Elo + Barttorvik + stats → dashboard JSON bundle
+  # === Phase 7: Dashboard & Game Log ===
+  generate_dashboard_data.py     # Merge Elo + Barttorvik + stats + game_log → dashboard JSON bundle
+  generate_game_log.py           # Standalone game log manager (--date, --settle, --export, --stats)
   # === Utilities ===
   validate_ncaab_elo.py          # Run NCAAB Elo through Gatekeeper (legacy)
   verify_schema.py               # Verify SQLite schema matches expected structure
@@ -462,8 +463,8 @@ python scripts/generate_report.py --all
 
 ### generate_dashboard_data.py
 
-Merges three data sources into a single JSON bundle for the NCAAB dashboard:
-Elo ratings (current), Barttorvik T-Rank (latest snapshot), and game stats (2026 W-L, PPG).
+Merges data sources into a single JSON bundle for the NCAAB dashboard:
+Elo ratings, Barttorvik T-Rank, game stats, and game_log data.
 
 **Usage:**
 
@@ -483,7 +484,7 @@ python scripts/generate_dashboard_data.py --season 2026
 
 **Outputs:** `data/processed/ncaab_dashboard_bundle.json` (360 teams, 31 conferences)
 **Dependencies:** pipelines.team_name_mapping (build_espn_barttorvik_mapping), pandas
-**Consumed by:** `dashboards/ncaab_dashboard.html` (Plotly.js, 7 tabs)
+**Consumed by:** `dashboards/ncaab_dashboard.html` (Plotly.js, 7 tabs), `dashboards/ncaab_game_log.html`
 
 ## MLB Scripts
 

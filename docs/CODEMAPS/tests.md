@@ -1,6 +1,6 @@
 # Tests Module Codemap
 
-**Last Updated:** 2026-02-25
+**Last Updated:** 2026-03-11
 **Framework:** pytest
 **Entry Point:** `tests/conftest.py` (shared fixtures)
 
@@ -34,6 +34,8 @@ tests/
   test_tune_barttorvik.py          # Barttorvik grid search tuning tests (14 tests)
   test_daily_run.py                # Paper betting orchestrator tests (29 tests, incl. CLV)
   test_fetch_opening_odds.py       # Opening odds fetcher tests (5 tests)
+  test_game_log.py                 # Game log schema, insert, settlement tests (12 tests)
+  test_game_log_integration.py     # Game log lifecycle integration tests (3 tests)
   # === MLB Tests (SKELETONS) ===
   test_mlb_poisson_model.py        # Poisson run distribution tests (8 planned)
   test_mlb_pitcher_model.py        # Pitcher evaluation tests (6 planned)
@@ -69,14 +71,16 @@ tests/
 | `test_barttorvik_fetcher.py` | pipelines/barttorvik_fetcher.py | 18 | Parquet parsing, PIT lookup, cache, differentials, fetcher class |
 | `test_team_name_mapping.py` | pipelines/team_name_mapping.py | 11 | Mascot stripping, manual overrides, full mapping coverage |
 | `test_tune_barttorvik.py` | scripts/tune_barttorvik_weights.py | 14 | Grid search combos, result ranking, CSV/JSON output |
-| `test_daily_run.py` | scripts/daily_run.py | 26 | Pipeline orchestration, dry-run, settle, report modes |
+| `test_daily_run.py` | scripts/daily_run.py | 31 | Pipeline orchestration, dry-run, settle, report, game log modes |
+| `test_game_log.py` | tracking/game_log.py, tracking/database.py | 12 | Schema creation, insert with/without odds, duplicate skip, settlement |
+| `test_game_log_integration.py` | tracking/game_log.py | 3 | Full lifecycle: insert → settle → export, idempotent operations |
 | `test_setup.py` | environment | 24 | Package imports, database connectivity |
 | `test_mlb_poisson_model.py` | mlb/poisson_model.py | 0 (8 planned) | Score matrix, ML/RL/total probs, edge cases |
 | `test_mlb_pitcher_model.py` | mlb/pitcher_model.py | 0 (6 planned) | Rolling stats, decay, blending, TTOP |
 | `test_mlb_stats_api.py` | pipelines/mlb_stats_api.py | 0 (7 planned) | Schedule, lineups, results, rate limiting |
 | `test_mlb_weather_fetcher.py` | pipelines/mlb_weather_fetcher.py | 0 (7 planned) | Forecast, historical, dome skip, unit conversion |
 | `test_mlb_daily_run.py` | scripts/mlb_daily_run.py | 0 (7 planned) | Pipeline, lineup trigger, Kelly, dry-run, CLV |
-| **TOTAL** | | **629 + 35 planned** | Full validation + features + paper betting + models + pipelines + Barttorvik + tuning + integration + MLB |
+| **TOTAL** | | **1002** | Full validation + features + paper betting + models + pipelines + Barttorvik + tuning + game log + integration + MLB |
 
 ## Shared Fixtures (conftest.py)
 
