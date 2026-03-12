@@ -54,7 +54,7 @@ class TestFilterCovidGaps:
             }
         )
         result = filter_covid_gaps(df, max_gap_days=10)
-        assert result["covid_gap"].iloc[2] is True
+        assert bool(result["covid_gap"].iloc[2]) is True
 
     def test_no_gaps_returns_all_false(self):
         dates = pd.to_datetime(["2022-01-01", "2022-01-03", "2022-01-06"])
