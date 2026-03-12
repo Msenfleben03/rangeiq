@@ -42,6 +42,7 @@ from features.sport_specific.ncaab.research_utils import (
     filter_covid_gaps,
     load_barttorvik_snapshots,
     load_season_games,
+    load_team_crosswalk,
     pit_opponent_barthag,
 )
 
@@ -50,6 +51,18 @@ DATA_DIR = PROJECT_ROOT / "data"
 RESEARCH_DIR = DATA_DIR / "research"
 BACKTEST_DIR = DATA_DIR / "backtests"
 REPORT_DIR = PROJECT_ROOT / "docs" / "research"
+
+# ESPN -> Barttorvik team name crosswalk (loaded once)
+_CROSSWALK: dict[str, str] | None = None
+
+
+def _get_crosswalk() -> dict[str, str]:
+    """Lazy-load the ESPN->Barttorvik crosswalk."""
+    global _CROSSWALK  # noqa: PLW0603
+    if _CROSSWALK is None:
+        _CROSSWALK = load_team_crosswalk()
+    return _CROSSWALK
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -94,10 +107,16 @@ def compute_season_features(season: int) -> pd.DataFrame | None:
             continue
 
         # Compute PIT opponent barthag for each game
+        # Translate ESPN opponent_id -> Barttorvik name via crosswalk
+        crosswalk = _get_crosswalk()
         opp_barthag_values = []
         for _, row in team_games.iterrows():
-            opp_b = pit_opponent_barthag(bart_df, row["opponent_id"], row["date"])
-            opp_barthag_values.append(opp_b)
+            bart_name = crosswalk.get(row["opponent_id"])
+            if bart_name is None:
+                opp_barthag_values.append(np.nan)
+            else:
+                opp_b = pit_opponent_barthag(bart_df, bart_name, row["date"])
+                opp_barthag_values.append(opp_b)
 
         opp_barthag = pd.Series(opp_barthag_values, index=team_games.index)
 
