@@ -591,7 +591,7 @@ def run_predictions(
                 "odds_opening_away": row.get("away_ml"),
             }
             rec_side = row.get("rec_side")
-            if rec_side:
+            if isinstance(rec_side, str) and rec_side:
                 bet_lookup[gid] = rec_side.lower()
 
         all_games_for_log = fetch_espn_scoreboard(target_date)
