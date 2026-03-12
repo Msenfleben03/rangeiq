@@ -93,3 +93,71 @@ class TestTeamNameMapping:
         assert mapping.get("CONN") == "Connecticut"
         assert mapping.get("MIA") == "Miami FL"
         assert mapping.get("NCSU") == "N.C. State"
+
+    def test_louisville_and_manhattan_mapped(self):
+        from pipelines.team_name_mapping import build_espn_barttorvik_mapping
+
+        mapping = build_espn_barttorvik_mapping()
+        assert mapping.get("LOU") == "Louisville"
+        assert mapping.get("MAN") == "Manhattan"
+
+
+class TestCrosswalkCSV:
+    def test_crosswalk_covers_all_d1_teams(self):
+        """Crosswalk CSV must cover every ESPN team_id that appears in game data."""
+        import pandas as pd
+        from pathlib import Path
+
+        crosswalk_path = Path("data/reference/espn_barttorvik_crosswalk.csv")
+        if not crosswalk_path.exists():
+            pytest.skip("Crosswalk CSV not generated yet")
+
+        crosswalk = pd.read_csv(crosswalk_path)
+        crosswalk_ids = set(crosswalk["espn_id"])
+
+        # Collect all D1 team_ids (teams that have game rows, not just opponents)
+        d1_team_ids = set()
+        for f in sorted(Path("data/raw/ncaab").glob("ncaab_games_*.parquet")):
+            df = pd.read_parquet(f)
+            d1_team_ids.update(df["team_id"].unique())
+
+        missing = sorted(d1_team_ids - crosswalk_ids)
+        assert not missing, f"D1 teams missing from crosswalk: {missing}"
+
+    def test_crosswalk_values_are_valid_barttorvik_names(self):
+        """All barttorvik_name values in crosswalk should exist in Barttorvik data."""
+        import pandas as pd
+        from pathlib import Path
+
+        crosswalk_path = Path("data/reference/espn_barttorvik_crosswalk.csv")
+        if not crosswalk_path.exists():
+            pytest.skip("Crosswalk CSV not generated yet")
+
+        bart_dir = Path("data/external/barttorvik")
+        bart_files = sorted(bart_dir.glob("barttorvik_ratings_*.parquet"))
+        if not bart_files:
+            pytest.skip("No Barttorvik data cached")
+
+        # Collect all Barttorvik names across all seasons
+        bart_names = set()
+        for f in bart_files:
+            df = pd.read_parquet(f)
+            bart_names.update(df["team"].unique())
+
+        crosswalk = pd.read_csv(crosswalk_path)
+        invalid = sorted(set(crosswalk["barttorvik_name"]) - bart_names)
+        assert not invalid, f"Crosswalk names not in Barttorvik: {invalid}"
+
+    def test_load_team_crosswalk_returns_dict(self):
+        """load_team_crosswalk should return a non-empty dict."""
+        from pathlib import Path
+
+        if not Path("data/reference/espn_barttorvik_crosswalk.csv").exists():
+            pytest.skip("Crosswalk CSV not generated yet")
+
+        from features.sport_specific.ncaab.research_utils import load_team_crosswalk
+
+        result = load_team_crosswalk()
+        assert isinstance(result, dict)
+        assert len(result) > 300
+        assert result["DUKE"] == "Duke"

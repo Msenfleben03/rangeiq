@@ -14,9 +14,25 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 RAW_DIR = PROJECT_ROOT / "data" / "raw" / "ncaab"
 BART_DIR = PROJECT_ROOT / "data" / "external" / "barttorvik"
+REFERENCE_DIR = PROJECT_ROOT / "data" / "reference"
 
 # 2020 excluded (cancelled tournament). 2021 included with COVID flag.
 VALID_SEASONS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
+
+
+def load_team_crosswalk() -> dict[str, str]:
+    """Load ESPN team_id -> Barttorvik team name mapping.
+
+    Reads the reference crosswalk CSV built from automatic mascot-stripping
+    and manual overrides. Covers all D1 teams across seasons 2020-2026.
+
+    Returns:
+        Dict mapping ESPN team abbreviation (e.g., 'DUKE') to Barttorvik
+        team name (e.g., 'Duke').
+    """
+    path = REFERENCE_DIR / "espn_barttorvik_crosswalk.csv"
+    df = pd.read_csv(path)
+    return dict(zip(df["espn_id"], df["barttorvik_name"]))
 
 
 def load_season_games(season: int) -> pd.DataFrame:

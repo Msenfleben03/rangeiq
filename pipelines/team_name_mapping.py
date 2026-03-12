@@ -53,7 +53,7 @@ MANUAL_OVERRIDES: dict[str, str] = {
     # Teams with name format mismatches
     "BCU": "Bethune Cookman",
     "CONN": "Connecticut",
-    "ETAM": "Texas A&M Commerce",
+    "ETAM": "East Texas A&M",
     "GRAM": "Grambling St.",
     "GWEB": "Gardner Webb",
     "HAW": "Hawaii",
@@ -77,6 +77,9 @@ MANUAL_OVERRIDES: dict[str, str] = {
     "UIC": "Illinois Chicago",
     "ULM": "Louisiana Monroe",
     "UTM": "Tennessee Martin",
+    # Ambiguous abbreviations (shared with non-D1 teams that overwrite in data)
+    "LOU": "Louisville",
+    "MAN": "Manhattan",
 }
 
 # Module-level cache for the mapping

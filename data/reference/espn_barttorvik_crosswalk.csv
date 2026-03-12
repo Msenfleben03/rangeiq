@@ -1,0 +1,362 @@
+espn_id,barttorvik_name,match_method
+AAMU,Alabama A&M,manual
+ACU,Abilene Christian,manual
+AF,Air Force,manual
+AKR,Akron,manual
+ALA,Alabama,manual
+ALCN,Alcorn St.,automatic
+ALST,Alabama St.,automatic
+AMCC,Texas,automatic
+AMER,American,manual
+APP,Appalachian St.,manual
+APSU,Austin Peay,manual
+ARIZ,Arizona,automatic
+ARK,Arkansas,automatic
+ARMY,Army,automatic
+ARST,Arkansas St.,automatic
+ASU,Arizona St.,manual
+AUB,Auburn,automatic
+BALL,Ball St.,automatic
+BAY,Baylor,automatic
+BC,Boston College,automatic
+BCU,Bethune Cookman,manual
+BEL,Belmont,automatic
+BELL,Bellarmine,automatic
+BGSU,Bowling Green,automatic
+BING,Binghamton,automatic
+BOIS,Boise St.,automatic
+BRAD,Bradley,automatic
+BRWN,Brown,manual
+BRY,Bryant,automatic
+BU,Boston University,automatic
+BUCK,Bucknell,automatic
+BUF,Buffalo,automatic
+BUT,Butler,automatic
+BYU,BYU,automatic
+CAL,California,automatic
+CAM,Campbell,manual
+CAN,Canisius,automatic
+CARK,Central Arkansas,automatic
+CBU,California,automatic
+CCSU,Central Connecticut,automatic
+CCU,Coastal Carolina,automatic
+CHSO,Charleston Southern,manual
+CHST,Chicago St.,automatic
+CIN,Cincinnati,automatic
+CIT,The Citadel,automatic
+CLE,Cleveland St.,manual
+CLEM,Clemson,automatic
+CLT,Charlotte,automatic
+CMU,Central Michigan,automatic
+COFC,Charleston,automatic
+COLG,Colgate,automatic
+COLO,Colorado,automatic
+COLU,Columbia,automatic
+CONN,Connecticut,manual
+COPP,Coppin St.,manual
+COR,Cornell,automatic
+CP,Cal Poly,automatic
+CREI,Creighton,automatic
+CSU,Colorado St.,automatic
+CSUB,Cal St. Bakersfield,automatic
+CSUF,Cal St. Fullerton,automatic
+CSUN,Cal St. Northridge,automatic
+DART,Dartmouth,automatic
+DAV,Davidson,automatic
+DAY,Dayton,automatic
+DEL,Delaware,automatic
+DEN,Denver,automatic
+DEP,DePaul,automatic
+DETM,Detroit Mercy,automatic
+DREX,Drexel,automatic
+DRKE,Drake,automatic
+DSU,Delaware St.,automatic
+DUKE,Duke,automatic
+DUQ,Duquesne,automatic
+ECU,East Carolina,automatic
+EIU,Eastern Illinois,automatic
+EKU,Eastern Kentucky,automatic
+ELON,Elon,automatic
+EMU,Eastern Michigan,automatic
+ETAM,East Texas A&M,manual
+ETSU,East Tennessee St.,automatic
+EVAN,Evansville,automatic
+EWU,Eastern Washington,automatic
+FAIR,Fairfield,automatic
+FAMU,Florida A&M,automatic
+FAU,Florida Atlantic,automatic
+FDU,Fairleigh Dickinson,automatic
+FGCU,Florida Gulf Coast,automatic
+FIU,Florida,automatic
+FLA,Florida,automatic
+FOR,Fordham,automatic
+FRES,Fresno St.,automatic
+FSU,Florida St.,automatic
+FUR,Furman,automatic
+GASO,Georgia Southern,automatic
+GAST,Georgia St.,automatic
+GB,Green Bay,automatic
+GCU,Grand Canyon,automatic
+GMU,George Mason,automatic
+GONZ,Gonzaga,automatic
+GRAM,Grambling St.,manual
+GT,Georgia Tech,automatic
+GTWN,Georgetown,automatic
+GW,George Washington,automatic
+GWEB,Gardner Webb,manual
+HALL,Seton Hall,automatic
+HAMP,Hampton,automatic
+HARV,Harvard,automatic
+HAW,Hawaii,manual
+HC,Holy Cross,automatic
+HCU,Houston Christian,automatic
+HOF,Hofstra,automatic
+HOU,Houston,automatic
+HOW,Howard,automatic
+HPU,High Point,automatic
+IDHO,Idaho,automatic
+IDST,Idaho St.,automatic
+ILL,Illinois,automatic
+ILST,Illinois St.,automatic
+INST,Indiana St.,automatic
+IONA,Iona,automatic
+IOWA,Iowa,automatic
+ISU,Iowa St.,automatic
+IU,Indiana,automatic
+IUIN,IU Indy,manual
+JAX,Jacksonville,automatic
+JKST,Jackson St.,automatic
+JMU,James Madison,automatic
+JOES,Saint Joseph's,automatic
+JXST,Jacksonville St.,automatic
+KC,Kansas,automatic
+KENN,Kennesaw St.,automatic
+KENT,Kent St.,automatic
+KSU,Kansas St.,automatic
+KU,Kansas,automatic
+L-MD,Loyola MD,manual
+LAF,Lafayette,automatic
+LAM,Lamar,automatic
+LAS,La Salle,automatic
+LBSU,Long Beach St.,automatic
+LEH,Lehigh,automatic
+LEM,Le Moyne,automatic
+LIB,Liberty,automatic
+LIP,Lipscomb,automatic
+LIU,LIU,manual
+LMU,Loyola Marymount,automatic
+LONG,Longwood,automatic
+LOU,Louisville,manual
+LR,Little Rock,automatic
+LSU,LSU,automatic
+LT,Louisiana Tech,automatic
+LUC,Loyola Chicago,automatic
+M-OH,Miami OH,manual
+MAN,Manhattan,manual
+MARQ,Marquette,automatic
+MASS,Massachusetts,automatic
+MCN,McNeese St.,manual
+MD,Maryland,automatic
+ME,Maine,automatic
+MEM,Memphis,automatic
+MER,Mercer,automatic
+MERC,Mercyhurst,automatic
+MIA,Miami FL,manual
+MICH,Michigan,automatic
+MILW,Milwaukee,automatic
+MINN,Minnesota,automatic
+MISS,Mississippi,manual
+MIZ,Missouri,automatic
+MONM,Monmouth,automatic
+MONT,Montana,automatic
+MORE,Morehead St.,automatic
+MORG,Morgan St.,automatic
+MOST,Missouri St.,automatic
+MRMK,Merrimack,automatic
+MRSH,Marshall,automatic
+MRST,Marist,automatic
+MSM,Mount St. Mary's,automatic
+MSST,Mississippi St.,automatic
+MSU,Michigan St.,automatic
+MTST,Montana St.,automatic
+MTSU,Middle Tennessee,automatic
+MUR,Murray St.,automatic
+MVSU,Mississippi Valley St.,automatic
+NAU,Northern Arizona,automatic
+NAVY,Navy,automatic
+NCAT,North Carolina A&T,automatic
+NCCU,North Carolina Central,automatic
+NCSU,N.C. State,manual
+ND,Notre Dame,automatic
+NDSU,North Dakota St.,automatic
+NE,Northeastern,automatic
+NEB,Nebraska,automatic
+NEV,Nevada,automatic
+NHVN,New Haven,automatic
+NIA,Niagara,automatic
+NICH,Nicholls St.,manual
+NIU,Northern Illinois,automatic
+NJIT,NJIT,automatic
+NKU,Northern Kentucky,automatic
+NMSU,New Mexico St.,automatic
+NORF,Norfolk St.,automatic
+NU,Northwestern,automatic
+NWST,Northwestern St.,automatic
+OAK,Oakland,automatic
+ODU,Old Dominion,automatic
+OHIO,Ohio,automatic
+OKST,Oklahoma St.,automatic
+OMA,Nebraska Omaha,manual
+ORE,Oregon,automatic
+ORST,Oregon St.,automatic
+ORU,Oral Roberts,automatic
+OSU,Ohio St.,automatic
+OU,Oklahoma,automatic
+PAC,Pacific,automatic
+PENN,Penn,manual
+PEPP,Pepperdine,automatic
+PFW,Purdue Fort Wayne,automatic
+PITT,Pittsburgh,automatic
+PORT,Portland,automatic
+PRES,Presbyterian,automatic
+PRIN,Princeton,automatic
+PROV,Providence,automatic
+PRST,Portland St.,automatic
+PSU,Penn St.,automatic
+PUR,Purdue,automatic
+PV,Prairie View A&M,automatic
+QUIN,Quinnipiac,automatic
+RAD,Radford,automatic
+RGV,UT Rio Grande Valley,automatic
+RICE,Rice,automatic
+RICH,Richmond,automatic
+RID,Rider,automatic
+RMU,Robert Morris,automatic
+RUTG,Rutgers,automatic
+SAC,Sacramento St.,automatic
+SAM,Samford,automatic
+SBU,St. Bonaventure,automatic
+SC,South Carolina,automatic
+SCST,South Carolina St.,automatic
+SCU,Santa Clara,automatic
+SDAK,South Dakota,automatic
+SDST,South Dakota St.,automatic
+SDSU,San Diego St.,automatic
+SEA,Seattle,automatic
+SELA,Southeastern Louisiana,manual
+SEMO,Southeast Missouri St.,automatic
+SF,San Francisco,automatic
+SFA,Stephen F. Austin,automatic
+SFPA,Saint Francis,automatic
+SHSU,Sam Houston St.,manual
+SHU,Sacred Heart,automatic
+SIE,Siena,automatic
+SIU,Southern Illinois,automatic
+SIUE,SIU Edwardsville,automatic
+SJSU,San Jose St.,manual
+SJU,St. John's,automatic
+SLU,Saint Louis,automatic
+SMC,Saint Mary's,automatic
+SMU,SMU,automatic
+SOU,Southern,automatic
+SPU,Saint Peter's,automatic
+STAN,Stanford,automatic
+STBK,Stony Brook,automatic
+STET,Stetson,automatic
+STMN,St. Thomas,manual
+STO,Stonehill,automatic
+SUU,Southern Utah,automatic
+SYR,Syracuse,automatic
+TA&M,Texas A&M,automatic
+TAR,Tarleton St.,automatic
+TCU,TCU,automatic
+TEM,Temple,automatic
+TENN,Tennessee,automatic
+TEX,Texas,automatic
+TLSA,Tulsa,automatic
+TNST,Tennessee St.,automatic
+TNTC,Tennessee Tech,automatic
+TOL,Toledo,automatic
+TOW,Towson,automatic
+TROY,Troy,automatic
+TTU,Texas Tech,automatic
+TULN,Tulane,automatic
+TXSO,Texas Southern,automatic
+TXST,Texas St.,automatic
+UAB,UAB,automatic
+UALB,Albany,manual
+UAPB,Arkansas Pine Bluff,manual
+UCD,UC Davis,automatic
+UCF,UCF,automatic
+UCI,UC Irvine,automatic
+UCLA,UCLA,automatic
+UCR,UC Riverside,automatic
+UCSB,UC Santa Barbara,automatic
+UCSD,UC San Diego,automatic
+UGA,Georgia,automatic
+UIC,Illinois Chicago,manual
+UIW,Incarnate Word,automatic
+UK,Kentucky,automatic
+UL,Louisiana,automatic
+ULM,Louisiana Monroe,manual
+UMBC,UMBC,automatic
+UMES,Maryland Eastern Shore,automatic
+UML,UMass Lowell,automatic
+UNA,North Alabama,automatic
+UNC,North Carolina,automatic
+UNCA,UNC Asheville,automatic
+UNCG,UNC Greensboro,automatic
+UNCO,Northern Colorado,automatic
+UNCW,UNC Wilmington,automatic
+UND,North Dakota,automatic
+UNF,North Florida,automatic
+UNH,New Hampshire,automatic
+UNI,Northern Iowa,automatic
+UNLV,UNLV,automatic
+UNM,New Mexico,automatic
+UNO,New Orleans,automatic
+UNT,North Texas,automatic
+UPST,South Carolina,automatic
+URI,Rhode Island,automatic
+USA,South Alabama,automatic
+USC,USC,automatic
+USD,San Diego,automatic
+USF,South Florida,automatic
+USM,Southern Miss,automatic
+USU,Utah St.,automatic
+UTA,UT Arlington,automatic
+UTAH,Utah,automatic
+UTC,Chattanooga,automatic
+UTEP,UTEP,automatic
+UTM,Tennessee Martin,manual
+UTSA,UTSA,automatic
+UTU,Utah Tech,automatic
+UVA,Virginia,automatic
+UVM,Vermont,automatic
+UVU,Utah Valley,automatic
+VAL,Valparaiso,automatic
+VAN,Vanderbilt,automatic
+VCU,VCU,automatic
+VILL,Villanova,automatic
+VMI,VMI,automatic
+VT,Virginia Tech,automatic
+W&M,William & Mary,automatic
+WAG,Wagner,automatic
+WAKE,Wake Forest,automatic
+WASH,Washington,automatic
+WCU,Western Carolina,automatic
+WEB,Weber St.,automatic
+WGA,West Georgia,automatic
+WICH,Wichita St.,automatic
+WIN,Winthrop,automatic
+WIS,Wisconsin,automatic
+WIU,Western Illinois,automatic
+WKU,Western Kentucky,automatic
+WMU,Western Michigan,automatic
+WOF,Wofford,automatic
+WRST,Wright St.,automatic
+WSU,Washington St.,automatic
+WVU,West Virginia,automatic
+WYO,Wyoming,automatic
+YALE,Yale,automatic
+YSU,Youngstown St.,automatic
