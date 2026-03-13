@@ -348,16 +348,20 @@ function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iter
       const hc = heroCombos[Math.floor(Math.random() * heroCombos.length)];
       // Pick random villain combo — no card overlap
       const hSet = new Set(hc);
-      const vcFiltered = villainCombos.filter(vc => !vc.some(c => hSet.has(c)));
-      if (!vcFiltered.length) continue;
-      const vc = vcFiltered[Math.floor(Math.random() * vcFiltered.length)];
+      let vc;
+      let attempts = 0;
+      do {
+        vc = villainCombos[Math.floor(Math.random() * villainCombos.length)];
+        attempts++;
+      } while (vc.some(c => hSet.has(c)) && attempts < 20);
+      if (attempts >= 20) continue;
 
-      // Build runout deck (exclude hc + vc + board + dead)
-      const usedAll = new Set([...board, ...deadCards, ...hc, ...vc]);
-      const runDeck = deckArr.filter(c => !usedAll.has(c));
+      // Build runout deck (deckArr already excludes board+dead; just filter hc+vc)
+      const hcvcSet = new Set([...hc, ...vc]);
+      const runDeck = deckArr.filter(c => !hcvcSet.has(c));
 
       // Deal remaining board cards
-      const needed = 5 - board.length;
+      const needed = Math.max(0, 5 - board.length);
       const shuffled = [...runDeck].sort(() => Math.random() - 0.5);
       const runout = shuffled.slice(0, needed);
 
@@ -374,11 +378,14 @@ function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iter
       const total = heroWins + villainWins + ties;
       const heroEq = total ? (heroWins + ties * 0.5) / total : 0;
       const villainEq = total ? (villainWins + ties * 0.5) / total : 0;
+      const tieEq = total ? ties / total : 0;
       dispatch({ type: "SET_METRICS", payload: {
         equity: {
-          hero: (heroEq * 100).toFixed(2),
-          villain: (villainEq * 100).toFixed(2),
-        }
+          hero: heroEq * 100,
+          villain: villainEq * 100,
+          tie: tieEq * 100,
+        },
+        histogram: null, // deferred — bucket hero win% into 10% bands
       }});
       dispatch({ type: "SET_MC_RUNNING", payload: false });
     } else {
