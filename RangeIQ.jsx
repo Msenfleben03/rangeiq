@@ -762,7 +762,7 @@ function Module1({ state, dispatch }) {
 }
 
 // ============================================================
-// MODULE 2 — BOARD & EQUITY (STUB WITH CARD SELECTOR)
+// MODULE 2 — BOARD & EQUITY
 // ============================================================
 function CardSelector({ selected, onSelect, onRemove, max, deadCards = [], label }) {
   const [open, setOpen] = useState(false);
