@@ -397,6 +397,39 @@ function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iter
   setTimeout(runChunk, 0);
 }
 
+function boardTexture(board) {
+  if (!board || board.length < 3) return null;
+
+  const ranks = board.map(cardRank);
+  const suits = board.map(cardSuit);
+
+  // Flush texture
+  const suitCounts = {};
+  suits.forEach(s => { suitCounts[s] = (suitCounts[s] || 0) + 1; });
+  const maxSuitCount = Math.max(...Object.values(suitCounts));
+  const flushTexture = maxSuitCount >= 3 ? "Monotone" : maxSuitCount === 2 ? "Two-Tone" : "Rainbow";
+
+  // Paired board
+  const rankCounts = {};
+  ranks.forEach(r => { rankCounts[r] = (rankCounts[r] || 0) + 1; });
+  const isPaired = Object.values(rankCounts).some(c => c >= 2);
+
+  // Connectivity: count adjacent rank pairs on board
+  const sortedRanks = [...new Set(ranks)].sort((a, b) => a - b);
+  let connectivity = 0;
+  for (let i = 0; i < sortedRanks.length - 1; i++) {
+    if (sortedRanks[i + 1] - sortedRanks[i] <= 2) connectivity++;
+  }
+
+  // Wetness score (0-10)
+  const fdScore = maxSuitCount >= 3 ? 4 : maxSuitCount === 2 ? 2 : 0;
+  const sdScore = Math.min(4, connectivity * 2);
+  const pairedScore = isPaired ? -2 : 0;
+  const wetness = Math.max(0, Math.min(10, fdScore + sdScore + pairedScore));
+
+  return { flushTexture, isPaired, connectivity, wetness };
+}
+
 // ============================================================
 // STATE MANAGEMENT
 // ============================================================
@@ -786,6 +819,60 @@ function CardSelector({ selected, onSelect, onRemove, max, deadCards = [], label
 }
 
 const RED_SUITS = new Set(["h", "d"]);
+
+function RangeBreakdown({ range, board, deadCards, label, color }) {
+  const breakdown = useMemo(() => {
+    if (!board || board.length < 3 || !range || range.size === 0) return null;
+    const allDead = [...board, ...deadCards];
+    const cats = {};
+    for (const hand of range) {
+      const combos = expandHand(hand, allDead);
+      for (const combo of combos) {
+        const { category } = classifyHand(combo, board);
+        cats[category] = (cats[category] || 0) + 1;
+      }
+    }
+    const total = Object.values(cats).reduce((a, b) => a + b, 0);
+    return Object.entries(cats)
+      .map(([cat, count]) => ({ cat, count, pct: total ? (count / total * 100).toFixed(1) : 0 }))
+      .sort((a, b) => b.count - a.count);
+  }, [range, board, deadCards]);
+
+  if (!breakdown) return null;
+
+  return (
+    <div>
+      <Label>{label} Range Breakdown</Label>
+      <div style={{ marginTop: 6, height: breakdown.length * 22 + 20 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={breakdown}
+            layout="vertical"
+            margin={{ top: 0, right: 40, left: 120, bottom: 0 }}
+          >
+            <XAxis type="number" hide />
+            <YAxis
+              type="category"
+              dataKey="cat"
+              tick={{ fontSize: 10, fill: T.muted, fontFamily: "monospace" }}
+              width={115}
+            />
+            <Tooltip
+              contentStyle={{
+                background: T.bgCard,
+                border: `1px solid ${T.border}`,
+                fontSize: 11,
+                fontFamily: "monospace",
+              }}
+              formatter={(v) => [`${v} combos`, "count"]}
+            />
+            <Bar dataKey="count" fill={color} radius={[0, 3, 3, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 function Module2({ state, dispatch }) {
   const { board, heroHand, deadCards, heroRange, villainRange, mcRunning, metrics } = state;
