@@ -217,12 +217,13 @@ function compareHands(cards7a, cards7b) {
 function detectDraws(holeCards, board) {
   const draws = [];
   const allCards = [...holeCards, ...board];
+  const hasMadeFlush = evalHand7(allCards)[0] >= 5;
 
   // Flush draws
   const suitCounts = {};
   allCards.forEach(c => { const s = cardSuit(c); suitCounts[s] = (suitCounts[s] || 0) + 1; });
   for (const [suit, count] of Object.entries(suitCounts)) {
-    if (count >= 5) continue; // already a flush — made hand handles it
+    if (count >= 5 || hasMadeFlush) continue;
     if (count === 4) {
       const heroContrib = holeCards.filter(c => cardSuit(c) === suit).length;
       if (heroContrib > 0) {
@@ -300,7 +301,7 @@ function classifyHand(holeCards, board) {
     const isHolePair = hRanks[0] === hRanks[1];
     if (isHolePair) {
       if (pairRank > topBoard) category = "Overpair";
-      else if (pairRank === boardRanks[boardRanks.length - 1]) category = "Underpair";
+      else if (pairRank < boardRanks[boardRanks.length - 1]) category = "Underpair";
       else category = "Middle Pair";
     } else {
       if (pairRank === topBoard) {
