@@ -214,6 +214,113 @@ function compareHands(cards7a, cards7b) {
   return 0;
 }
 
+function detectDraws(holeCards, board) {
+  const draws = [];
+  const allCards = [...holeCards, ...board];
+
+  // Flush draws
+  const suitCounts = {};
+  allCards.forEach(c => { const s = cardSuit(c); suitCounts[s] = (suitCounts[s] || 0) + 1; });
+  for (const [suit, count] of Object.entries(suitCounts)) {
+    if (count >= 5) continue; // already a flush — made hand handles it
+    if (count === 4) {
+      const heroContrib = holeCards.filter(c => cardSuit(c) === suit).length;
+      if (heroContrib > 0) {
+        const hasNutFD = holeCards.some(c => cardSuit(c) === suit && cardRank(c) === 14);
+        draws.push(hasNutFD ? "Nut Flush Draw" : "Flush Draw");
+      }
+    }
+    if (count === 3 && board.length <= 4) {
+      const heroContrib = holeCards.filter(c => cardSuit(c) === suit).length;
+      const boardContrib = board.filter(c => cardSuit(c) === suit).length;
+      if (heroContrib >= 1 && boardContrib >= 2) draws.push("Backdoor FD");
+    }
+  }
+
+  // Straight draws
+  const allRanks = allCards.map(cardRank);
+  const uniqueRanks = [...new Set(allRanks)].sort((a, b) => a - b);
+  const withAceLow = uniqueRanks.includes(14) ? [1, ...uniqueRanks] : uniqueRanks;
+  const dedupRanks = [...new Set(withAceLow)].sort((a, b) => a - b);
+
+  const gutWindows = [];
+  for (let lo = 1; lo <= 10; lo++) {
+    const window = [lo, lo+1, lo+2, lo+3, lo+4];
+    const hits = window.filter(r => dedupRanks.includes(r)).length;
+    if (hits === 4) {
+      const missing = window.find(r => !dedupRanks.includes(r));
+      if (missing === lo || missing === lo + 4) {
+        draws.push("OESD");
+      } else {
+        gutWindows.push(lo);
+      }
+    }
+    if (hits === 3 && board.length <= 4) {
+      if (!draws.includes("Backdoor SD")) draws.push("Backdoor SD");
+    }
+  }
+
+  if (gutWindows.length >= 2) {
+    draws.push("Double Gutshot");
+  } else if (gutWindows.length === 1) {
+    draws.push("Gutshot");
+  }
+
+  // Overcard draws
+  const boardTop = Math.max(...board.map(cardRank));
+  const overcards = holeCards.filter(c => cardRank(c) > boardTop);
+  if (overcards.length > 0 && evalHand7([...holeCards, ...board])[0] === 0) {
+    draws.push("Overcard Draw");
+  }
+
+  return [...new Set(draws)];
+}
+
+function classifyHand(holeCards, board) {
+  if (!board || board.length < 3) return { category: "Preflop", strength: 0, draws: [] };
+
+  const allCards = [...holeCards, ...board];
+  const handVal = evalHand7(allCards);
+  const handRank = handVal[0];
+
+  const boardRanks = board.map(cardRank).sort((a, b) => b - a);
+  const hRanks = holeCards.map(cardRank).sort((a, b) => b - a);
+
+  let category = "";
+  if (handRank === 8) category = "Straight Flush";
+  else if (handRank === 7) category = "Quads";
+  else if (handRank === 6) category = "Full House";
+  else if (handRank === 5) category = "Flush";
+  else if (handRank === 4) category = "Straight";
+  else if (handRank === 3) category = "Three of a Kind";
+  else if (handRank === 2) category = "Two Pair";
+  else if (handRank === 1) {
+    const pairRank = handVal[1];
+    const topBoard = boardRanks[0];
+    const isHolePair = hRanks[0] === hRanks[1];
+    if (isHolePair) {
+      if (pairRank > topBoard) category = "Overpair";
+      else if (pairRank === boardRanks[boardRanks.length - 1]) category = "Underpair";
+      else category = "Middle Pair";
+    } else {
+      if (pairRank === topBoard) {
+        const kicker = hRanks.find(r => r !== pairRank) || 0;
+        category = kicker >= 10 ? "Top Pair (Good Kicker)" : "Top Pair (Weak Kicker)";
+      } else if (pairRank === boardRanks[1]) category = "Middle Pair";
+      else if (pairRank === boardRanks[boardRanks.length - 1]) category = "Bottom Pair";
+      else category = "Pair";
+    }
+  } else {
+    const maxHole = Math.max(...hRanks);
+    category = maxHole === 14 ? "Ace High" : "No Made Hand";
+  }
+
+  const strength = Math.min(1, (handRank / 8) * 0.85 + ((handVal[1] || 0) / 14) * 0.15);
+  const draws = detectDraws(holeCards, board);
+
+  return { category, strength, draws };
+}
+
 // ============================================================
 // STATE MANAGEMENT
 // ============================================================
