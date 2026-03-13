@@ -108,6 +108,20 @@ function combinations(arr, k) {
   ];
 }
 
+// Straight check (including A-low wheel: A=1) — module scope so evalHand5 and evalHand7 can share it
+function hasStraight(rs) {
+  const unique = [...new Set(rs)].sort((a, b) => b - a);
+  const withAceLow = unique.includes(14) ? [...unique, 1] : unique;
+  const dedup = [...new Set(withAceLow)].sort((a, b) => b - a);
+  for (let i = 0; i <= dedup.length - 5; i++) {
+    if (dedup[i] - dedup[i + 4] === 4 &&
+        new Set(dedup.slice(i, i + 5)).size === 5) {
+      return dedup[i];
+    }
+  }
+  return null;
+}
+
 // evalHand5: returns [handRank, ...tiebreakers] comparable array
 // handRank: 8=SF, 7=quads, 6=FH, 5=flush, 4=straight, 3=trips, 2=two-pair, 1=pair, 0=high-card
 function evalHand5(cards) {
@@ -118,19 +132,6 @@ function evalHand5(cards) {
   const flushSuit = suits.find(s => suits.filter(x => x === s).length >= 5) || null;
   const isFlush = flushSuit !== null;
 
-  // Straight check (including A-low wheel: A=1)
-  function hasStraight(rs) {
-    const unique = [...new Set(rs)].sort((a, b) => b - a);
-    const withAceLow = unique.includes(14) ? [...unique, 1] : unique;
-    const dedup = [...new Set(withAceLow)].sort((a, b) => b - a);
-    for (let i = 0; i <= dedup.length - 5; i++) {
-      if (dedup[i] - dedup[i + 4] === 4 &&
-          new Set(dedup.slice(i, i + 5)).size === 5) {
-        return dedup[i];
-      }
-    }
-    return null;
-  }
   const straightHigh = hasStraight(ranks);
 
   // Group by rank
@@ -189,7 +190,9 @@ function evalHand5(cards) {
 
 // Best 5-card hand from 7 cards (21 combinations)
 function evalHand7(cards7) {
-  return combinations(cards7, 5)
+  const combos = combinations(cards7, 5);
+  if (!combos.length) return [0];
+  return combos
     .map(evalHand5)
     .reduce((best, curr) => {
       for (let i = 0; i < Math.max(best.length, curr.length); i++) {
