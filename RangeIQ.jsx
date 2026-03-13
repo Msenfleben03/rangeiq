@@ -876,22 +876,25 @@ function RangeBreakdown({ range, board, deadCards, label, color }) {
 
 function Module2({ state, dispatch }) {
   const { board, heroHand, deadCards, heroRange, villainRange, mcRunning, metrics } = state;
+  const allDead = useMemo(() => [...(heroHand || []), ...deadCards], [heroHand, deadCards]);
+  const texture = useMemo(() => boardTexture(board), [board]);
 
-  // TODO: Monte Carlo equity engine (50k iterations, chunked)
-  // TODO: Hand category breakdown for villain range vs board
-  // TODO: Range/nut advantage post-board
-  // TODO: Board texture metrics (wetness, connectivity, static/dynamic)
-  // TODO: Combo & blocker engine
-  // TODO: Equity distribution histogram (recharts BarChart)
+  const heroHandClassification = useMemo(() => {
+    if (heroHand && heroHand.length === 2 && board.length >= 3) {
+      return classifyHand(heroHand, board);
+    }
+    return null;
+  }, [heroHand, board]);
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+      {/* Card Selectors */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 16 }}>
         <CardSelector
           label="Board (3-5 cards)"
           selected={board}
           max={5}
-          deadCards={[...(heroHand || []), ...deadCards]}
+          deadCards={allDead}
           onSelect={(c) => dispatch({ type: "SET_BOARD", payload: [...board, c] })}
           onRemove={(i) => dispatch({ type: "SET_BOARD", payload: board.filter((_, j) => j !== i) })}
         />
@@ -913,51 +916,77 @@ function Module2({ state, dispatch }) {
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
-        <Card>
-          <Label>Statistical Breakdown</Label>
-          <div style={{ color: T.muted, fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
-            <p>→ Monte Carlo engine (50k iterations, chunked setTimeout)</p>
-            <p>→ Made hand category breakdown (quads → no made hand)</p>
-            <p>→ Draw detection (NFD, FD, OESD, gutshot, backdoors)</p>
-            <p>→ Combo count + % of range + EV weight per category</p>
-            <p style={{ marginTop: 8 }}>
-              <strong style={{ color: T.yellow }}>Entry point:</strong> Implement <code>runMonteCarlo(heroRange, villainRange, board, deadCards)</code>
-              → returns {{ heroEq, villainEq, tieEq, histogram[] }}
-            </p>
-            <p>
-              <strong style={{ color: T.yellow }}>Key fn:</strong> <code>classifyHand(holeCards, board)</code>
-              → returns hand category + strength score 0-1
-            </p>
+      {/* Board Texture */}
+      {texture && (
+        <Card style={{ marginBottom: 12 }}>
+          <Label>Board Texture</Label>
+          <div style={{ display: "flex", gap: 24, marginTop: 8, flexWrap: "wrap" }}>
+            <Stat label="Wetness" value={texture.wetness.toFixed(1)} color={texture.wetness >= 7 ? T.red : texture.wetness >= 4 ? T.yellow : T.green} />
+            <Stat label="Connectivity" value={texture.connectivity} />
+            <Stat label="Flush" value={texture.flushTexture} color={texture.flushTexture === "Monotone" ? T.red : texture.flushTexture === "Two-Tone" ? T.yellow : T.muted} />
+            <Stat label="Paired" value={texture.isPaired ? "Yes" : "No"} color={texture.isPaired ? T.yellow : T.muted} />
           </div>
         </Card>
+      )}
 
-        <Card>
-          <Label>Board Texture & Metrics</Label>
-          <div style={{ color: T.muted, fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
-            <p>→ Wetness Score (0-10): FD/SD density + paired board</p>
-            <p>→ Connectivity Score: rank-adjacent card count</p>
-            <p>→ Monotone / Two-tone / Rainbow</p>
-            <p>→ Static vs. Dynamic classification</p>
-            <p>→ Post-board Range Advantage & Nut Advantage</p>
-            <p>→ Polarity Index (stddev of hand strength distribution)</p>
-            <p>→ Blocker impact table per board card</p>
+      {/* Hero hand classification */}
+      {heroHandClassification && (
+        <Card style={{ marginBottom: 12 }}>
+          <Label>Hero Hand Strength</Label>
+          <div style={{ display: "flex", gap: 24, marginTop: 8, flexWrap: "wrap" }}>
+            <Stat label="Category" value={heroHandClassification.category} color={T.blue} />
+            <Stat label="Strength" value={(heroHandClassification.strength * 100).toFixed(0) + "%"} color={T.blue} />
+            {heroHandClassification.draws.length > 0 && (
+              <div style={{ textAlign: "center" }}>
+                <Label>Draws</Label>
+                <div style={{ fontSize: 11, color: T.yellow, fontFamily: "monospace", marginTop: 2 }}>
+                  {heroHandClassification.draws.join(", ")}
+                </div>
+              </div>
+            )}
           </div>
         </Card>
-      </div>
+      )}
 
+      {/* Equity + MC button */}
       {board.length >= 3 && (
-        <Card style={{ marginTop: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Label>Equity Computation</Label>
-            <Btn small onClick={() => {/* TODO: trigger MC */}} disabled={mcRunning}>
-              {mcRunning ? "Running…" : "Run Monte Carlo (R)"}
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Label>Monte Carlo Equity ({totalCombos(heroRange)}h × {totalCombos(villainRange)}v combos)</Label>
+            <Btn
+              small
+              color={T.green}
+              disabled={mcRunning || !heroRange.size || !villainRange.size}
+              onClick={() => runMonteCarlo(heroRange, villainRange, board, allDead, dispatch)}
+            >
+              {mcRunning ? "Running…" : "Run MC (R)"}
             </Btn>
           </div>
-          <div style={{ color: T.muted, fontSize: 12, marginTop: 6 }}>
-            Board set. Wire up <code>runMonteCarlo()</code> to compute equity across {totalCombos(heroRange)} hero × {totalCombos(villainRange)} villain combos.
-          </div>
+          {metrics.equity && (
+            <div style={{ display: "flex", gap: 24 }}>
+              <Stat label="Hero Equity" value={metrics.equity.hero.toFixed(2) + "%"} color={T.blue} />
+              <Stat label="Villain Equity" value={metrics.equity.villain.toFixed(2) + "%"} color={T.red} />
+              {metrics.equity.tie > 0.01 && (
+                <Stat label="Tie" value={metrics.equity.tie.toFixed(2) + "%"} color={T.muted} />
+              )}
+            </div>
+          )}
+          {!metrics.equity && !mcRunning && (
+            <div style={{ fontSize: 11, color: T.muted }}>Set hero + villain ranges then run.</div>
+          )}
         </Card>
+      )}
+
+      {/* Range Breakdowns */}
+      {board.length >= 3 && (heroRange.size > 0 || villainRange.size > 0) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <Card>
+            <RangeBreakdown range={heroRange} board={board} deadCards={allDead} label="Hero" color={T.blue} />
+          </Card>
+          <Card>
+            <RangeBreakdown range={villainRange} board={board} deadCards={allDead} label="Villain" color={T.red} />
+          </Card>
+        </div>
       )}
     </div>
   );
@@ -1240,6 +1269,8 @@ const MODULE_NAMES = ["Range Builder", "Board & Equity", "EV Tree", "Trace Gen",
 
 export default function RangeIQ() {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1248,6 +1279,13 @@ export default function RangeIQ() {
       const num = parseInt(e.key);
       if (num >= 1 && num <= 5) dispatch({ type: "SET_MODULE", payload: num });
       if (e.key === "c" || e.key === "C") dispatch({ type: "CLEAR_RANGE" });
+      if (e.key === "r" || e.key === "R") {
+        const s = stateRef.current;
+        if (s.activeModule === 2 && !s.mcRunning && s.board.length >= 3 && s.heroRange.size && s.villainRange.size) {
+          const dead = [...(s.heroHand || []), ...s.deadCards];
+          runMonteCarlo(s.heroRange, s.villainRange, s.board, dead, dispatch);
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
