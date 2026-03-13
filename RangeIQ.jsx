@@ -321,6 +321,74 @@ function classifyHand(holeCards, board) {
   return { category, strength, draws };
 }
 
+function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iterations = 50000) {
+  const CHUNK = 5000;
+
+  // Pre-expand all combos (filter dead cards + board)
+  const usedPreflop = new Set([...board, ...deadCards]);
+  const heroCombos = [...heroRange].flatMap(h => expandHand(h, [...usedPreflop]));
+  const villainCombos = [...villainRange].flatMap(h => expandHand(h, [...usedPreflop]));
+
+  if (!heroCombos.length || !villainCombos.length) {
+    dispatch({ type: "SET_MC_RUNNING", payload: false });
+    return;
+  }
+
+  // Remaining deck for runout
+  const deckArr = DECK.filter(c => !usedPreflop.has(c));
+
+  let heroWins = 0, villainWins = 0, ties = 0;
+  let done = 0;
+
+  function runChunk() {
+    const end = Math.min(done + CHUNK, iterations);
+    for (let i = done; i < end; i++) {
+      // Pick random hero combo
+      const hc = heroCombos[Math.floor(Math.random() * heroCombos.length)];
+      // Pick random villain combo — no card overlap
+      const hSet = new Set(hc);
+      const vcFiltered = villainCombos.filter(vc => !vc.some(c => hSet.has(c)));
+      if (!vcFiltered.length) continue;
+      const vc = vcFiltered[Math.floor(Math.random() * vcFiltered.length)];
+
+      // Build runout deck (exclude hc + vc + board + dead)
+      const usedAll = new Set([...board, ...deadCards, ...hc, ...vc]);
+      const runDeck = deckArr.filter(c => !usedAll.has(c));
+
+      // Deal remaining board cards
+      const needed = 5 - board.length;
+      const shuffled = [...runDeck].sort(() => Math.random() - 0.5);
+      const runout = shuffled.slice(0, needed);
+
+      const fullBoard = [...board, ...runout];
+      const result = compareHands([...hc, ...fullBoard], [...vc, ...fullBoard]);
+
+      if (result === 1) heroWins++;
+      else if (result === -1) villainWins++;
+      else ties++;
+    }
+    done = end;
+
+    if (done >= iterations) {
+      const total = heroWins + villainWins + ties;
+      const heroEq = total ? (heroWins + ties * 0.5) / total : 0;
+      const villainEq = total ? (villainWins + ties * 0.5) / total : 0;
+      dispatch({ type: "SET_METRICS", payload: {
+        equity: {
+          hero: (heroEq * 100).toFixed(2),
+          villain: (villainEq * 100).toFixed(2),
+        }
+      }});
+      dispatch({ type: "SET_MC_RUNNING", payload: false });
+    } else {
+      setTimeout(runChunk, 0);
+    }
+  }
+
+  dispatch({ type: "SET_MC_RUNNING", payload: true });
+  setTimeout(runChunk, 0);
+}
+
 // ============================================================
 // STATE MANAGEMENT
 // ============================================================
