@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import sys
 from pathlib import Path
 from typing import List
 
@@ -25,6 +26,11 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_predict
 from sklearn.preprocessing import StandardScaler
+
+# Ensure the script's own package root (worktree root) is importable
+_script_root = Path(__file__).parent.parent
+if str(_script_root) not in sys.path:
+    sys.path.insert(0, str(_script_root))
 
 # Locate the repo root whether running from worktree or main directory
 _candidate = Path(__file__).parent.parent
@@ -416,11 +422,12 @@ def compute_clv(fold_results: list[dict]) -> pd.DataFrame:
     bt_names = set(crosswalk_df["barttorvik_name"].tolist())
 
     def bt_name_from_odds_name(odds_name: str) -> str | None:
+        """Return longest-matching BT name so 'Oregon St' beats 'Oregon'."""
         odds_lower = odds_name.lower()
-        for bt in bt_names:
-            if bt.lower() in odds_lower:
-                return bt
-        return None
+        candidates = [bt for bt in bt_names if bt.lower() in odds_lower]
+        if not candidates:
+            return None
+        return max(candidates, key=len)  # longest match wins (most specific)
 
     # Build ESPN id -> BT name lookup
     espn_to_bt = dict(zip(crosswalk_df["espn_id"], crosswalk_df["barttorvik_name"]))
@@ -465,6 +472,10 @@ def compute_clv(fold_results: list[dict]) -> pd.DataFrame:
             odds_row = odds_lookup.get((home_bt, away_bt, date_str))
             if odds_row is None:
                 continue  # No Pinnacle match for this game
+
+            # Skip if closing odds are missing (cancelled game or data gap)
+            if pd.isna(odds_row.get("home_ml_close")) or pd.isna(odds_row.get("away_ml_close")):
+                continue
 
             model_prob = game["model_prob"]
             fair_home_open, _ = _devig(odds_row["home_ml"], odds_row["away_ml"])
@@ -554,12 +565,16 @@ def compute_flat_roi(fold_results: list[dict]) -> tuple[float, dict]:
 
 def run_gatekeeper(fold_results: list[dict], clv_df: pd.DataFrame) -> object:
     """Build Gatekeeper inputs and run validation."""
-    import sys
-
-    sys.path.insert(0, str(BASE_DIR))
+    # Ensure BASE_DIR (main repo) is in path for gatekeeper, but worktree stays first
+    if str(BASE_DIR) not in sys.path:
+        sys.path.insert(1, str(BASE_DIR))
+    if str(_script_root) not in sys.path:
+        sys.path.insert(0, str(_script_root))
     from backtesting.validators.gatekeeper import Gatekeeper
 
-    _, season_rois = compute_flat_roi(fold_results)
+    _, season_rois_dict = compute_flat_roi(fold_results)
+    # Overfit validator expects a list of decimal fractions, not a percentage dict
+    season_rois_list = [v / 100.0 for v in season_rois_dict.values()]
 
     all_test = pd.concat([f["test_df"] for f in fold_results], ignore_index=True)
 
@@ -570,7 +585,8 @@ def run_gatekeeper(fold_results: list[dict], clv_df: pd.DataFrame) -> object:
     in_sample_bets = in_sample_probs > 0.5
     if in_sample_bets.sum() > 0:
         correct = (in_sample_probs[in_sample_bets] > 0.5) == (in_sample_wins[in_sample_bets] == 1)
-        in_sample_roi = float(np.where(correct, 100, -100).mean())
+        # Convert to decimal fraction (0.58 not 58.0) for Gatekeeper threshold check
+        in_sample_roi = float(np.where(correct, 1.0, -1.0).mean())
     else:
         in_sample_roi = 0.0
 
@@ -609,7 +625,7 @@ def run_gatekeeper(fold_results: list[dict], clv_df: pd.DataFrame) -> object:
     model_metadata = {
         "n_features": len(FEATURE_COLS),
         "n_samples": len(all_test),
-        "season_rois": season_rois,
+        "season_rois": season_rois_list,
         "in_sample_roi": in_sample_roi,
         "bankroll": 5000.0,
         "config": {"kelly_fraction": 0.25, "model_type": "logistic_regression"},
