@@ -321,12 +321,15 @@ function classifyHand(holeCards, board) {
   return { category, strength, draws };
 }
 
-function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iterations = 50000) {
+function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iterations = 50000, heroHandFixed = null) {
   const CHUNK = 5000;
 
   // Pre-expand all combos (filter dead cards + board)
   const usedPreflop = new Set([...board, ...deadCards]);
-  const heroCombos = [...heroRange].flatMap(h => expandHand(h, [...usedPreflop]));
+  // heroHandFixed: when set, lock hero to one specific combo instead of sampling the full range
+  const heroCombos = heroHandFixed
+    ? [heroHandFixed]
+    : [...heroRange].flatMap(h => expandHand(h, [...usedPreflop]));
   const villainCombos = [...villainRange].flatMap(h => expandHand(h, [...usedPreflop]));
 
   if (!heroCombos.length || !villainCombos.length) {
@@ -951,12 +954,12 @@ function Module2({ state, dispatch }) {
       {board.length >= 3 && (
         <Card style={{ marginBottom: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <Label>Monte Carlo Equity ({totalCombos(heroRange)}h × {totalCombos(villainRange)}v combos)</Label>
+            <Label>Monte Carlo Equity ({heroHand && heroHand.length === 2 ? heroHand.join("") : totalCombos(heroRange)}h × {totalCombos(villainRange)}v combos)</Label>
             <Btn
               small
               color={T.green}
               disabled={mcRunning || !heroRange.size || !villainRange.size}
-              onClick={() => runMonteCarlo(heroRange, villainRange, board, allDead, dispatch)}
+              onClick={() => runMonteCarlo(heroRange, villainRange, board, allDead, dispatch, 50000, heroHand && heroHand.length === 2 ? heroHand : null)}
             >
               {mcRunning ? "Running…" : "Run MC (R)"}
             </Btn>
@@ -1282,7 +1285,8 @@ export default function RangeIQ() {
         const s = stateRef.current;
         if (s.activeModule === 2 && !s.mcRunning && s.board.length >= 3 && s.heroRange.size && s.villainRange.size) {
           const dead = [...(s.heroHand || []), ...s.deadCards];
-          runMonteCarlo(s.heroRange, s.villainRange, s.board, dead, dispatch);
+          const hFixed = s.heroHand && s.heroHand.length === 2 ? s.heroHand : null;
+          runMonteCarlo(s.heroRange, s.villainRange, s.board, dead, dispatch, 50000, hFixed);
         }
       }
     };
