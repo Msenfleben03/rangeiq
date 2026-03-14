@@ -1197,6 +1197,80 @@ function buildTree({
   return nodes;
 }
 
+function computeNodeEV(node) {
+  const eq = node.equityAssumption;
+  const pot = node.potAfter;
+  const inv = node.heroInvestmentAfter;
+
+  // ── LEAF NODES ──
+  if (node.isLeaf) {
+    switch (node.action) {
+      case "villain_fold":  return pot;
+      case "hero_fold":     return -inv;
+      case "check_behind":
+      case "hero_call":
+      case "villain_call":  return eq * pot - (1 - eq) * inv;
+      default:              return eq * pot - (1 - eq) * inv;
+    }
+  }
+
+  // ── BET NODES (villain responds) ──
+  if (node.action === "bet" || node.action === "villain_bet") {
+    const foldChild  = node.children.find(c => c.action === "villain_fold");
+    const callChild  = node.children.find(c => c.action === "villain_call");
+    const raiseChild = node.children.find(c => c.action === "villain_raise");
+
+    const foldEV  = foldChild  ? computeNodeEV(foldChild)  : 0;
+    const callEV  = callChild  ? computeNodeEV(callChild)  : 0;
+
+    let raiseEV = 0;
+    if (raiseChild) {
+      const heroFold = node.heroFoldToRaise / 100;
+      const heroFoldChild = raiseChild.children.find(c => c.id.includes("hero_fold"));
+      const heroCallChild = raiseChild.children.find(c => c.id.includes("hero_call"));
+      const heroFoldEV = heroFoldChild ? computeNodeEV(heroFoldChild) : 0;
+      const heroCallEV = heroCallChild ? computeNodeEV(heroCallChild) : 0;
+      raiseEV = heroFold * heroFoldEV + (1 - heroFold) * heroCallEV;
+    }
+
+    const fP = node.villainFoldPct / 100;
+    const cP = node.villainCallPct / 100;
+    const rP = node.villainRaisePct / 100;
+    return fP * foldEV + cP * callEV + rP * raiseEV;
+  }
+
+  // ── CHECK NODES ──
+  if (node.action === "check") {
+    if (!node.children?.length) return eq * pot - (1 - eq) * inv;
+    const childEVs = node.children.map(computeNodeEV);
+    return Math.max(...childEVs);
+  }
+
+  // ── VILLAIN BET RESPONSE (hero faces bet) ──
+  if (node.action === "villain_bet") {
+    const heroFold = node.heroFoldToRaise / 100;
+    const foldChild = node.children.find(c => c.action === "hero_fold");
+    const callChild = node.children.find(c => c.action === "hero_call");
+    const foldEV = foldChild ? computeNodeEV(foldChild) : 0;
+    const callEV = callChild ? computeNodeEV(callChild) : 0;
+    return heroFold * foldEV + (1 - heroFold) * callEV;
+  }
+
+  // Fallthrough
+  if (node.children?.length) {
+    return Math.max(...node.children.map(computeNodeEV));
+  }
+  return eq * pot - (1 - eq) * inv;
+}
+
+function stampEV(nodes) {
+  return nodes.map(n => {
+    const children = n.children?.length ? stampEV(n.children) : [];
+    const withChildren = { ...n, children };
+    return { ...withChildren, ev: computeNodeEV(withChildren) };
+  });
+}
+
 // ============================================================
 // MODULE 3 — MULTI-STREET EV TREE (STUB)
 // ============================================================
