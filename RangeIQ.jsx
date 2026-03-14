@@ -1029,6 +1029,175 @@ function Module2({ state, dispatch }) {
 }
 
 // ============================================================
+// MODULE 3 — HELPERS
+// ============================================================
+function makeNodeId(parentId, action, sizing) {
+  const sizingTag = sizing != null ? `_${Math.round(sizing * 100)}` : "";
+  return `${parentId}__${action}${sizingTag}`;
+}
+
+function buildTree({
+  potSize,
+  effStack,
+  betSizings,
+  equity,
+  street = "flop",
+  depth = 0,
+  parentId = "root",
+  heroInvestment = 0,
+}) {
+  const STREETS = ["flop", "turn", "river"];
+  if (depth >= 3 || heroInvestment >= effStack) return [];
+
+  const nextStreet = STREETS[depth + 1] || "river";
+  const nodes = [];
+
+  // ── CHECK NODE ──
+  const checkId = makeNodeId(parentId, "check", null);
+  const checkChildren = [];
+
+  // Villain checks behind → showdown
+  checkChildren.push({
+    id: makeNodeId(checkId, "check_behind", null),
+    street,
+    action: "check_behind",
+    label: "Check behind (showdown)",
+    betSize: 0, betSizeBb: 0,
+    potAfter: potSize, heroInvestmentAfter: heroInvestment,
+    villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
+    heroFoldToRaise: 0,
+    equityAssumption: equity, equity_is_approximated: street !== "flop",
+    ev: null, expanded: false, children: [], isLeaf: true,
+  });
+
+  // Villain leads each sizing (donk bets)
+  betSizings.forEach(s => {
+    const S = s * potSize;
+    const leadId = makeNodeId(checkId, "villain_bet", s);
+    const heroPotOdds = potSize / (potSize + 2 * S);
+    const foldPct = (1 - heroPotOdds) * 100;
+    const callPct = heroPotOdds * 100;
+    const heroCallChildren = buildTree({
+      potSize: potSize + 2 * S, effStack, betSizings, equity,
+      street: nextStreet, depth: depth + 1,
+      parentId: leadId, heroInvestment: heroInvestment + S,
+    });
+    checkChildren.push({
+      id: leadId, street, action: "villain_bet",
+      label: `Villain bets ${Math.round(s * 100)}%`,
+      betSize: s, betSizeBb: S,
+      potAfter: potSize + S, heroInvestmentAfter: heroInvestment,
+      villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
+      heroFoldToRaise: foldPct,
+      equityAssumption: equity, equity_is_approximated: street !== "flop",
+      ev: null, expanded: false, isLeaf: false,
+      children: [
+        { id: makeNodeId(leadId, "hero_fold", null), street, action: "hero_fold",
+          label: "Hero folds", betSize: 0, betSizeBb: 0,
+          potAfter: potSize + S, heroInvestmentAfter: heroInvestment,
+          villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
+          heroFoldToRaise: 0, equityAssumption: equity,
+          equity_is_approximated: street !== "flop",
+          ev: null, expanded: false, children: [], isLeaf: true },
+        { id: makeNodeId(leadId, "hero_call", null), street, action: "hero_call",
+          label: "Hero calls", betSize: 0, betSizeBb: 0,
+          potAfter: potSize + 2 * S, heroInvestmentAfter: heroInvestment + S,
+          villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
+          heroFoldToRaise: 0, equityAssumption: equity,
+          equity_is_approximated: nextStreet !== "flop",
+          ev: null, expanded: false, isLeaf: heroCallChildren.length === 0,
+          children: heroCallChildren },
+      ],
+    });
+  });
+
+  nodes.push({
+    id: checkId, street, action: "check", label: "Check",
+    betSize: 0, betSizeBb: 0,
+    potAfter: potSize, heroInvestmentAfter: heroInvestment,
+    villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
+    heroFoldToRaise: 0,
+    equityAssumption: equity, equity_is_approximated: street !== "flop",
+    ev: null, expanded: true, isLeaf: false, children: checkChildren,
+  });
+
+  // ── BET NODES ──
+  betSizings.forEach(s => {
+    const S = s * potSize;
+    if (S > effStack - heroInvestment) return;
+    const betId = makeNodeId(parentId, "bet", s);
+
+    const foldPct = S / (potSize + S) * 100;
+    const callPct = potSize / (potSize + S) * 100;
+    const raisePct = 0;
+
+    const R = S * 2.5;
+    const heroFoldToRaise = (1 - (R - S) / (potSize + R)) * 100;
+
+    const callChildren = buildTree({
+      potSize: potSize + 2 * S, effStack, betSizings, equity,
+      street: nextStreet, depth: depth + 1,
+      parentId: makeNodeId(betId, "villain_call", null),
+      heroInvestment: heroInvestment + S,
+    });
+
+    nodes.push({
+      id: betId, street, action: "bet",
+      label: `Bet ${Math.round(s * 100)}% pot (${S.toFixed(1)} bb)`,
+      betSize: s, betSizeBb: S,
+      potAfter: potSize + S, heroInvestmentAfter: heroInvestment + S,
+      villainFoldPct: foldPct, villainCallPct: callPct, villainRaisePct: raisePct,
+      heroFoldToRaise,
+      equityAssumption: equity, equity_is_approximated: street !== "flop",
+      ev: null, expanded: true, isLeaf: false,
+      children: [
+        { id: makeNodeId(betId, "villain_fold", null), street, action: "villain_fold",
+          label: "Villain folds", betSize: 0, betSizeBb: 0,
+          potAfter: potSize + S, heroInvestmentAfter: heroInvestment + S,
+          villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
+          heroFoldToRaise: 0, equityAssumption: equity,
+          equity_is_approximated: street !== "flop",
+          ev: null, expanded: false, children: [], isLeaf: true },
+        { id: makeNodeId(betId, "villain_call", null), street, action: "villain_call",
+          label: "Villain calls", betSize: 0, betSizeBb: 0,
+          potAfter: potSize + 2 * S, heroInvestmentAfter: heroInvestment + S,
+          villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
+          heroFoldToRaise: 0, equityAssumption: equity,
+          equity_is_approximated: nextStreet !== "flop",
+          ev: null, expanded: false, isLeaf: callChildren.length === 0,
+          children: callChildren },
+        { id: makeNodeId(betId, "villain_raise", null), street, action: "villain_raise",
+          label: `Villain raises to ${R.toFixed(1)} bb`,
+          betSize: R / potSize, betSizeBb: R,
+          potAfter: potSize + S + R, heroInvestmentAfter: heroInvestment + S,
+          villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
+          heroFoldToRaise,
+          equityAssumption: equity, equity_is_approximated: street !== "flop",
+          ev: null, expanded: false, isLeaf: false,
+          children: [
+            { id: makeNodeId(betId, "hero_fold_raise", null), street, action: "hero_fold",
+              label: "Hero folds to raise", betSize: 0, betSizeBb: 0,
+              potAfter: potSize + S + R, heroInvestmentAfter: heroInvestment + S,
+              villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
+              heroFoldToRaise: 0, equityAssumption: equity,
+              equity_is_approximated: street !== "flop",
+              ev: null, expanded: false, children: [], isLeaf: true },
+            { id: makeNodeId(betId, "hero_call_raise", null), street, action: "hero_call",
+              label: "Hero calls raise", betSize: 0, betSizeBb: 0,
+              potAfter: potSize + 2 * R, heroInvestmentAfter: heroInvestment + R,
+              villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
+              heroFoldToRaise: 0, equityAssumption: equity,
+              equity_is_approximated: nextStreet !== "flop",
+              ev: null, expanded: false, children: [], isLeaf: true },
+          ]},
+      ],
+    });
+  });
+
+  return nodes;
+}
+
+// ============================================================
 // MODULE 3 — MULTI-STREET EV TREE (STUB)
 // ============================================================
 function Module3({ state, dispatch }) {
