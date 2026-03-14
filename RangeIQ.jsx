@@ -539,9 +539,10 @@ function reducer(state, action) {
         if (n.children?.length) return { ...n, children: updateNode(n.children, targetId, patch) };
         return n;
       });
+      const updated = updateNode(state.evTreeConfig.nodes, action.payload.id, action.payload.patch);
       return { ...state, evTreeConfig: {
         ...state.evTreeConfig,
-        nodes: updateNode(state.evTreeConfig.nodes, action.payload.id, action.payload.patch)
+        nodes: stampEV(updated)
       }};
     }
     case "SET_BATCH_PROGRESS":
@@ -1074,7 +1075,7 @@ function buildTree({
   betSizings.forEach(s => {
     const S = s * potSize;
     const leadId = makeNodeId(checkId, "villain_bet", s);
-    const heroPotOdds = potSize / (potSize + 2 * S);
+    const heroPotOdds = (potSize + S) / (potSize + 2 * S);
     const foldPct = (1 - heroPotOdds) * 100;
     const callPct = heroPotOdds * 100;
     const heroCallChildren = buildTree({
@@ -1127,12 +1128,13 @@ function buildTree({
     if (S > effStack - heroInvestment) return;
     const betId = makeNodeId(parentId, "bet", s);
 
-    const foldPct = S / (potSize + S) * 100;
-    const callPct = potSize / (potSize + S) * 100;
-    const raisePct = 0;
+    const foldPct = S / (potSize + 2 * S) * 100;
+    const callPct = (potSize + S) / (potSize + 2 * S) * 100;
+    const raisePct = 10;
+    const adjustedCallPct = callPct - raisePct;
 
     const R = S * 2.5;
-    const heroFoldToRaise = (1 - (R - S) / (potSize + R)) * 100;
+    const heroFoldToRaise = (1 - (R - S) / (potSize + 2 * R)) * 100;
 
     const callChildren = buildTree({
       potSize: potSize + 2 * S, effStack, betSizings, equity,
@@ -1146,7 +1148,7 @@ function buildTree({
       label: `Bet ${Math.round(s * 100)}% pot (${S.toFixed(1)} bb)`,
       betSize: s, betSizeBb: S,
       potAfter: potSize + S, heroInvestmentAfter: heroInvestment + S,
-      villainFoldPct: foldPct, villainCallPct: callPct, villainRaisePct: raisePct,
+      villainFoldPct: foldPct, villainCallPct: adjustedCallPct, villainRaisePct: raisePct,
       heroFoldToRaise,
       equityAssumption: equity, equity_is_approximated: street !== "flop",
       ev: null, expanded: true, isLeaf: false,
@@ -1215,7 +1217,7 @@ function computeNodeEV(node) {
   }
 
   // ── BET NODES (villain responds) ──
-  if (node.action === "bet" || node.action === "villain_bet") {
+  if (node.action === "bet") {
     const foldChild  = node.children.find(c => c.action === "villain_fold");
     const callChild  = node.children.find(c => c.action === "villain_call");
     const raiseChild = node.children.find(c => c.action === "villain_raise");
@@ -1274,7 +1276,7 @@ function stampEV(nodes) {
 function buildAncestorChain(leafId) {
   const parts = leafId.split("__");
   const chain = [];
-  for (let i = 1; i <= parts.length; i++) {
+  for (let i = 2; i <= parts.length; i++) {
     chain.push(parts.slice(0, i).join("__"));
   }
   return chain;
@@ -1344,17 +1346,19 @@ function TreeNode({ node, depth, selectedLine, dispatch, siblingCollapse }) {
           <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <input type="number" min={0} max={100} value={Math.round(node.villainFoldPct)}
               onChange={e => handleFreqChange("villainFoldPct", e.target.value)}
-              style={{ width: 40, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
+              style={{ width: 38, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
             />
             <span style={{ color: T.muted, fontSize: 10 }}>F%</span>
             <input type="number" min={0} max={100} value={Math.round(node.villainCallPct)}
               onChange={e => handleFreqChange("villainCallPct", e.target.value)}
-              style={{ width: 40, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
+              style={{ width: 38, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
             />
             <span style={{ color: T.muted, fontSize: 10 }}>C%</span>
-            <span style={{ color: T.muted, fontSize: 10, width: 30, textAlign: "right", fontFamily: "monospace" }}>
-              {raiseComputed}R%
-            </span>
+            <input type="number" min={0} max={100} value={Math.round(node.villainRaisePct)}
+              onChange={e => handleFreqChange("villainRaisePct", e.target.value)}
+              style={{ width: 38, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
+            />
+            <span style={{ color: T.muted, fontSize: 10 }}>R%</span>
           </span>
         )}
 
