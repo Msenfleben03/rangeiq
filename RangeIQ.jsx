@@ -1387,6 +1387,67 @@ function TreeNode({ node, depth, selectedLine, dispatch, siblingCollapse }) {
   );
 }
 
+function BreakevenPanel({ node }) {
+  if (!node) {
+    return (
+      <Card style={{ width: 220, minHeight: 160, flexShrink: 0 }}>
+        <Label>Breakeven Analysis</Label>
+        <div style={{ color: T.muted, fontSize: 12, marginTop: 12 }}>
+          Hover a bet node to see analysis.
+        </div>
+      </Card>
+    );
+  }
+
+  const S = node.betSizeBb;
+  const P = node.potAfter - S;
+  const bePct = S > 0 ? S / (P + S) : null;
+  const gtoBluffFreq = S > 0 ? S / (S + P) : null;
+  const bluffValueRatio = S > 0 ? S / P : null;
+
+  const evColor = node.ev === null ? T.muted
+    : node.ev > 0.5 ? T.green
+    : node.ev < -0.5 ? T.red
+    : T.yellow;
+
+  return (
+    <Card style={{ width: 220, minHeight: 160, flexShrink: 0 }}>
+      <Label>Breakeven Analysis</Label>
+      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+          <span style={{ color: T.muted }}>Node: </span>
+          <span style={{ color: T.text }}>{node.label}</span>
+        </div>
+        <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+          <span style={{ color: T.muted }}>EV: </span>
+          <span style={{ color: evColor }}>{node.ev?.toFixed(2) ?? "—"} bb</span>
+        </div>
+        {bePct !== null && (
+          <>
+            <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+              <span style={{ color: T.muted }}>BE%: </span>
+              <span style={{ color: T.text }}>{(bePct * 100).toFixed(1)}%</span>
+            </div>
+            <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+              <span style={{ color: T.muted }}>GTO bluff freq: </span>
+              <span style={{ color: T.text }}>{(gtoBluffFreq * 100).toFixed(1)}%</span>
+            </div>
+            <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+              <span style={{ color: T.muted }}>Bluff:Value ratio: </span>
+              <span style={{ color: T.text }}>{bluffValueRatio?.toFixed(2)} : 1</span>
+            </div>
+          </>
+        )}
+        {node.equity_is_approximated && (
+          <div style={{ color: T.yellow, fontSize: 10, marginTop: 4 }}>
+            ⚠ Equity approximated (multi-street)
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 // ============================================================
 // MODULE 3 — MULTI-STREET EV TREE (STUB)
 // ============================================================
