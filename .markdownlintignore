@@ -28,3 +28,7 @@ coverage.json
 
 # Claude config
 .claude/
+
+# Project root docs (long lines acceptable in spec/reference files)
+CLAUDE.md
+README.md

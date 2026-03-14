@@ -1,101 +1,178 @@
-# Project: Sports Betting Model Development
+# CLAUDE.md
 
-Build profitable projection models for NCAAB and MLB achieving positive ROI
-through systematic Closing Line Value (CLV) capture.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Tech Stack
+## What This Is
 
-Python 3.11+, pandas, scikit-learn, statsmodels, SQLite, pytest.
-See `docs/CODEMAPS/` for module-level architecture. See `docs/RUNBOOK.md` for daily ops.
+RangeIQ is a single-file React artifact (`RangeIQ.jsx`) that runs inside Claude.ai's artifact renderer. It is a professional-grade Texas Hold'em GTO analysis tool that doubles as an LLM fine-tuning data generator. The full spec lives in `Texas_Holdem_GTO_Analysis_App_Prompt.md`.
 
-## Active Tasks
+**Two parallel jobs:**
+1. Statistical analysis engine (Flopzilla parity + solver metrics)
+2. LLM training data factory (Claude API → JSONL export)
 
-### Phase 7-8 (Mar 7-20): Live testing + MLB data
+## Directory Note
 
-- [ ] Begin live paper betting tracking (daily_run.py)
-- [ ] Backfill 2026 odds (0% coverage currently)
-- [ ] NCAAB tournament prep — Selection Sunday Mar 16
-- [ ] Schema overhaul Tasks 2-8 — `docs/plans/2026-03-05-schema-overhaul.md`
-- [ ] Injury/Divergence overhaul — `docs/plans/2026-02-28-injury-divergence-system.md`
+The directories `scripts/`, `tests/`, `docs/`, `config/`, `data/`, `logs/`, `tracking/`, `dashboards/`, `venv/`, and `archive/` were inherited from a sports-betting project as infrastructure scaffolding. They are **not relevant to RangeIQ development** — ignore them. The entire poker codebase is `RangeIQ.jsx`.
 
-After tournament: MLB pipeline activation (strategy decision, lineup wRC+, park factors).
+## Commands
 
-## Domain Knowledge — CRITICAL
+**Test the artifact**: Paste the contents of `RangeIQ.jsx` into a Claude.ai artifact (React). No build step required.
 
-**CLV > Win Rate.** Closing Line Value is the PRIMARY success metric. A bettor who
-consistently gets better odds than closing lines WILL profit long-term.
+**Lint markdown** (reference docs):
+```sh
+pre-commit run markdownlint --all-files
+```
 
-- **De-vig**: `fair_prob = raw_implied / (raw_home + raw_away)`
-- **CLV**: `(prob_closing - prob_placed) / prob_placed` — positive = beat the market
-- **Kelly**: `(b * p - q) / b * fraction` — use 0.25 fraction (full Kelly too aggressive)
-- All formulas in `betting/odds_converter.py`
+**Run all pre-commit hooks** (file hygiene, secret detection):
+```sh
+pre-commit run --all-files
+```
 
-**Market inefficiency priority:** Player props > small conference > derivatives > main lines
+## Current State
 
-## Gatekeeper — Model Validation
+### ✅ Done
+- **Global architecture**: `useReducer` with single state object, all action types defined
+- **Module 1 (Range Builder)**: Fully functional — 13×13 matrix, click+drag, Hero/Villain toggle, 14 presets, combo counters, nut advantage gauge (recharts RadialBarChart)
+- **Module 2 (Board & Equity)**: Card selector UI working (board, hero hand, dead cards with exclusion logic)
+- **Module 4 (Trace Generator)**: Full API flow — context serialization, Claude API call, JSONL record packaging, export download, error handling
+- **Module 5 (Scenario Library)**: Save/load/tag/export all functional (in-memory)
+- **Header**: Persistent with live stats (combos, nut advantage, trace count), module tabs
+- **Keyboard shortcuts**: 1-5 module switch, C clear range
+- **Design system**: Dark theme with all CSS variables applied, monospace numerical output
 
-No model reaches production without passing the 5-dimension Gatekeeper
-(`backtesting/validators/gatekeeper.py`). **Run when model looks too good.**
+### 🔧 Needs Implementation (priority order)
 
-| Blocking Check | Threshold |
-|----------------|-----------|
-| Temporal: no leakage | 0 leaky features |
-| Statistical: sample size | >= 200 bets |
-| Statistical: Sharpe | >= 0.5 |
-| Overfit: in-sample ROI | <= 15% |
-| Betting: CLV | >= 1.5% |
-| Betting: ruin probability | <= 5% |
+#### P0 — Module 2 Core Engine
+This is the foundation everything else depends on.
 
-## Database
+1. **`classifyHand(holeCards, board)`** — The critical function.
+   - Input: 2 hole cards + 3-5 board cards
+   - Output: `{ category: string, strength: number (0-1), draws: string[] }`
+   - Categories (strongest → weakest): Quads, Full House, Flush, Straight, Three of a Kind, Two Pair, Overpair, Top Pair (good/weak kicker), Middle Pair, Bottom Pair, Underpair, Ace High, No Made Hand
+   - Draws: Nut Flush Draw, Flush Draw, OESD, Double Gutshot, Gutshot, Overcard Draw, Backdoor FD, Backdoor SD
+   - **Pure poker logic — no external deps.** Implement from scratch using rank/suit comparisons. Do NOT import a poker library.
 
-Two SQLite databases. Schema auto-created by `BettingDatabase()` in `tracking/database.py`.
-Full schema: `docs/DATA_DICTIONARY.md`.
+2. **`runMonteCarlo(heroRange, villainRange, board, deadCards, iterations=50000)`**
+   - Chunk into 5000-iteration batches via `setTimeout` to avoid blocking UI
+   - For each iteration: pick random hero combo from range, random villain combo (no overlap), deal remaining board cards, evaluate both hands, track wins/ties
+   - Return: `{ heroEq, villainEq, tieEq, histogram: number[10] }`
+   - Set `mcRunning` state during execution, clear when done
+   - The histogram buckets hero winning % into 10% bands
 
-- **ncaab_betting.db**: bets, bankroll_log, predictions, team_ratings, odds_snapshots,
-  barttorvik_ratings, kenpom_ratings, game_log
-- **mlb_data.db**: games, game_pitchers, pitcher_stats, lineups, odds_snapshots,
-  bets, predictions, park_factors (key: `game_pk`)
+3. **Range breakdown panel** — Iterate all villain combos, call `classifyHand()` on each, group by category, display as horizontal bar chart (recharts)
 
-No `sport` column — file name identifies sport.
+4. **Board texture metrics:**
+   - Wetness: `(FD_combos/max_FD)×4 + (SD_combos/max_SD)×4 + (paired ? 2 : 0)`
+   - Connectivity: count of rank-adjacent board cards
+   - Flush texture: monotone / two-tone / rainbow
 
-## Bankroll & Sizing
+5. **Post-board range/nut advantage:**
+   - RA: compare hero vs villain strong combo counts (sets+, two pair+, nut draws)
+   - NA: compare top 15% hand strength combos between ranges
+   - PI: standard deviation of hand strength distribution per range
 
-| Parameter | Value |
-|-----------|-------|
-| Total bankroll | $5,000 (static paper) |
-| Kelly fraction | 0.25 (quarter) |
-| Max bet | 5% ($250) |
-| Min bet | $10 |
-| Daily exposure cap | 20% ($1,000) |
-| Weekly loss limit | 25% ($1,250) → reduce sizing 50% |
-| Monthly loss limit | 40% ($2,000) → pause, full review |
+6. **Blocker engine:**
+   - Apply 6-3-1-0 rule for pocket pairs
+   - Unpaired: `unseen(rank_A) × unseen(rank_B)`
+   - Hero hole card blocker impact
 
-Sized via `KellySizer` with Platt-calibrated probabilities. See `betting/odds_converter.py`.
+#### P1 — Module 3 EV Tree
+1. **Tree data structure**: Each node: `{ street, action, betSize, villainFoldPct, villainCallPct, villainRaisePct, equityAssumption, children[] }`
+2. **`computeNodeEV(node, pot, heroInvestment)`**: Recursive. Base case = showdown: `heroEq × finalPot - (1 - heroEq) × heroInvestment`
+3. **Tree builder UI**: Add-node buttons at each leaf, expandable/collapsible with indentation
+4. **Per-node breakeven panel**: `BE% = bet / (bet + pot)`
+5. **Frequency exploitability**: Compare actual bluff:value ratio to `S/(S+P)` optimal
+6. **EV breakdown pie chart**: fold equity vs showdown equity vs implied equity
 
-## Key Results
+#### P2 — Module 4 Enhancements
+1. **Batch generation**: Multi-board × multi-range iteration, 500ms delay between API calls, progress bar
+2. **Trace quality indicators**: Coverage score, specificity, consistency
 
-- **NCAAB Elo+Barttorvik**: OOS flat ROI +27.09% pooled (5 seasons), p=0.0001
-- **MLB Poisson v1**: 56.1% acc, home_fav CLV +2.08% (only positive CLV cell)
+#### P3 — Module 1 Enhancements
+1. Ctrl+click for partial inclusion % (0-100%) per cell
+2. Preflop all-in equity (requires Monte Carlo)
 
-## Known Dead Ends (do NOT revisit)
+## Code Conventions
 
-| Item | Reason |
-|------|--------|
-| `sportsipy` library | BROKEN since 2025 — use ESPN API |
-| KenPom via cbbdata | Auth BLOCKED (upstream issue #14) — use kenpompy |
-| `breadwinner.py` metric | DISABLED — no ROI correlation |
-| KenPom year-end as feature | 98.9% redundant with Barttorvik |
-| Hurst exponent / Jensen's alpha | Sample size too small / circular |
-| Barttorvik 2026 before Feb 17 | Unrecoverable |
-| ECC Continuous Learning v2 | INCOMPATIBLE with Windows |
-| `test_logger.py` 8 failures | Pre-existing schema mismatch — known, not a blocker |
+### Single-File Constraint
+Everything must be in `RangeIQ.jsx`. No separate CSS, no modules. Available imports:
+- `react` (hooks), `recharts`, `lucide-react`, `lodash`, `d3`
 
-## Notes for Claude Code
+### State Management
+Single `useReducer` at top level. All mutations through `dispatch`. New actions: `case "NEW_ACTION": return { ...state, newField: action.payload };`
 
-- **Always consider**: "Could this leak future information?"
-- Flag overfitting/data leakage risks proactively
-- Suggest tests for new functionality
-- Default to simpler implementations first
-- Run Gatekeeper before approving any model for deployment
-- Understand sharp vs soft books, walk-forward vs random CV
-- See `docs/CODEMAPS/` for file-level architecture before modifying unfamiliar modules
+### Styling
+Inline styles using the `T` theme object — no Tailwind (artifact renderer doesn't compile it):
+```js
+T.bgPrimary  // #0d1117
+T.bgCard     // #161b22
+T.bgElevated // #21262d
+T.border     // #30363d
+T.blue       // #58a6ff  (Hero color)
+T.green      // #3fb950  (+EV, success)
+T.red        // #f85149  (Villain, -EV, red suits)
+T.yellow     // #d29922  (warnings, premiums)
+T.purple     // #bc8cff  (overlap)
+T.text       // #e6edf3
+T.muted      // #8b949e
+```
+
+### Shared Components
+- `Btn` — standard button with active/disabled states
+- `Card` — container with bgCard background + border
+- `Label` — uppercase muted label
+- `Stat` — centered label + large value display
+- `CardSelector` — card picker with dead-card exclusion
+
+All computed metrics: **2 decimal places** (`.toFixed(2)`). Monospace font for numbers.
+
+### API Calls
+Model: `claude-sonnet-4-20250514`. No API key needed (artifact runtime injects it). Always parse `data.content[0].text` and handle JSON parse errors.
+
+## Key Utilities Already Built
+
+```js
+RANKS          // ["A","K","Q","J","T","9","8","7","6","5","4","3","2"]
+SUITS          // ["s","h","d","c"]
+DECK           // all 52 cards as ["As","Ah",...,"2c"]
+matrixLabel(row, col)  // → "AKs", "TT", "87o" etc
+combosFor(hand)        // → 6 (pair), 4 (suited), 12 (offsuit)
+expandHand(hand, deadCards)  // → [[card,card],...] specific combos
+totalCombos(rangeSet)  // → integer total combo count
+countPremiums(rangeSet) // → combo count of AA/KK/QQ/AKs/AKo
+parsePreset(str)       // → Set from comma-separated hand string
+PRESETS                // object of all 14 preset range strings
+```
+
+## Poker Logic Notes
+
+**Hand evaluation priority** — check in order, first match wins:
+straight flush → quads → full house → flush → straight → three of a kind → two pair → one pair → high card
+
+Sub-classify one pair: overpair / top pair / middle pair / bottom pair / underpair by comparing hole card ranks to board ranks.
+
+**Rank ordering**: A=14, K=13, Q=12, J=11, T=10, 9-2 face value. Ace also low for A-2-3-4-5 straight.
+
+**Flush detection**: Count suits across all 7 cards. ≥5 of one suit = flush. Draws: 4 to a flush = FD, 3 to a flush with 2 board cards of that suit = backdoor FD.
+
+**Straight detection**: Convert to rank numbers, sort, deduplicate, find runs of 5. Draws: 4 consecutive = OESD, 4-card span with 1 gap = gutshot, two gaps in 5-card span = double gutshot.
+
+**Monte Carlo**: Per iteration — pick random hero combo, random villain combo (no card overlap with each other, board, or dead cards). Deal remaining board cards. Evaluate both 7-card hands. After all iterations divide by total.
+
+## Common Gotchas
+
+1. **Card overlap**: Always filter dead cards when expanding ranges. `expandHand(hand, deadCards)` handles this.
+2. **Ace-low straights**: Include Ace as both 14 and 1 when checking straights.
+3. **Matrix orientation**: Row < Col = suited, Row > Col = offsuit, Row == Col = pair. `matrixLabel()` handles this.
+4. **Monte Carlo blocking UI**: MUST chunk via `setTimeout` (5k iterations/chunk). A tight loop of 50k will freeze the artifact.
+5. **No localStorage**: Artifacts cannot use localStorage/sessionStorage. All persistence is in-memory React state only.
+6. **recharts sizing**: Always wrap charts in `<ResponsiveContainer>` with explicit width/height on the parent div.
+
+## Reference Files (domain context, not code)
+
+- `Texas_Holdem_GTO_Analysis_App_Prompt.md` — full spec (source of truth)
+- `ABC_Poker_The_Simple_Strategy_In_2026__SplitSuit_Poker.md` — ABC strategy, default ranges
+- `Poker_Bluffing_Made_Easy_In_2026__SplitSuit.md` — BE%, fold frequency, multi-street bluffs
+- `Poker_Combos___Blockers_101_In_2026__SplitSuit_Poker.md` — 6-3-1-0 rule, combo counting
+- `The_Preflop_Poker_Checklist_In_2026__SplitSuit_Poker.md` — PLANES framework, SPR
+- `Why_A_Poker_Math_Approach_Is_Best_In_2026__SplitSuit_Poker.md` — EV, BE%, frequencies

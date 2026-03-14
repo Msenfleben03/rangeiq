@@ -1,448 +1,193 @@
-# Sports Betting Model Development
+# RangeIQ
 
-A systematic approach to building profitable sports betting projection models using quantitative methods and disciplined bankroll management.
+**Professional-grade Texas Hold'em GTO analysis tool + LLM training data factory.**
 
-## Project Goal
+RangeIQ is a single-page React application with two parallel jobs:
 
-Achieve positive ROI through **Closing Line Value (CLV)** capture across NCAA Basketball, MLB, NFL, and NCAA Football markets, starting with zero capital outlay for data and tools.
+1. **Statistical Analysis Engine** — Flopzilla-class range/equity analysis extended with solver-grade metrics (range advantage, nut advantage, polarity index, multi-street EV trees, combo density, blocker impact).
 
-## Core Philosophy
+2. **LLM Training Data Factory** — Generates structured expert GTO reasoning traces from live game state via Claude API, packaged as JSONL fine-tuning datasets compatible with Anthropic, OpenAI, and Hugging Face pipelines.
 
-> **CLV > Win Rate**: A bettor who consistently beats closing lines will profit long-term, even through losing streaks.
-
-This project prioritizes:
-
-- **CLV tracking** as the primary success metric
-- **Walk-forward validation** to prevent overfitting
-- **Conservative bankroll management** (Quarter Kelly, 3% max bet)
-- **Market inefficiency targeting** (player props, small conferences)
-- **Rigorous model validation** via 5-dimension validation framework
-
-## Key Features
-
-- **5-Dimension Validation Framework** - 198 tests ensuring model integrity
-  - Temporal validation (26 tests) - Prevents look-ahead bias
-  - Statistical validation (49 tests) - Sample size, Sharpe, significance
-  - Overfitting detection (42 tests) - Catches suspiciously good results
-  - Betting validation (52 tests) - CLV, vig, Kelly limits
-  - Gatekeeper (29 tests) - Final PASS/QUARANTINE decision
-- **Elo Rating System** - Team strength estimation with MOV adjustments
-- **CLV Tracking** - Automated closing line value calculation
-- **Walk-Forward Backtesting** - Chronological validation preventing data leakage
-- **Kelly Criterion Sizing** - Conservative fractional Kelly bet sizing
-- **Multi-Sportsbook Support** - Line shopping across DraftKings, FanDuel, BetMGM, Caesars
-- **Prediction Markets Integration** - Polymarket/Kalshi data fetching
-
-## Quick Start
-
-### Step 1: Install Prerequisites
-
-Before running the setup script, install these dependencies:
-
-```powershell
-# 1. Install Miniconda (Python environment manager)
-#    Download from: https://docs.conda.io/en/latest/miniconda.html
-#    Choose: Miniconda3 Windows 64-bit
-#    Run installer, check "Add to PATH" option
-
-# 2. Install SQLite (database)
-#    Download from: https://www.sqlite.org/download.html
-#    Choose: sqlite-tools-win-x64-*.zip
-#    Extract to C:\sqlite and add to PATH:
-#    - Search "Environment Variables" in Windows
-#    - Edit PATH, add: C:\sqlite
-
-# 3. Install Node.js (optional)
-#    Download from: https://nodejs.org/
-#    Choose: LTS version, run installer
-
-# 4. Install Git (includes Git Bash)
-#    Download from: https://git-scm.com/download/win
-#    Run installer with default options
-
-# Verify installations (open new terminal after installing):
-conda --version      # Should show: conda 23.x.x or higher
-sqlite3 --version    # Should show: 3.x.x
-node --version       # Should show: v18.x.x or higher (optional)
-git --version        # Should show: git version 2.x.x
-```
-
-### Step 2: Download and Extract Project
-
-```bash
-# Option A: If you have the zip file
-unzip sports-betting.zip
-cd sports-betting
-
-# Option B: If cloning from git
-git clone https://github.com/yourusername/sports-betting.git
-cd sports-betting
-```
-
-### Step 3: Run Automated Setup
-
-```bash
-# Open Git Bash (recommended) or PowerShell
-# Navigate to project folder
-cd sports-betting
-
-# Run setup script
-bash scripts/setup_environment.sh
-```
-
-This script will:
-
-- Create conda environment `sports_betting` with Python 3.11
-- Install all Python dependencies from `requirements.txt`
-- Create project directory structure
-- Copy `.env.example` to `.env`
-- Initialize SQLite database with schema
-- Set up pre-commit hooks
-
-### Step 4: Configure API Keys
-
-```powershell
-# Edit .env file with your API keys
-# Option 1: Notepad
-notepad .env
-
-# Option 2: VS Code (if already open)
-# Just click on .env in the Explorer panel
-```
-
-**Required API Keys:**
-| Key | Where to Get | Cost |
-|-----|--------------|------|
-| `ODDS_API_KEY` | https://the-odds-api.com/ | Free (500 req/month) |
-| `CFBD_API_KEY` | https://collegefootballdata.com/ | Free |
-
-### Step 5: Verify Installation
-
-```bash
-# Activate the environment
-conda activate sports_betting
-
-# Run tests
-make test
-
-# Or manually verify:
-python -c "import pandas; import numpy; import sklearn; print('Core packages OK')"
-python -c "from sportsipy.ncaab.teams import Teams; print('sportsipy OK')"
-
-# Verify validators
-python -c "from backtesting.validators import Gatekeeper; print('Validators OK')"
-```
-
-### Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| `conda: command not found` | Close and reopen terminal; ensure Miniconda added to PATH during install |
-| `sqlite3: command not found` | Verify C:\sqlite is in PATH; restart terminal |
-| `bash: command not found` | Use Git Bash instead of PowerShell/CMD |
-| Script fails in PowerShell | Use Git Bash (installed with Git) |
-| pip install fails | Try `pip install --upgrade pip` first |
-| Node.js commands fail | Try Git Bash; PowerShell may have execution policy issues |
+Built for advanced players and AI researchers. No beginner coaching layer.
 
 ---
 
-## VS Code Setup
+## Architecture
 
-This project includes pre-configured VS Code settings for optimal development experience.
-
-### Opening the Project
-
-```bash
-# Open in VS Code from terminal
-code sports-betting
-
-# Or: File > Open Folder > select sports-betting
+```
+┌─────────────────────────────────────────────────────────┐
+│  RangeIQ (single React component, useReducer state)     │
+├──────────┬──────────┬──────────┬──────────┬─────────────┤
+│ Module 1 │ Module 2 │ Module 3 │ Module 4 │  Module 5   │
+│ Range    │ Board &  │ EV Tree  │ Trace    │  Scenario   │
+│ Builder  │ Equity   │          │ Generator│  Library    │
+├──────────┴──────────┴──────────┴──────────┴─────────────┤
+│  Shared State (useReducer)                              │
+│  heroRange, villainRange, board, heroHand, deadCards,   │
+│  metrics, evTree, traceQueue, scenarios, activeModule   │
+├─────────────────────────────────────────────────────────┤
+│  Utilities: expandHand(), combosFor(), DECK, PRESETS    │
+└─────────────────────────────────────────────────────────┘
+         │                              │
+         ▼                              ▼
+  Monte Carlo Engine            Anthropic API
+  (50k iterations,              (claude-sonnet-4)
+   chunked setTimeout)          Trace generation
 ```
 
-### Installing Recommended Extensions
+## Modules
 
-When you first open the project, VS Code will prompt to install recommended extensions. Click **Install All**, or manually install via:
+### Module 1 — Preflop Range Builder ✅
 
-1. Open Extensions panel (`Ctrl+Shift+X` / `Cmd+Shift+X`)
-2. Type `@recommended` in the search bar
-3. Click **Install Workspace Recommendations**
+13×13 hand matrix for Hero and Villain ranges with click-to-toggle, click+drag selection, 14 preset ranges, combo/VPIP counters, and a preflop nut advantage gauge.
 
-**Essential Extensions:**
-| Extension | Purpose |
-|-----------|---------|
-| Python | IntelliSense, debugging, formatting |
-| Pylance | Fast type checking |
-| Jupyter | Notebook support |
-| Black Formatter | Auto-format on save |
-| Ruff | Fast linting |
-| SQLite Viewer | Browse betting.db |
-| Rainbow CSV | Readable CSV files |
-| GitLens | Git history & blame |
+### Module 2 — Board & Equity Analysis 🔧
 
-### Selecting the Python Interpreter
+Card selector UI for board/hero hand/dead cards is built. Remaining work:
 
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Type: `Python: Select Interpreter`
-3. Choose: `sports_betting (conda)`
+- Monte Carlo equity engine (50k iterations, chunked `setTimeout`)
+- Hand classifier: `classifyHand(holeCards, board)` → category + strength 0–1
+- Made hand breakdown (quads → no made hand) + draw detection
+- Range advantage / nut advantage / polarity index (post-board)
+- Board texture metrics (wetness, connectivity, static/dynamic)
+- Combo & blocker engine with impact tables
+- Equity distribution histogram + runout equity graph (recharts)
 
-If not visible, click **Enter interpreter path** and browse to:
-`C:\Users\<your-username>\miniconda3\envs\sports_betting\python.exe`
+### Module 3 — Multi-Street EV Tree 🔧
 
-### Using the Integrated Terminal
+Pot/stack inputs wired. Remaining work:
 
-```bash
-# Open terminal: Ctrl+` (backtick) or View > Terminal
+- Recursive tree builder UI with add-node interaction
+- `computeNodeEV(node, pot, heroInvestment)` recursive function
+- Expandable/collapsible tree visualization (indented cards)
+- Breakeven analysis panel per betting node
+- Frequency exploitability score (GTO bluff:value ratio comparison)
+- EV breakdown pie chart (fold equity / showdown equity / implied equity)
 
-# Activate conda environment (usually automatic)
-conda activate sports_betting
+### Module 4 — LLM Reasoning Trace Generator ✅ (core flow)
 
-# Run tests
-make test
+Full API integration: context serialization → Claude API call → JSONL record packaging → export download. Remaining work:
 
-# Run daily pipeline
-make run-daily
-```
+- Batch generation mode (multi-board, multi-range iteration with progress bar)
+- Trace quality indicators (coverage, specificity, consistency scores)
 
-### Running & Debugging
+### Module 5 — Scenario Library ✅
 
-**Quick Run (no debugging):**
-
-- Open any Python file
-- Press `Ctrl+F5` (Run Without Debugging)
-
-**With Debugging:**
-
-- Press `F5` or use Run > Start Debugging
-- Choose a configuration from the dropdown:
-  - `Python: Current File` - Run active file
-  - `Pytest: All Tests` - Run full test suite
-  - `Pytest: Current File` - Run tests in active file
-  - `Daily Run: Refresh & Predict` - Run daily pipeline
-
-**Breakpoints:**
-
-- Click in the gutter (left of line numbers) to set breakpoints
-- Use the Debug panel to inspect variables
-
-### Viewing the Database
-
-1. Install SQLite Viewer extension (included in recommendations)
-2. Open `data/betting.db` in the Explorer panel
-3. Click tables to browse data
-
-Or use the terminal:
-
-```bash
-make db-shell
-# Then: .tables, SELECT * FROM teams LIMIT 10;
-```
-
-### Jupyter Notebooks
-
-1. Open any `.ipynb` file in `notebooks/`
-2. Select kernel: `sports_betting (Python 3.11)`
-3. Run cells with `Shift+Enter`
-
-**Creating new notebooks:**
-
-- Command Palette > `Create: New Jupyter Notebook`
-- Save in `notebooks/exploration/` or `notebooks/analysis/`
-
-### Code Formatting
-
-Formatting is automatic on save. To manually format:
-
-- Press `Shift+Alt+F`
-- Or: Command Palette > `Format Document`
-
-### Useful Keyboard Shortcuts
-
-| Action | Shortcut |
-|--------|----------|
-| Command Palette | `Ctrl+Shift+P` |
-| Quick Open File | `Ctrl+P` |
-| Search in Files | `Ctrl+Shift+F` |
-| Toggle Terminal | `` Ctrl+` `` |
-| Go to Definition | `F12` |
-| Peek Definition | `Alt+F12` |
-| Run Without Debug | `Ctrl+F5` |
-| Start Debugging | `F5` |
-| Toggle Sidebar | `Ctrl+B` |
-| Format Document | `Shift+Alt+F` |
-
-### VS Code Settings Included
-
-The `.vscode/` folder contains:
-
-| File | Purpose |
-|------|---------|
-| `settings.json` | Workspace settings (formatting, linting, paths) |
-| `extensions.json` | Recommended extensions list |
-| `launch.json` | Debug configurations for tests and pipelines |
-
-These are committed to the repository so all developers have consistent settings.
+Save/load/tag/export scenarios. In-memory for prototype.
 
 ---
 
-## Project Structure
+## Tech Stack
+
+| Layer         | Choice                                    |
+|---------------|-------------------------------------------|
+| Framework     | React (hooks only, single file)           |
+| State         | `useReducer` with single state object     |
+| Styling       | Inline styles, dark theme CSS variables   |
+| Charts        | recharts (BarChart, RadialBarChart, Pie)  |
+| Equity engine | Monte Carlo simulation (TODO)             |
+| AI            | Anthropic API (`claude-sonnet-4`)         |
+| Export        | JSONL (Blob download), JSON scenarios     |
+
+## Design System
+
+Dark analyst theme. All CSS variable values:
 
 ```
-sports_betting/
-├── CLAUDE.md              # AI context (Claude Code reads this)
-├── README.md              # This file
-├── requirements.txt       # Python dependencies
-├── .env                   # API keys (gitignored)
-│
-├── .vscode/               # VS Code configuration (shared)
-│   ├── settings.json      # Workspace settings
-│   ├── launch.json        # Debug configurations
-│   └── extensions.json    # Recommended extensions
-│
-├── config/                # Configuration
-│   └── constants.py       # Thresholds, parameters
-│
-├── data/                  # Data storage
-│   ├── raw/               # Unprocessed downloads
-│   ├── processed/         # Feature-engineered data
-│   └── betting.db         # SQLite database
-│
-├── models/                # Prediction models
-├── features/              # Feature engineering
-├── betting/               # Bet sizing, CLV tracking
-├── tracking/              # Database interface, logging
-├── backtesting/           # Walk-forward validation
-│   └── validators/        # 5-Dimension Validation Framework (198 tests)
-│       ├── temporal_validator.py    # Look-ahead bias detection
-│       ├── statistical_validator.py # Sample size, Sharpe
-│       ├── overfit_validator.py     # Overfitting detection
-│       ├── betting_validator.py     # CLV, vig, Kelly
-│       └── gatekeeper.py            # Final PASS/QUARANTINE gate
-├── pipelines/             # Daily automation
-├── notebooks/             # Exploration & analysis
-├── tests/                 # Unit tests (198 validator tests)
-├── scripts/               # Utility scripts
-│
-└── docs/                  # Documentation
-    ├── DATA_DICTIONARY.md # Field definitions
-    ├── DATA_SOURCES.md    # API documentation
-    ├── DECISIONS.md       # Architecture decisions
-    ├── RUNBOOK.md         # Operations procedures
-    └── SESSION_HANDOFF.md # Session continuity
+--bg-primary:    #0d1117
+--bg-card:       #161b22
+--bg-elevated:   #21262d
+--border:        #30363d
+--accent-blue:   #58a6ff   (Hero)
+--accent-green:  #3fb950   (+EV, confirms)
+--accent-red:    #f85149   (Villain, -EV, hearts/diamonds)
+--accent-yellow: #d29922   (warnings, premiums)
+--accent-purple: #bc8cff   (overlap)
+--text-primary:  #e6edf3
+--text-muted:    #8b949e
 ```
 
-## Supported Sports
+Monospace font for all numerical output. 2 decimal places everywhere.
 
-| Sport | Status | Primary Model | Data Source |
-|-------|--------|---------------|-------------|
-| NCAAB | In Progress | Elo ratings | sportsipy |
-| MLB | Planned | Pitcher-based | pybaseball |
-| NFL | Future | EPA-based | nfl-data-py |
-| NCAAF | Future | Returning production | cfbd |
+## Keyboard Shortcuts
 
-## Prediction Markets (New)
+| Key | Action              |
+|-----|---------------------|
+| 1–5 | Switch modules     |
+| C   | Clear active range |
+| G   | Generate trace (M4)|
+| E   | Export JSONL (M4)  |
+| R   | Run Monte Carlo    |
 
-Diversifying into political/economic prediction markets based on Tetlock's Superforecasting methodology.
+## Statistical Formulas
 
-| Platform | Use Case | Status |
-|----------|----------|--------|
-| **Kalshi** | Primary trading (CFTC-regulated) | Account setup |
-| **Polymarket** | Data source, US launch Mar 2026 | Fetcher built |
-| **PredictIt** | Accuracy benchmark only | Future |
+**Range Advantage:**
+`RA = (Hero_strong - Villain_strong) / Total_strong`
+Strong = sets+, two pair+, nut draws. Signed output.
 
-### Why Prediction Markets?
+**Nut Advantage:**
+`NA = (Hero_nut - Villain_nut) / (Hero_nut + Villain_nut)`
+Nut = top 15% hand strength on specific board.
 
-- **Higher CLV potential**: 3-10% vs 1-3% in sports
-- **Different inefficiencies**: Political/economic vs athletic
-- **Uncorrelated returns**: Portfolio diversification
-- **Less competition**: 2-3 year window before institutional saturation
+**Polarity Index:**
+`PI = StdDev(hand_strength_distribution)`
+High = polarized (large bet sizes). Low = merged (small/medium).
 
-### Key Resources
+**Wetness Score (0–10):**
+`WS = (FD_combos/max_FD)×4 + (SD_combos/max_SD)×4 + (paired ? 2 : 0)`
 
-- `pipelines/polymarket_fetcher.py` - Market data fetching
-- `tracking/forecasting_db.py` - Belief revision tracking
-- `docs/SUPERFORECASTING_RESEARCH_SYNTHESIS.md` - Tetlock methodology
-- `docs/PREDICTION_MARKETS_INTEGRATION_GUIDE.md` - Technical guide
+**EV Tree Node:**
+`EV(node) = Σ[ P(action_i) × EV(outcome_i) ]`
+Base: `EV = Hero_eq × final_pot - (1 - Hero_eq) × hero_investment`
 
-## Bankroll Management
+**Breakeven %:**
+`BE% = Bet / (Bet + Pot)`
 
-| Parameter | Value |
-|-----------|-------|
-| Starting Bankroll | $5,000 |
-| Active Capital | $4,000 |
-| Reserve (untouched) | $1,000 |
-| Default Bet Sizing | Quarter Kelly |
-| Maximum Bet | 3% ($150) |
-| Daily Exposure Limit | 10% ($500) |
+**GTO Bluff:Value:**
+`Optimal_bluff_ratio = S / (S + P)`
 
-### Risk Limits
+## JSONL Output Schema
 
-| Trigger | Threshold | Action |
-|---------|-----------|--------|
-| Weekly Loss | 15% | Reduce sizing 50% |
-| Monthly Loss | 25% | Full stop, review |
+Each trace record:
 
-## Development Phases
-
-| Phase | Weeks | Focus | Target |
-|-------|-------|-------|--------|
-| 1-2 | Jan 24 - Feb 6 | NCAAB Elo foundation | Working model |
-| 3-4 | Feb 7 - Feb 20 | Paper betting + MLB | 50+ paper bets |
-| 5-6 | Feb 21 - Mar 6 | March Madness prep | Tournament model |
-| 7-8 | Mar 7 - Mar 20 | Live testing | Small stakes |
-| 9-10 | Mar 21 - Apr 3 | MLB deployment | Full operation |
-
-## Key Metrics
-
-| Metric | Target | Why It Matters |
-|--------|--------|----------------|
-| **CLV** | > 1% | Primary indicator of edge |
-| Closing Line Beat % | > 55% | Consistency measure |
-| ROI | > 2% | Profitability (secondary) |
-| Sample Size | > 500 bets | Statistical significance |
-
-## Documentation
-
-- **[DECISIONS.md](docs/DECISIONS.md)** - Why we made each architectural choice
-- **[RUNBOOK.md](docs/RUNBOOK.md)** - Daily/weekly/monthly operations
-- **[DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)** - Field definitions
-- **[DATA_SOURCES.md](docs/DATA_SOURCES.md)** - API details and rate limits
-- **[backtesting/validators/README.md](backtesting/validators/README.md)** - Validation framework guide
-
-## Development with Claude
-
-This project is designed for AI-assisted development using Claude Code:
-
-```bash
-# Validate model before deployment
-python -c "from backtesting.validators import Gatekeeper; gk = Gatekeeper(); gk.load_validators(); print('Ready')"
+```json
+{
+  "messages": [
+    { "role": "system", "content": "GTO expert system prompt..." },
+    { "role": "user", "content": "{serialized game state + metrics}" },
+    { "role": "assistant", "content": "{reasoning trace JSON}" }
+  ],
+  "metadata": {
+    "scenario_id": "uuid",
+    "street": "flop",
+    "hero_equity": 54.2,
+    "range_advantage": 0.18,
+    "nut_advantage": 0.34,
+    "optimal_action": "bet",
+    "source": "RangeIQ-synthetic-v1",
+    "generated_at": "ISO timestamp"
+  }
+}
 ```
 
-## Disclaimers
+Compatible with Anthropic fine-tuning, OpenAI fine-tuning, and HuggingFace `load_dataset`.
 
-### Financial Risk
+## Post-MVP Extension Path
 
-Sports betting involves substantial risk of loss. This project is for educational purposes. Never bet more than you can afford to lose.
+- [ ] WASM equity engine (PokerHandEval port) for exact enumeration
+- [ ] Multi-street runout simulation (full turn + river equity trees)
+- [ ] HUD stat import (PT4/HM3 export paste)
+- [ ] Solver output import (PioSOLVER .cfr parser)
+- [ ] Active learning loop: flag low-confidence traces for human review
+- [ ] Trace quality classifier: fine-tuned model scores traces before export
+- [ ] Ctrl+click partial inclusion % on matrix cells
+- [ ] Persistent storage (localStorage or file-backed)
 
-### Not Financial Advice
+## Reference Material
 
-Nothing in this project constitutes financial or betting advice. Past performance does not guarantee future results.
+This project draws on concepts from:
 
-### Legal Compliance
-
-Ensure sports betting is legal in your jurisdiction. This project was developed in Wisconsin, USA where sports betting is legal.
-
-### Responsible Gambling
-
-If you or someone you know has a gambling problem, call 1-800-522-4700 (National Council on Problem Gambling).
-
-## License
-
-This project is for personal use. If you find it helpful, consider contributing improvements back.
-
-## Contributing
-
-This is a personal project, but suggestions are welcome. Please open an issue to discuss before submitting PRs.
-
----
-
-**Remember: CLV > Win Rate. Track everything. Stay disciplined. Run the Gatekeeper.**
+- **PokerBench** (AAAI 2025) — solver-computed optimal decisions dataset
+- **SplitSuit / Red Chip Poker** — PLANES preflop framework, combo/blocker math, bluffing breakeven analysis, EV calculation methodology
+- **Flopzilla** — hand-vs-range equity and range composition analysis
+- **PioSOLVER** — GTO solver output format and metric vocabulary
