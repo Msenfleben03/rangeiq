@@ -1449,58 +1449,155 @@ function BreakevenPanel({ node }) {
 }
 
 // ============================================================
-// MODULE 3 — MULTI-STREET EV TREE (STUB)
+// MODULE 3 — MULTI-STREET EV TREE
 // ============================================================
 function Module3({ state, dispatch }) {
-  const { evTreeConfig } = state;
+  const { evTreeConfig, metrics } = state;
+  const { potSize, effStack, betSizings, nodes, selectedLine, hoveredNodeId, siblingCollapseEnabled } = evTreeConfig;
 
-  // TODO: Recursive EV tree builder UI
-  // TODO: computeNodeEV(node, pot, heroInvestment) recursive function
-  // TODO: Expandable/collapsible tree visualization
-  // TODO: Breakeven analysis panel per betting node
-  // TODO: Frequency exploitability score
-  // TODO: EV breakdown pie chart (fold eq / showdown eq / implied eq)
+  const equity = metrics.equity?.hero != null ? metrics.equity.hero / 100 : 0.5;
+  const equityLabel = metrics.equity?.hero != null
+    ? `MC: ${metrics.equity.hero.toFixed(1)}%`
+    : "Default: 50.0%";
+
+  const findNode = (nodeList, id) => {
+    for (const n of nodeList) {
+      if (n.id === id) return n;
+      if (n.children?.length) {
+        const found = findNode(n.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const hoveredNode = hoveredNodeId ? findNode(nodes, hoveredNodeId) : null;
+
+  const handleBuild = () => {
+    const raw = buildTree({ potSize, effStack, betSizings, equity, street: "flop" });
+    const stamped = stampEV(raw);
+    dispatch({ type: "SET_EV_TREE_NODES", payload: stamped });
+    dispatch({ type: "SET_EV_SELECTED_LINE", payload: [] });
+  };
+
+  const handleSizingsChange = (val) => {
+    const parsed = val.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0 && n <= 3);
+    if (parsed.length) dispatch({ type: "SET_EV_TREE_CONFIG", payload: { betSizings: parsed } });
+  };
+
+  const lastSelectedId = selectedLine[selectedLine.length - 1];
+  const lastSelectedNode = lastSelectedId ? findNode(nodes, lastSelectedId) : null;
+  const lineComplete = lastSelectedNode?.isLeaf === true;
+
+  const handleSendToTrace = () => {
+    if (!lineComplete) return;
+    const line = selectedLine.map(id => {
+      const n = findNode(nodes, id);
+      if (!n) return null;
+      return {
+        id: n.id,
+        street: n.street,
+        action: n.action,
+        bet_size_fraction: n.betSize,
+        bet_size_bb: parseFloat(n.betSizeBb.toFixed(2)),
+        pot_after_bb: parseFloat(n.potAfter.toFixed(2)),
+        hero_investment_bb: parseFloat(n.heroInvestmentAfter.toFixed(2)),
+        villain_fold_pct: n.villainFoldPct,
+        villain_call_pct: n.villainCallPct,
+        villain_raise_pct: Math.max(0, 100 - n.villainFoldPct - n.villainCallPct),
+        equity: parseFloat(n.equityAssumption.toFixed(4)),
+        equity_is_approximated: n.equity_is_approximated,
+        ev_bb: n.ev !== null ? parseFloat(n.ev.toFixed(4)) : null,
+      };
+    }).filter(Boolean);
+
+    dispatch({ type: "SET_EV_TREE_CONFIG", payload: { evTreeLine: line } });
+    dispatch({ type: "SET_MODULE", payload: 4 });
+  };
 
   return (
-    <div>
-      <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-        <Card style={{ flex: 1 }}>
-          <Label>Pot Size (bb)</Label>
-          <input
-            type="number" value={evTreeConfig.potSize}
-            onChange={(e) => dispatch({ type: "SET_EV_TREE_CONFIG", payload: { potSize: +e.target.value } })}
-            style={{ background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 4, padding: "4px 8px", width: 80, fontFamily: "monospace" }}
-          />
-        </Card>
-        <Card style={{ flex: 1 }}>
-          <Label>Effective Stack (bb)</Label>
-          <input
-            type="number" value={evTreeConfig.effStack}
-            onChange={(e) => dispatch({ type: "SET_EV_TREE_CONFIG", payload: { effStack: +e.target.value } })}
-            style={{ background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 4, padding: "4px 8px", width: 80, fontFamily: "monospace" }}
-          />
-        </Card>
+    <div style={{ display: "flex", gap: 16 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <Card style={{ flex: "0 0 auto" }}>
+            <Label>Pot (bb)</Label>
+            <input type="number" value={potSize}
+              onChange={e => dispatch({ type: "SET_EV_TREE_CONFIG", payload: { potSize: +e.target.value } })}
+              style={{ background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 4, padding: "4px 8px", width: 70, fontFamily: "monospace" }}
+            />
+          </Card>
+          <Card style={{ flex: "0 0 auto" }}>
+            <Label>Stack (bb)</Label>
+            <input type="number" value={effStack}
+              onChange={e => dispatch({ type: "SET_EV_TREE_CONFIG", payload: { effStack: +e.target.value } })}
+              style={{ background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 4, padding: "4px 8px", width: 70, fontFamily: "monospace" }}
+            />
+          </Card>
+          <Card style={{ flex: "1 1 160px" }}>
+            <Label>Bet Sizings (fractions)</Label>
+            <input type="text" defaultValue={betSizings.join(", ")}
+              onBlur={e => handleSizingsChange(e.target.value)}
+              style={{ background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 4, padding: "4px 8px", width: "100%", fontFamily: "monospace", boxSizing: "border-box" }}
+            />
+          </Card>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 11, color: T.muted, fontFamily: "monospace" }}>
+              Equity: <span style={{ color: metrics.equity?.hero != null ? T.green : T.muted }}>{equityLabel}</span>
+            </span>
+            <Btn onClick={handleBuild} style={{ background: T.blue, color: "#fff" }}>
+              Build Tree
+            </Btn>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" id="sibCollapseToggle"
+              checked={siblingCollapseEnabled}
+              onChange={e => dispatch({ type: "SET_EV_TREE_CONFIG", payload: { siblingCollapseEnabled: e.target.checked } })}
+            />
+            <label htmlFor="sibCollapseToggle" style={{ color: T.muted, fontSize: 11 }}>Auto-collapse siblings</label>
+          </div>
+        </div>
+
+        {nodes.length === 0 ? (
+          <Card>
+            <div style={{ color: T.muted, fontSize: 12, textAlign: "center", padding: 24 }}>
+              Set pot size, stack, and sizings, then click <strong style={{ color: T.text }}>Build Tree</strong>.
+            </div>
+          </Card>
+        ) : (
+          <Card style={{ maxHeight: 520, overflowY: "auto" }}>
+            {nodes.map(node => (
+              <TreeNode key={node.id} node={node} depth={0}
+                selectedLine={selectedLine} dispatch={dispatch}
+                siblingCollapse={siblingCollapseEnabled} />
+            ))}
+          </Card>
+        )}
+
+        {nodes.length > 0 && (
+          <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
+            <Btn
+              onClick={handleSendToTrace}
+              disabled={!lineComplete}
+              style={{
+                background: lineComplete ? T.green : T.bgElevated,
+                color: lineComplete ? "#000" : T.muted,
+                opacity: lineComplete ? 1 : 0.5,
+              }}
+            >
+              Send to Trace →
+            </Btn>
+            {!lineComplete && selectedLine.length > 0 && (
+              <span style={{ color: T.yellow, fontSize: 11 }}>Select a complete line (end at leaf)</span>
+            )}
+            {selectedLine.length === 0 && (
+              <span style={{ color: T.muted, fontSize: 11 }}>Click "Select" on a leaf node to choose a line</span>
+            )}
+          </div>
+        )}
       </div>
 
-      <Card>
-        <Label>EV Tree Architecture</Label>
-        <div style={{ color: T.muted, fontSize: 12, marginTop: 8, lineHeight: 1.8 }}>
-          <p><strong style={{ color: T.green }}>Tree Structure:</strong> Flop → Turn → River, recursive</p>
-          <p>Each node: Action (Check/Bet/Raise/Fold) + Villain frequency %</p>
-          <p><strong style={{ color: T.yellow }}>EV Formula:</strong></p>
-          <pre style={{ background: T.bgPrimary, padding: 8, borderRadius: 4, fontSize: 11, marginTop: 4 }}>
-{`EV(node) = Σ[ P(action_i) × EV(outcome_i) ]
-EV(fold)     = pot  (Hero wins)
-EV(call)     = recurse to next street
-EV(showdown) = Hero_eq × final_pot - (1 - Hero_eq) × hero_investment
-EV(raise)    = fold_to_raise% × pot + (1 - fold%) × EV(call)`}
-          </pre>
-          <p style={{ marginTop: 8 }}><strong style={{ color: T.yellow }}>Breakeven:</strong> BE% = Bet / (Bet + Pot)</p>
-          <p><strong style={{ color: T.yellow }}>Bluff:Value Ratio:</strong> S / (S + P) = optimal bluff frequency</p>
-          <p style={{ marginTop: 8 }}>Build interactive tree with add-node buttons at each leaf.</p>
-          <p>Color-code: <span style={{ color: T.green }}>+EV green</span> / <span style={{ color: T.yellow }}>≈0 yellow</span> / <span style={{ color: T.red }}>-EV red</span></p>
-        </div>
-      </Card>
+      <div style={{ position: "sticky", top: 0, alignSelf: "flex-start" }}>
+        <BreakevenPanel node={hoveredNode} />
+      </div>
     </div>
   );
 }
