@@ -233,8 +233,7 @@ function detectDraws(holeCards, board) {
     }
     if (count === 3 && board.length <= 4) {
       const heroContrib = holeCards.filter(c => cardSuit(c) === suit).length;
-      const boardContrib = board.filter(c => cardSuit(c) === suit).length;
-      if (heroContrib >= 1 && boardContrib >= 2) draws.push("Backdoor FD");
+      if (heroContrib >= 1) draws.push("Backdoor FD");
     }
   }
 
