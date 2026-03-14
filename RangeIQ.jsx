@@ -1630,6 +1630,7 @@ function Module4({ state, dispatch }) {
     decision_context: {
       action_facing: null,
       available_actions: ["fold","check","call","bet_half","bet_pot","raise"],
+      ev_tree_line: state.evTreeConfig.evTreeLine ?? null,
     }
   });
 
