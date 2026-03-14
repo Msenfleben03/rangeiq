@@ -450,8 +450,14 @@ const initialState = {
   mcRunning: false,
   // Module 3 state
   evTreeConfig: {
-    potSize: 6, effStack: 100,
-    nodes: [] // will be built in Module 3
+    potSize: 6,
+    effStack: 100,
+    betSizings: [0.33, 0.66, 1.0],
+    nodes: [],
+    selectedLine: [],
+    hoveredNodeId: null,
+    siblingCollapseEnabled: false,
+    evTreeLine: null,
   },
   // Module 4 state
   lastTrace: null,
@@ -510,6 +516,34 @@ function reducer(state, action) {
     }
     case "SET_EV_TREE_CONFIG":
       return { ...state, evTreeConfig: { ...state.evTreeConfig, ...action.payload } };
+    case "SET_EV_TREE_NODES":
+      return { ...state, evTreeConfig: { ...state.evTreeConfig, nodes: action.payload } };
+    case "SET_EV_SELECTED_LINE":
+      return { ...state, evTreeConfig: { ...state.evTreeConfig, selectedLine: action.payload } };
+    case "SET_EV_HOVERED":
+      return { ...state, evTreeConfig: { ...state.evTreeConfig, hoveredNodeId: action.payload } };
+    case "TOGGLE_EV_NODE_EXPANDED": {
+      const toggleNode = (nodes, targetId) => nodes.map(n => {
+        if (n.id === targetId) return { ...n, expanded: !n.expanded };
+        if (n.children?.length) return { ...n, children: toggleNode(n.children, targetId) };
+        return n;
+      });
+      return { ...state, evTreeConfig: {
+        ...state.evTreeConfig,
+        nodes: toggleNode(state.evTreeConfig.nodes, action.payload)
+      }};
+    }
+    case "UPDATE_EV_NODE_FREQ": {
+      const updateNode = (nodes, targetId, patch) => nodes.map(n => {
+        if (n.id === targetId) return { ...n, ...patch };
+        if (n.children?.length) return { ...n, children: updateNode(n.children, targetId, patch) };
+        return n;
+      });
+      return { ...state, evTreeConfig: {
+        ...state.evTreeConfig,
+        nodes: updateNode(state.evTreeConfig.nodes, action.payload.id, action.payload.patch)
+      }};
+    }
     case "SET_BATCH_PROGRESS":
       return { ...state, batchProgress: action.payload };
     default:
