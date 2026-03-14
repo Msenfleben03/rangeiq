@@ -1271,6 +1271,122 @@ function stampEV(nodes) {
   });
 }
 
+function buildAncestorChain(leafId) {
+  const parts = leafId.split("__");
+  const chain = [];
+  for (let i = 1; i <= parts.length; i++) {
+    chain.push(parts.slice(0, i).join("__"));
+  }
+  return chain;
+}
+
+function TreeNode({ node, depth, selectedLine, dispatch, siblingCollapse }) {
+  const isSelected = selectedLine.includes(node.id);
+  const evColor = node.ev === null ? T.muted
+    : node.ev > 0.5 ? T.green
+    : node.ev < -0.5 ? T.red
+    : T.yellow;
+
+  const approxBadge = node.equity_is_approximated
+    ? <span style={{ color: T.yellow, fontSize: 10, marginLeft: 4 }}>⚠approx</span>
+    : null;
+
+  const raiseComputed = Math.max(0, 100 - node.villainFoldPct - node.villainCallPct);
+
+  const handleSelectLine = () => {
+    dispatch({ type: "SET_EV_SELECTED_LINE", payload: buildAncestorChain(node.id) });
+  };
+
+  const handleFreqChange = (field, val) => {
+    const num = Math.min(100, Math.max(0, +val));
+    dispatch({ type: "UPDATE_EV_NODE_FREQ", payload: { id: node.id, patch: { [field]: num } } });
+  };
+
+  const rowBg = isSelected ? `${T.blue}22` : "transparent";
+  const indentPx = depth * 20;
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "3px 6px", marginLeft: indentPx,
+          background: rowBg, borderRadius: 4, cursor: "pointer",
+          borderLeft: isSelected ? `2px solid ${T.blue}` : "2px solid transparent",
+        }}
+        onMouseEnter={() => dispatch({ type: "SET_EV_HOVERED", payload: node.id })}
+        onMouseLeave={() => dispatch({ type: "SET_EV_HOVERED", payload: null })}
+      >
+        {!node.isLeaf && (
+          <span
+            style={{ color: T.muted, fontSize: 10, width: 12, userSelect: "none" }}
+            onClick={e => { e.stopPropagation(); dispatch({ type: "TOGGLE_EV_NODE_EXPANDED", payload: node.id }); }}
+          >
+            {node.expanded ? "▾" : "▸"}
+          </span>
+        )}
+        {node.isLeaf && <span style={{ width: 12 }} />}
+
+        <span style={{ color: T.text, fontSize: 12, flex: 1, fontFamily: "monospace" }}>
+          {node.label}
+          {approxBadge}
+        </span>
+
+        <span style={{ color: T.muted, fontSize: 11, fontFamily: "monospace", width: 70, textAlign: "right" }}>
+          pot {node.potAfter.toFixed(1)} bb
+        </span>
+
+        <span style={{ color: evColor, fontSize: 12, fontFamily: "monospace", width: 70, textAlign: "right" }}>
+          {node.ev !== null ? `EV ${node.ev.toFixed(2)}` : "—"}
+        </span>
+
+        {(node.action === "bet" || node.action === "villain_bet") && (
+          <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <input type="number" min={0} max={100} value={Math.round(node.villainFoldPct)}
+              onChange={e => handleFreqChange("villainFoldPct", e.target.value)}
+              style={{ width: 40, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
+            />
+            <span style={{ color: T.muted, fontSize: 10 }}>F%</span>
+            <input type="number" min={0} max={100} value={Math.round(node.villainCallPct)}
+              onChange={e => handleFreqChange("villainCallPct", e.target.value)}
+              style={{ width: 40, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
+            />
+            <span style={{ color: T.muted, fontSize: 10 }}>C%</span>
+            <span style={{ color: T.muted, fontSize: 10, width: 30, textAlign: "right", fontFamily: "monospace" }}>
+              {raiseComputed}R%
+            </span>
+          </span>
+        )}
+
+        {node.action === "villain_raise" && (
+          <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <input type="number" min={0} max={100} value={Math.round(node.heroFoldToRaise)}
+              onChange={e => handleFreqChange("heroFoldToRaise", e.target.value)}
+              style={{ width: 44, background: T.bgElevated, color: T.text, border: `1px solid ${T.border}`, borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "monospace" }}
+            />
+            <span style={{ color: T.muted, fontSize: 10 }}>hFold%</span>
+          </span>
+        )}
+
+        {node.isLeaf && (
+          <Btn
+            onClick={e => { e.stopPropagation(); handleSelectLine(); }}
+            style={{ fontSize: 10, padding: "1px 6px", marginLeft: 4 }}
+          >
+            Select
+          </Btn>
+        )}
+      </div>
+
+      {node.expanded && !node.isLeaf && node.children?.map(child => (
+        <TreeNode key={child.id} node={child} depth={depth + 1}
+          selectedLine={selectedLine} dispatch={dispatch}
+          siblingCollapse={siblingCollapse} />
+      ))}
+    </div>
+  );
+}
+
 // ============================================================
 // MODULE 3 — MULTI-STREET EV TREE (STUB)
 // ============================================================
