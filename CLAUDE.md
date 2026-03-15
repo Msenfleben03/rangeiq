@@ -15,6 +15,8 @@ RangeIQ is a single-file React artifact (`RangeIQ.jsx`) that runs inside Claude.
 
 The directories `scripts/`, `tests/`, `config/`, `data/`, `logs/`, `tracking/`, `dashboards/`, `venv/`, and `archive/` were inherited from a sports-betting project as infrastructure scaffolding. They are **not relevant to RangeIQ development** — ignore them. The `docs/plans/` directory contains design docs and implementation plans for reference. The entire poker codebase is `RangeIQ.jsx`.
 
+The `docs/domain-knowledge-extraction/` directory contains the orchestration workflow and 6 expert-level reference documents for the `rangeiq-poker` skill (deployed to `~/.claude/skills/rangeiq-poker/`). The skill provides domain knowledge for GTO theory, range construction, bet sizing, multi-street planning, exploitative adjustments, and LLM trace quality. Load via the `rangeiq-poker` skill — do not read reference files directly unless the skill routes you there.
+
 ## Commands
 
 **Test the artifact**: Paste the contents of `RangeIQ.jsx` into a Claude.ai artifact (React). No build step required.
@@ -47,20 +49,38 @@ pre-commit run --all-files
 
 ### 🔧 Needs Implementation (priority order)
 
-#### P1 — Module 4 Batch Generation
+#### P0 — Analytical Accuracy (unblocks trace quality)
 
-1. **Batch generation**: Multi-board × multi-range iteration, 500ms delay between API calls, progress bar
-2. **Trace quality indicators**: Coverage score, specificity, consistency
+1. **Per-combo equity histogram**: Implement `histogram` in `runMonteCarlo` (line 390) — per-combo win tracking → 10% equity buckets → polarity index. Enables `metrics.pi.hero` and postflop nut advantage. Referenced in 4 of 6 domain skill references as the key gap.
+2. **Polarity-aware sizing recommendation**: Compute PI from `classifyHand` buckets (value/marginal/air), condition Two Pair on `boardTexture.wetness` (<3 = value, >=3 = marginal), store in `metrics.pi`. Feed into trace context via `buildContext`.
+3. **Per-street equity re-estimation**: Re-run `runMonteCarlo` with 4 board cards (turn) and 5 (river) at street transitions in `buildTree`. Replace static `equityAssumption` propagation. The `equity_is_approximated` flag documents the current gap; this eliminates it.
+
+#### P1 — Module 4 Batch Generation + Quality Pipeline
+
+1. **Batch generation**: Multi-board × multi-range iteration across 24-cell coverage matrix (12 texture profiles × 2 SPR regimes), 500ms delay between API calls, progress bar, per-cell cap of 30 traces
+2. **Trace quality gate**: Enforce 5-step triage before JSONL inclusion — reject session-history hallucinations, draw-as-value errors, frequency divergence >15pp from `ev_tree_line`, flag unanchored traces (`ev_tree_line: null`), flag under-represented textures (<15 traces in batch)
+3. **SYSTEM_PROMPT v2**: Upgrade Module 4 prompt from Tier 1 (Competent) to Tier 2 (Expert) — add floor declaration, mandatory combo identification (min 3), frequency confidence levels (`high/medium/low`), rejection criteria for insufficient specificity
+4. **Post-batch trace auditor**: Group traces by `(hero_range, villain_range, board)`, compute frequency variance within groups, flag batches where sd >20pp as inconsistent
 
 #### P2 — Module 3 Minor Deferred
 
 1. **siblingCollapse**: Implement actual collapse behavior in `TreeNode` (checkbox exists but prop not consumed)
 2. **Controlled sizings input**: Replace `defaultValue` with controlled `value` + `onChange`
+3. **Overbet nodes**: Extend `betSizings` default to `[0.33, 0.66, 1.0, 1.5]`; requires capped-range detection for when overbets are structurally justified
+4. **SPR-conditioned betSizings**: At SPR <3 collapse to `[1.0]`, SPR 3-6 use `[0.66, 1.0]`, SPR >6 use full array
+5. **Position-adjusted equity**: Apply OOP dampening to `equityAssumption` (~80% realization factor for OOP nodes)
 
 #### P3 — Module 1 Enhancements
 
 1. Ctrl+click for partial inclusion % (0-100%) per cell
 2. Preflop all-in equity (requires Monte Carlo)
+3. Population-calibrated presets: Add `"Pop BB def vs BTN"`, `"Pop CO RFI"`, `"Pop BTN RFI"` reflecting pool deviations
+
+#### P4 — Future: Fine-Tuning Pipeline Infrastructure
+
+1. **Solver output ingestion MCP server**: Read PioSOLVER/GTO Wizard exports (.cfr, .csv), expose as structured data for frequency validation, solver-informed trace generation, and hybrid dataset construction
+2. **`range_source` field in trace context**: Track whether villain range is `"gto" | "population" | "custom"` so traces carry provenance
+3. **`villainProfile` exploitative mode for `buildTree`**: Accept population stat overrides for fold/call/raise frequencies; store `frequency_source: "gto" | "exploitative"` per node
 
 ## Code Conventions
 
@@ -216,3 +236,11 @@ Sub-classify one pair: overpair / top pair / middle pair / bottom pair / underpa
 - `Why_A_Poker_Math_Approach_Is_Best_In_2026__SplitSuit_Poker.md` — EV, BE%, frequencies
 - `docs/plans/2026-03-14-module3-ev-tree-design.md` — Module 3 approved design doc
 - `docs/plans/2026-03-14-module3-ev-tree-impl.md` — Module 3 implementation plan
+
+**Expert domain knowledge** (access via `rangeiq-poker` skill, not directly):
+- `docs/domain-knowledge-extraction/references/solver-theory-gto.md` — CFR convergence, abstraction distortions, indifference principle, trace generation interpretation
+- `docs/domain-knowledge-extraction/references/range-construction.md` — equity distribution/polarity, nut advantage asymmetry, blocker math, population ranges
+- `docs/domain-knowledge-extraction/references/bet-sizing-theory.md` — geometric sizing, polarity-sizing, SPR thresholds, overbet theory, donk bets
+- `docs/domain-knowledge-extraction/references/multi-street-planning.md` — equity realization, commitment thresholds, range narrowing, blocker cascade, bluff coherence
+- `docs/domain-knowledge-extraction/references/exploitative-adjustments.md` — deviation thresholds, population profiles, counter-exploit risk, Bayesian range updates
+- `docs/domain-knowledge-extraction/references/trace-quality-finetuning.md` — fluency-accuracy gap, coverage architecture, SYSTEM_PROMPT engineering, dataset curation
