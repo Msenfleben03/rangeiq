@@ -25,7 +25,7 @@ tags:
 | 2 | Range Construction and Equity Distribution | `references/range-construction.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS applied |
 | 3 | Bet Sizing Theory and Pot Geometry | `references/bet-sizing-theory.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (2) applied |
 | 4 | Multi-Street Planning and EV Architecture | `references/multi-street-planning.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (5) applied |
-| 5 | Exploitative Adjustments and Population Dynamics | `references/exploitative-adjustments.md` | ⬜ PENDING | — | — |
+| 5 | Exploitative Adjustments and Population Dynamics | `references/exploitative-adjustments.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (3) applied |
 | 6 | LLM Trace Quality and Fine-Tuning Architecture | `references/trace-quality-finetuning.md` | ⬜ PENDING | — | Integration domain |
 
 Status codes: ⬜ PENDING → 🔄 IN PROGRESS → ✅ DONE → ⚠️ DONE_WITH_CONCERNS → 🚫 BLOCKED
@@ -53,7 +53,7 @@ Equity realization by position: IP realizes 105-115% of raw equity, OOP realizes
 
 ### Domain 5: Exploitative Adjustments and Population Dynamics
 
-*(Write after Domain 5 passes cross-domain review)*
+Deviation thresholds follow binomial CI: >15pp reliable at ~50 hands, 5-15pp at 200+, <5pp rarely actionable below 500. Population profiles by stake: micro/low fold-to-cbet ~45-55% vs GTO ~35%, blind defense ~25-35% vs GTO 40-60%, wide preflop calls; mid stakes over-fold 3-bets by 10-15pp, under-bluff rivers (~18-22% vs GTO ~33%), too few check-raises; high stakes deviations are subtle (timing tells, sizing leaks). Counter-exploit asymmetry: exploiting a 15pp fold deviation gains ~0.5-1.0bb/hand but opens a counter-exploit window where villain calling 5pp more than baseline becomes +EV. Front-load exploitation, return to GTO when villain shows awareness. Frequency adjustment (bet 70% vs 50%) differs from line change (donk vs check-raise) — mixing both creates detectable patterns. Diagnostic: villain's fold frequency declining toward GTO baseline faster than sample size warrants signals detection. ICM pressure at tournament bubbles makes medium-stack folds profitable at equity levels that would be clear calls in cash games — survival EV dominates pot EV. Bayesian range updates from timing/sizing tells: P(hand_class | signal) via likelihood ratios, not deterministic tells. Board-texture-conditioned fold rates use `adjustedFoldPct = populationFold + (5 - wetness) * 2pp` but this inverts on paired and monotone boards. The `villainProfile` override for exploitative `buildTree` mode leaves `raisePct = 10` unaddressed.
 
 ## Quality Checkpoint Log
 
@@ -65,7 +65,7 @@ Equity realization by position: IP realizes 105-115% of raw equity, OOP realizes
 | 2 | 0 | MINOR_EDITS (4 cross-refs applied) | Indifference principle link, deterministic-mixing warning, equity realization note, approximation flag ref |
 | 3 | 0 | MINOR_EDITS (2 cross-refs applied) | Two Pair wetness bucketing in PI calc, raisePct=10 distortion ref |
 | 4 | 0 | MINOR_EDITS (5 cross-refs applied) | D2 polarity proxy, D1 serialization gaps, D3 sizing-independence, D2 blocker framework, SPR tier clarification |
-| 5 | — | — | — |
+| 5 | 0 | MINOR_EDITS (3 cross-refs applied) | MDF baseline caveat, wetness inversion cases, raisePct=10 in exploit mode |
 | 6 | — | — | — |
 
 ## Final Quality Checklist
