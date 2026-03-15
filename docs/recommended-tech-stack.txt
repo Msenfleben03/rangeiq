@@ -1,0 +1,25 @@
+Good — this is the most technically consequential choice in the stack because exact enumeration can't live in the browser. That single constraint drives the entire architecture decision.
+
+Here's my opinionated recommendation:Exact enumeration is the right call — and it's the constraint that clarifies everything. Here's the architecture I'd build toward:Here's the reasoning behind each layer decision.
+
+**Equity engine: `phevaluator` + `treys`**
+
+`phevaluator` (C++ under the hood, Python bindings) evaluates 5-card hands in nanoseconds using a perfect hash lookup table — this is how you get exact enumeration fast enough to be usable. `treys` handles the range representation layer: range-to-combo expansion, board card removal, and the combinatorial iteration. Together they replace your Monte Carlo entirely. A full flop enumeration (2 hole cards vs. a range against a 3-card board, all turn/river runouts) runs in under a second on modern hardware.
+
+**API layer: FastAPI**
+
+The equity computation has to leave the browser. FastAPI is the natural fit — async, minimal overhead, and you can expose typed Pydantic endpoints that mirror the exact JSON schema from the prompt. It also means the Streamlit UI and the React prototype can both hit the same backend, so you're not maintaining two computation paths.
+
+**UI path: React now ? Streamlit later**
+
+Keep the React artifact as the prototype scratchpad — it's already specified and useful for rapid iteration. When you're ready to move off the artifact, Streamlit is the fastest migration path given your existing Python comfort. A Streamlit app with `st.components.v1` can embed recharts-style visualizations if needed. Dash is the alternative if you want more control over the layout, but Streamlit's faster to build for this kind of analytical tool.
+
+**Training pipeline: HuggingFace `datasets`**
+
+`datasets.Dataset.from_json()` loads your JSONL directly and gives you filtering, shuffling, train/test splits, and push-to-hub in a few lines. The `metadata` field in your JSONL schema becomes filterable columns — `hero_equity`, `range_advantage`, `optimal_action` — so dataset curation is a query, not a manual process.
+
+**SQLite for the scenario library**
+
+The in-memory scenario store from the prototype needs to persist. SQLite is zero-infrastructure and queryable, and it maps cleanly to the scenario/tag structure already designed. One table per scenario, tags as a JSON column.
+
+The sequencing I'd recommend: get `phevaluator` + FastAPI running locally first with a single equity endpoint, validate the numbers against known solver outputs, then wire the prototype React UI to hit that endpoint instead of its Monte Carlo. Everything else builds on top of accurate equity.
