@@ -29,6 +29,9 @@ coverage.json
 # Claude config
 .claude/
 
+# Domain knowledge extraction (AI-generated reference docs, long prose lines)
+docs/domain-knowledge-extraction/
+
 # Project root docs (long lines acceptable in spec/reference files)
 CLAUDE.md
 README.md
