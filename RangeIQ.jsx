@@ -1,7 +1,7 @@
-import { useReducer, useCallback, useMemo, useState, useEffect, useRef } from "react";
+import { useReducer, useMemo, useState, useEffect, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  RadialBarChart, RadialBar, PieChart, Pie, Cell
+  RadialBarChart, RadialBar
 } from "recharts";
 
 // ============================================================
@@ -342,6 +342,9 @@ function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iter
 
   let heroWins = 0, villainWins = 0, ties = 0;
   let done = 0;
+  // Per-combo win tracking for equity histogram
+  const comboWins = {};
+  const comboSamples = {};
 
   function runChunk() {
     const end = Math.min(done + CHUNK, iterations);
@@ -370,9 +373,17 @@ function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iter
       const fullBoard = [...board, ...runout];
       const result = compareHands([...hc, ...fullBoard], [...vc, ...fullBoard]);
 
-      if (result === 1) heroWins++;
-      else if (result === -1) villainWins++;
-      else ties++;
+      const key = hc.join("-");
+      comboSamples[key] = (comboSamples[key] || 0) + 1;
+      if (result === 1) {
+        heroWins++;
+        comboWins[key] = (comboWins[key] || 0) + 1;
+      } else if (result === -1) {
+        villainWins++;
+      } else {
+        ties++;
+        comboWins[key] = (comboWins[key] || 0) + 0.5;
+      }
     }
     done = end;
 
@@ -381,14 +392,65 @@ function runMonteCarlo(heroRange, villainRange, board, deadCards, dispatch, iter
       const heroEq = total ? (heroWins + ties * 0.5) / total : 0;
       const villainEq = total ? (villainWins + ties * 0.5) / total : 0;
       const tieEq = total ? ties / total : 0;
-      dispatch({ type: "SET_METRICS", payload: {
-        equity: {
-          hero: heroEq * 100,
-          villain: villainEq * 100,
-          tie: tieEq * 100,
-        },
-        histogram: null, // deferred — bucket hero win% into 10% bands
-      }});
+
+      // Per-combo equity histogram: bucket each combo's win% into 10% bands
+      const buckets = Array(10).fill(0);
+      for (const key of Object.keys(comboSamples)) {
+        const eq = (comboWins[key] || 0) / comboSamples[key];
+        const idx = Math.min(9, Math.floor(eq * 10));
+        buckets[idx]++;
+      }
+      const histogram = buckets.map((count, i) => ({
+        bucket: `${i * 10}-${(i + 1) * 10}%`,
+        count,
+      }));
+
+      const metricsPayload = {
+        equity: { hero: heroEq * 100, villain: villainEq * 100, tie: tieEq * 100 },
+        histogram,
+      };
+
+      // Polarity Index, Range Advantage, Nut Advantage — derived from classifyHand on expanded combos
+      if (board.length >= 3) {
+        const texture = boardTexture(board);
+        const wetness = texture?.wetness ?? 0;
+
+        const categorizeCombo = (combo) => {
+          const { category } = classifyHand(combo, board);
+          if (["Straight Flush","Quads","Full House","Flush","Straight","Three of a Kind"].includes(category)) return "value";
+          if (category === "Two Pair") return wetness < 3 ? "value" : "marginal";
+          if (["Overpair","Top Pair (Good Kicker)"].includes(category)) return "marginal";
+          return "air";
+        };
+
+        const computePI = (combos) => {
+          if (!combos.length) return 0;
+          let value = 0, air = 0;
+          for (const combo of combos) {
+            const cat = categorizeCombo(combo);
+            if (cat === "value") value++;
+            else if (cat === "air") air++;
+          }
+          return (value - air) / combos.length;
+        };
+
+        const meanStrength = (combos) => {
+          if (!combos.length) return 0.5;
+          return combos.reduce((sum, c) => sum + classifyHand(c, board).strength, 0) / combos.length;
+        };
+
+        const nutPct = (combos) => {
+          if (!combos.length) return 0;
+          return combos.filter(c => evalHand7([...c, ...board])[0] >= 3).length / combos.length;
+        };
+
+        metricsPayload.pi = { hero: computePI(heroCombos), villain: computePI(villainCombos) };
+        metricsPayload.ra = meanStrength(heroCombos) - meanStrength(villainCombos);
+        metricsPayload.na = nutPct(heroCombos) - nutPct(villainCombos);
+        metricsPayload.wetness = texture?.wetness ?? null;
+      }
+
+      dispatch({ type: "SET_METRICS", payload: metricsPayload });
       dispatch({ type: "SET_MC_RUNNING", payload: false });
     } else {
       setTimeout(runChunk, 0);
@@ -1000,11 +1062,21 @@ function Module2({ state, dispatch }) {
             </Btn>
           </div>
           {metrics.equity && (
-            <div style={{ display: "flex", gap: 24 }}>
-              <Stat label="Hero Equity" value={metrics.equity.hero.toFixed(2) + "%"} color={T.blue} />
-              <Stat label="Villain Equity" value={metrics.equity.villain.toFixed(2) + "%"} color={T.red} />
-              {metrics.equity.tie > 0.01 && (
-                <Stat label="Tie" value={metrics.equity.tie.toFixed(2) + "%"} color={T.muted} />
+            <div>
+              <div style={{ display: "flex", gap: 24 }}>
+                <Stat label="Hero Equity" value={metrics.equity.hero.toFixed(2) + "%"} color={T.blue} />
+                <Stat label="Villain Equity" value={metrics.equity.villain.toFixed(2) + "%"} color={T.red} />
+                {metrics.equity.tie > 0.01 && (
+                  <Stat label="Tie" value={metrics.equity.tie.toFixed(2) + "%"} color={T.muted} />
+                )}
+              </div>
+              {metrics.pi !== null && (
+                <div style={{ display: "flex", gap: 24, marginTop: 10 }}>
+                  <Stat label="PI Hero" value={metrics.pi.hero.toFixed(2)} color={metrics.pi.hero > 0.1 ? T.blue : metrics.pi.hero < -0.1 ? T.red : T.muted} />
+                  <Stat label="PI Villain" value={metrics.pi.villain.toFixed(2)} color={metrics.pi.villain > 0.1 ? T.red : metrics.pi.villain < -0.1 ? T.blue : T.muted} />
+                  <Stat label="Range Adv" value={(metrics.ra * 100).toFixed(1) + "%"} color={metrics.ra > 0 ? T.blue : T.red} />
+                  <Stat label="Nut Adv" value={(metrics.na * 100).toFixed(1) + "%"} color={metrics.na > 0 ? T.blue : T.red} />
+                </div>
               )}
             </div>
           )}
@@ -1032,6 +1104,36 @@ function Module2({ state, dispatch }) {
 // ============================================================
 // MODULE 3 — HELPERS
 // ============================================================
+
+// Synchronous fast MC for per-street equity estimation (N=500 typical)
+function computeEquityFast(heroCombos, villainCombos, board, N = 500) {
+  if (!heroCombos.length || !villainCombos.length) return 0.5;
+  const boardSet = new Set(board);
+  const deckArr = DECK.filter(c => !boardSet.has(c));
+  let heroWins = 0, ties = 0, total = 0;
+  for (let i = 0; i < N; i++) {
+    const hc = heroCombos[Math.floor(Math.random() * heroCombos.length)];
+    const hSet = new Set(hc);
+    let vc; let attempts = 0;
+    do {
+      vc = villainCombos[Math.floor(Math.random() * villainCombos.length)];
+      attempts++;
+    } while (vc.some(c => hSet.has(c)) && attempts < 20);
+    if (attempts >= 20) continue;
+    const hcvcSet = new Set([...hc, ...vc]);
+    const runDeck = deckArr.filter(c => !hcvcSet.has(c));
+    const needed = Math.max(0, 5 - board.length);
+    const shuffled = [...runDeck].sort(() => Math.random() - 0.5);
+    const runout = shuffled.slice(0, needed);
+    const fullBoard = [...board, ...runout];
+    const result = compareHands([...hc, ...fullBoard], [...vc, ...fullBoard]);
+    if (result === 1) heroWins++;
+    else if (result === 0) ties++;
+    total++;
+  }
+  return total > 0 ? (heroWins + ties * 0.5) / total : 0.5;
+}
+
 function makeNodeId(parentId, action, sizing) {
   const sizingTag = sizing != null ? `_${Math.round(sizing * 100)}` : "";
   return `${parentId}__${action}${sizingTag}`;
@@ -1046,11 +1148,25 @@ function buildTree({
   depth = 0,
   parentId = "root",
   heroInvestment = 0,
+  turnEquity = null,
+  riverEquity = null,
 }) {
   const STREETS = ["flop", "turn", "river"];
   if (depth >= 3 || heroInvestment >= effStack) return [];
 
   const nextStreet = STREETS[depth + 1] || "river";
+  // Per-street equity: use pre-computed turn/river estimates when available
+  const streetEq = street === "turn" && turnEquity !== null ? turnEquity
+                 : street === "river" && riverEquity !== null ? riverEquity
+                 : equity;
+  const isApprox = street !== "flop" && !(
+    (street === "turn" && turnEquity !== null) ||
+    (street === "river" && riverEquity !== null)
+  );
+  const nextIsApprox = nextStreet !== "flop" && !(
+    (nextStreet === "turn" && turnEquity !== null) ||
+    (nextStreet === "river" && riverEquity !== null)
+  );
   const nodes = [];
 
   // ── CHECK NODE ──
@@ -1067,7 +1183,7 @@ function buildTree({
     potAfter: potSize, heroInvestmentAfter: heroInvestment,
     villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
     heroFoldToRaise: 0,
-    equityAssumption: equity, equity_is_approximated: street !== "flop",
+    equityAssumption: streetEq, equity_is_approximated: isApprox,
     ev: null, expanded: false, children: [], isLeaf: true,
   });
 
@@ -1077,11 +1193,11 @@ function buildTree({
     const leadId = makeNodeId(checkId, "villain_bet", s);
     const heroPotOdds = (potSize + S) / (potSize + 2 * S);
     const foldPct = (1 - heroPotOdds) * 100;
-    const callPct = heroPotOdds * 100;
     const heroCallChildren = buildTree({
       potSize: potSize + 2 * S, effStack, betSizings, equity,
       street: nextStreet, depth: depth + 1,
       parentId: leadId, heroInvestment: heroInvestment + S,
+      turnEquity, riverEquity,
     });
     checkChildren.push({
       id: leadId, street, action: "villain_bet",
@@ -1090,22 +1206,22 @@ function buildTree({
       potAfter: potSize + S, heroInvestmentAfter: heroInvestment,
       villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
       heroFoldToRaise: foldPct,
-      equityAssumption: equity, equity_is_approximated: street !== "flop",
+      equityAssumption: streetEq, equity_is_approximated: isApprox,
       ev: null, expanded: false, isLeaf: false,
       children: [
         { id: makeNodeId(leadId, "hero_fold", null), street, action: "hero_fold",
           label: "Hero folds", betSize: 0, betSizeBb: 0,
           potAfter: potSize + S, heroInvestmentAfter: heroInvestment,
           villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
-          heroFoldToRaise: 0, equityAssumption: equity,
-          equity_is_approximated: street !== "flop",
+          heroFoldToRaise: 0, equityAssumption: streetEq,
+          equity_is_approximated: isApprox,
           ev: null, expanded: false, children: [], isLeaf: true },
         { id: makeNodeId(leadId, "hero_call", null), street, action: "hero_call",
           label: "Hero calls", betSize: 0, betSizeBb: 0,
           potAfter: potSize + 2 * S, heroInvestmentAfter: heroInvestment + S,
           villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
-          heroFoldToRaise: 0, equityAssumption: equity,
-          equity_is_approximated: nextStreet !== "flop",
+          heroFoldToRaise: 0, equityAssumption: streetEq,
+          equity_is_approximated: nextIsApprox,
           ev: null, expanded: false, isLeaf: heroCallChildren.length === 0,
           children: heroCallChildren },
       ],
@@ -1118,7 +1234,7 @@ function buildTree({
     potAfter: potSize, heroInvestmentAfter: heroInvestment,
     villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
     heroFoldToRaise: 0,
-    equityAssumption: equity, equity_is_approximated: street !== "flop",
+    equityAssumption: streetEq, equity_is_approximated: isApprox,
     ev: null, expanded: true, isLeaf: false, children: checkChildren,
   });
 
@@ -1141,6 +1257,7 @@ function buildTree({
       street: nextStreet, depth: depth + 1,
       parentId: makeNodeId(betId, "villain_call", null),
       heroInvestment: heroInvestment + S,
+      turnEquity, riverEquity,
     });
 
     nodes.push({
@@ -1150,22 +1267,22 @@ function buildTree({
       potAfter: potSize + S, heroInvestmentAfter: heroInvestment + S,
       villainFoldPct: foldPct, villainCallPct: adjustedCallPct, villainRaisePct: raisePct,
       heroFoldToRaise,
-      equityAssumption: equity, equity_is_approximated: street !== "flop",
+      equityAssumption: streetEq, equity_is_approximated: isApprox,
       ev: null, expanded: true, isLeaf: false,
       children: [
         { id: makeNodeId(betId, "villain_fold", null), street, action: "villain_fold",
           label: "Villain folds", betSize: 0, betSizeBb: 0,
           potAfter: potSize + S, heroInvestmentAfter: heroInvestment + S,
           villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
-          heroFoldToRaise: 0, equityAssumption: equity,
-          equity_is_approximated: street !== "flop",
+          heroFoldToRaise: 0, equityAssumption: streetEq,
+          equity_is_approximated: isApprox,
           ev: null, expanded: false, children: [], isLeaf: true },
         { id: makeNodeId(betId, "villain_call", null), street, action: "villain_call",
           label: "Villain calls", betSize: 0, betSizeBb: 0,
           potAfter: potSize + 2 * S, heroInvestmentAfter: heroInvestment + S,
           villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
-          heroFoldToRaise: 0, equityAssumption: equity,
-          equity_is_approximated: nextStreet !== "flop",
+          heroFoldToRaise: 0, equityAssumption: streetEq,
+          equity_is_approximated: nextIsApprox,
           ev: null, expanded: false, isLeaf: callChildren.length === 0,
           children: callChildren },
         { id: makeNodeId(betId, "villain_raise", null), street, action: "villain_raise",
@@ -1174,22 +1291,22 @@ function buildTree({
           potAfter: potSize + S + R, heroInvestmentAfter: heroInvestment + S,
           villainFoldPct: 0, villainCallPct: 0, villainRaisePct: 0,
           heroFoldToRaise,
-          equityAssumption: equity, equity_is_approximated: street !== "flop",
+          equityAssumption: streetEq, equity_is_approximated: isApprox,
           ev: null, expanded: false, isLeaf: false,
           children: [
             { id: makeNodeId(betId, "hero_fold_raise", null), street, action: "hero_fold",
               label: "Hero folds to raise", betSize: 0, betSizeBb: 0,
               potAfter: potSize + S + R, heroInvestmentAfter: heroInvestment + S,
               villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
-              heroFoldToRaise: 0, equityAssumption: equity,
-              equity_is_approximated: street !== "flop",
+              heroFoldToRaise: 0, equityAssumption: streetEq,
+              equity_is_approximated: isApprox,
               ev: null, expanded: false, children: [], isLeaf: true },
             { id: makeNodeId(betId, "hero_call_raise", null), street, action: "hero_call",
               label: "Hero calls raise", betSize: 0, betSizeBb: 0,
               potAfter: potSize + 2 * R, heroInvestmentAfter: heroInvestment + R,
               villainFoldPct: 0, villainCallPct: 100, villainRaisePct: 0,
-              heroFoldToRaise: 0, equityAssumption: equity,
-              equity_is_approximated: nextStreet !== "flop",
+              heroFoldToRaise: 0, equityAssumption: streetEq,
+              equity_is_approximated: nextIsApprox,
               ev: null, expanded: false, children: [], isLeaf: true },
           ]},
       ],
@@ -1293,7 +1410,6 @@ function TreeNode({ node, depth, selectedLine, dispatch, siblingCollapse }) {
     ? <span style={{ color: T.yellow, fontSize: 10, marginLeft: 4 }}>⚠approx</span>
     : null;
 
-  const raiseComputed = Math.max(0, 100 - node.villainFoldPct - node.villainCallPct);
 
   const handleSelectLine = () => {
     dispatch({ type: "SET_EV_SELECTED_LINE", payload: buildAncestorChain(node.id) });
@@ -1477,7 +1593,29 @@ function Module3({ state, dispatch }) {
   const hoveredNode = hoveredNodeId ? findNode(nodes, hoveredNodeId) : null;
 
   const handleBuild = () => {
-    const raw = buildTree({ potSize, effStack, betSizings, equity, street: "flop" });
+    let turnEquity = null;
+    let riverEquity = null;
+    const { heroRange, villainRange, board: stateBoard, deadCards, heroHand } = state;
+    if (heroRange.size > 0 && villainRange.size > 0 && stateBoard.length >= 3) {
+      const usedCards = new Set([...stateBoard, ...(heroHand || []), ...deadCards]);
+      const hCombos = [...heroRange].flatMap(h => expandHand(h, [...usedCards]));
+      const vCombos = [...villainRange].flatMap(h => expandHand(h, [...usedCards]));
+      if (hCombos.length && vCombos.length) {
+        const remainDeck = DECK.filter(c => !usedCards.has(c));
+        const turnCard = remainDeck[Math.floor(Math.random() * remainDeck.length)];
+        if (turnCard) {
+          const turnBoard = [...stateBoard, turnCard];
+          turnEquity = computeEquityFast(hCombos, vCombos, turnBoard, 500);
+          const riverDeck = remainDeck.filter(c => c !== turnCard);
+          const riverCard = riverDeck[Math.floor(Math.random() * riverDeck.length)];
+          if (riverCard) {
+            const riverBoard = [...turnBoard, riverCard];
+            riverEquity = computeEquityFast(hCombos, vCombos, riverBoard, 500);
+          }
+        }
+      }
+    }
+    const raw = buildTree({ potSize, effStack, betSizings, equity, street: "flop", turnEquity, riverEquity });
     const stamped = stampEV(raw);
     dispatch({ type: "SET_EV_TREE_NODES", payload: stamped });
     dispatch({ type: "SET_EV_SELECTED_LINE", payload: [] });
