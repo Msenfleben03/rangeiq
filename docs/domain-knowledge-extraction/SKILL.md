@@ -116,6 +116,18 @@ Ask these in order to load only relevant domains:
 - **Task spans all 6 domains:** Do NOT load all references. Use the Quick Decision Trees above for triage, then load at most 2-3 references for the specific sub-questions. Context budget matters more than completeness.
 - **Conflicting guidance between references:** SPR threshold tables differ between bet-sizing-theory.md (4-tier, sizing-focused) and multi-street-planning.md (5-tier, commitment-focused). These are complementary, not contradictory — use the table matching your current question.
 
+## Worked Example: End-to-End Flow
+
+**User asks:** "The EV tree shows +2.1bb for a 66% pot bet on K-7-2 rainbow OOP, but that feels too high."
+
+1. **Diagnose:** EV tree accuracy + equity computation → matches routing question #1
+2. **Quick tree first:** Check the EV Tree Debugging decision tree above:
+   - `equity_is_approximated`? If this is a flop node, no — equity is from MC. Continue.
+   - `villainFoldPct` close to MDF? MDF for 66% pot = 0.66/(1+2*0.66) = 28.4%. If the board is K-7-2 rainbow (dry, villain range is capped at one pair), actual fold frequency is likely 10-15%. The seed is inflating bluff EV. **Root cause found.**
+   - Hero OOP? Yes — raw equity overstates OOP EV by ~20%. **Second contributing factor.**
+3. **Route:** Load `references/solver-theory-gto.md` (Trap 1: MDF fold frequency on condensed boards) + `references/multi-street-planning.md` (equity realization position adjustment).
+4. **Apply:** Solver Theory Trap 1 explains that on A-A-7 type boards, actual fold frequency is 10-15% vs MDF 28.4% — K-7-2 has the same condensed-range property. Multi-Street Planning §Equity Realization provides the OOP discount formula. The corrected EV accounting for both factors is likely +0.5-1.0bb, not +2.1bb.
+
 ## Known Dead Ends
 
 - **Monte Carlo as a polarity metric** — aggregate equity from `runMonteCarlo` cannot be used to compute equity distribution variance (polarity); requires combo-level breakdown from `classifyHand` output
