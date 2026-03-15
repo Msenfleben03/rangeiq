@@ -72,14 +72,14 @@ Deviation thresholds follow binomial CI: >15pp reliable at ~50 hands, 5-15pp at 
 
 Before calling the skill complete:
 
-- [ ] All 6 reference files exist in `references/`
-- [ ] Every file achieved Expert tier minimum on rubric review
-- [ ] Cross-domain reviewer approved bidirectional references for domains 2–6
-- [ ] No file contains content below the floor (no definitions of table-stakes concepts)
-- [ ] Each "Implementation Notes" section names specific RangeIQ functions/modules
-- [ ] Each "Looks Right But Isn't" section has at least 2 deployment-specific traps
-- [ ] `SKILL.md` routes to specific reference files per task — no "load everything" guidance
-- [ ] skill-judge evaluation passes at 90+/120
+- [x] All 6 reference files exist in `references/`
+- [x] Every file achieved Expert tier minimum on rubric review (all 6 at Practitioner)
+- [x] Cross-domain reviewer approved bidirectional references for domains 2–6
+- [x] No file contains content below the floor (no definitions of table-stakes concepts)
+- [x] Each "Implementation Notes" section names specific RangeIQ functions/modules
+- [x] Each "Looks Right But Isn't" section has at least 2 deployment-specific traps
+- [x] `SKILL.md` routes to specific reference files per task — no "load everything" guidance
+- [x] skill-judge evaluation passes at 90+/120 (scored 108/120, Grade A)
 
 ## Related Notes
 
