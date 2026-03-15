@@ -525,6 +525,9 @@ const initialState = {
   lastTrace: null,
   traceError: null,
   batchProgress: null,
+  batchRunning: false,
+  rejectedTraces: [],
+  batchStats: null,
 };
 
 function reducer(state, action) {
@@ -569,7 +572,15 @@ function reducer(state, action) {
     case "SET_TRACE_ERROR":
       return { ...state, traceError: action.payload };
     case "CLEAR_TRACES":
-      return { ...state, traceQueue: [] };
+      return { ...state, traceQueue: [], rejectedTraces: [] };
+    case "SET_BATCH_RUNNING":
+      return { ...state, batchRunning: action.payload };
+    case "SET_BATCH_PROGRESS":
+      return { ...state, batchProgress: action.payload };
+    case "ADD_REJECTED_TRACE":
+      return { ...state, rejectedTraces: [...state.rejectedTraces, action.payload] };
+    case "SET_BATCH_STATS":
+      return { ...state, batchStats: action.payload };
     case "SAVE_SCENARIO":
       return { ...state, scenarios: [...state.scenarios, action.payload] };
     case "LOAD_SCENARIO": {
@@ -607,8 +618,6 @@ function reducer(state, action) {
         nodes: stampEV(updated)
       }};
     }
-    case "SET_BATCH_PROGRESS":
-      return { ...state, batchProgress: action.payload };
     default:
       return state;
   }
@@ -1745,54 +1754,168 @@ function Module3({ state, dispatch }) {
 }
 
 // ============================================================
-// MODULE 4 — TRACE GENERATOR (STUB WITH API WIRING)
+// BATCH BOARD MATRIX — 24 cells (12 texture profiles × 2 SPR regimes)
+// ============================================================
+const BATCH_BOARD_MATRIX = [
+  // Low SPR regime (potSize: 20, effStack: 60, SPR ~3)
+  { cell: "dry_rainbow_unpaired_disconnected_lowspr",  board: ["Kc","7d","2s"], potSize: 20, effStack: 60 },
+  { cell: "dry_rainbow_unpaired_connected_lowspr",     board: ["Kc","Jd","Ts"], potSize: 20, effStack: 60 },
+  { cell: "dry_rainbow_paired_lowspr",                 board: ["Kc","Kd","2s"], potSize: 20, effStack: 60 },
+  { cell: "dry_twotone_unpaired_disconnected_lowspr",  board: ["Kc","7d","2d"], potSize: 20, effStack: 60 },
+  { cell: "dry_twotone_unpaired_connected_lowspr",     board: ["Kc","Jd","Td"], potSize: 20, effStack: 60 },
+  { cell: "wet_rainbow_unpaired_connected_lowspr",     board: ["Jh","9c","8d"], potSize: 20, effStack: 60 },
+  { cell: "wet_rainbow_mid_connected_lowspr",          board: ["9c","7d","5s"], potSize: 20, effStack: 60 },
+  { cell: "wet_twotone_unpaired_connected_lowspr",     board: ["Jh","9h","8d"], potSize: 20, effStack: 60 },
+  { cell: "wet_twotone_unpaired_disconnected_lowspr",  board: ["Ah","8d","5h"], potSize: 20, effStack: 60 },
+  { cell: "monotone_unpaired_lowspr",                  board: ["Kh","7h","2h"], potSize: 20, effStack: 60 },
+  { cell: "wet_twotone_paired_lowspr",                 board: ["Jh","Jd","8c"], potSize: 20, effStack: 60 },
+  { cell: "dry_rainbow_ace_high_lowspr",               board: ["Ac","7d","2s"], potSize: 20, effStack: 60 },
+  // High SPR regime (potSize: 6, effStack: 100, SPR ~16.7)
+  { cell: "dry_rainbow_unpaired_disconnected_highspr", board: ["Kc","7d","2s"], potSize: 6, effStack: 100 },
+  { cell: "dry_rainbow_unpaired_connected_highspr",    board: ["Kc","Jd","Ts"], potSize: 6, effStack: 100 },
+  { cell: "dry_rainbow_paired_highspr",                board: ["Kc","Kd","2s"], potSize: 6, effStack: 100 },
+  { cell: "dry_twotone_unpaired_disconnected_highspr", board: ["Kc","7d","2d"], potSize: 6, effStack: 100 },
+  { cell: "dry_twotone_unpaired_connected_highspr",    board: ["Kc","Jd","Td"], potSize: 6, effStack: 100 },
+  { cell: "wet_rainbow_unpaired_connected_highspr",    board: ["Jh","9c","8d"], potSize: 6, effStack: 100 },
+  { cell: "wet_rainbow_mid_connected_highspr",         board: ["9c","7d","5s"], potSize: 6, effStack: 100 },
+  { cell: "wet_twotone_unpaired_connected_highspr",    board: ["Jh","9h","8d"], potSize: 6, effStack: 100 },
+  { cell: "wet_twotone_unpaired_disconnected_highspr", board: ["Ah","8d","5h"], potSize: 6, effStack: 100 },
+  { cell: "monotone_unpaired_highspr",                 board: ["Kh","7h","2h"], potSize: 6, effStack: 100 },
+  { cell: "wet_twotone_paired_highspr",                board: ["Jh","Jd","8c"], potSize: 6, effStack: 100 },
+  { cell: "dry_rainbow_ace_high_highspr",              board: ["Ac","7d","2s"], potSize: 6, effStack: 100 },
+];
+
+// ============================================================
+// MODULE 4 — TRACE GENERATOR
 // ============================================================
 function Module4({ state, dispatch }) {
-  const { traceQueue, lastTrace, traceError, heroRange, villainRange, board, heroHand, metrics } = state;
+  const { traceQueue, rejectedTraces, lastTrace, traceError, heroRange, villainRange,
+    board, heroHand, metrics, batchRunning, batchProgress, batchStats, evTreeConfig } = state;
+  const batchStopRef = useRef(false);
+  const [exportTier2Only, setExportTier2Only] = useState(true);
+  const [showAuditor, setShowAuditor] = useState(false);
 
-  // Serialize current state for API call
-  const buildContext = () => ({
+  const coverageMap = useMemo(() => {
+    const map = {};
+    BATCH_BOARD_MATRIX.forEach(c => { map[c.cell] = 0; });
+    traceQueue.forEach(r => {
+      if (r.metadata?.batch_cell) map[r.metadata.batch_cell] = (map[r.metadata.batch_cell] || 0) + 1;
+    });
+    return map;
+  }, [traceQueue]);
+
+  const coveredCells = Object.values(coverageMap).filter(n => n >= 15).length;
+  const tier2Count = traceQueue.filter(r => r.metadata?.quality_tier === "tier_2_expert").length;
+
+  const buildCtx = (activeBoard, activePot, activeStack, activeEquity, activeTexture, activeSpr) => ({
     scenario_id: crypto.randomUUID(),
+    game_state_key: `${[...heroRange].sort().join(",")}|${[...villainRange].sort().join(",")}|${activeBoard.join("")}|${activePot}|${activeStack}`,
     game_state: {
       hero_range: [...heroRange].join(","),
       villain_range: [...villainRange].join(","),
       hero_hand: heroHand,
-      board,
-      pot_size_bb: state.evTreeConfig.potSize,
-      effective_stack_bb: state.evTreeConfig.effStack,
-      street: board.length === 0 ? "preflop" : board.length === 3 ? "flop" : board.length === 4 ? "turn" : "river",
+      board: activeBoard,
+      pot_size_bb: activePot,
+      effective_stack_bb: activeStack,
+      spr: activeSpr !== null ? Math.round(activeSpr * 10) / 10 : null,
+      street: activeBoard.length === 0 ? "preflop" : activeBoard.length === 3 ? "flop" : activeBoard.length === 4 ? "turn" : "river",
     },
     computed_metrics: {
-      hero_equity_pct: metrics.equity?.hero ?? null,
+      hero_equity_pct: activeEquity,
       range_advantage_score: metrics.ra ?? null,
       nut_advantage_score: metrics.na ?? null,
       polarity_index_hero: metrics.pi?.hero ?? null,
-      wetness_score: metrics.wetness ?? null,
+      polarity_index_villain: metrics.pi?.villain ?? null,
+      wetness_score: activeTexture?.wetness ?? null,
+      connectivity: activeTexture?.connectivity ?? null,
+      flush_texture: activeTexture?.flushTexture ?? null,
+      is_paired: activeTexture?.isPaired ?? null,
     },
     decision_context: {
       action_facing: null,
       available_actions: ["fold","check","call","bet_half","bet_pot","raise"],
-      ev_tree_line: state.evTreeConfig.evTreeLine ?? null,
+      ev_tree_line: evTreeConfig.evTreeLine ?? null,
     }
   });
 
-  const SYSTEM_PROMPT = `You are a GTO-trained poker expert with deep knowledge of solver outputs, range construction, and multi-street planning. You are generating a reasoning trace that will be used to fine-tune an LLM on expert poker decision-making.
+  const SYSTEM_PROMPT_V2 = `You are a GTO-trained poker expert generating fine-tuning data for an advanced poker LLM.
 
-Given the game state and computed metrics below, produce a structured reasoning trace. The trace must:
-1. Diagnose the board texture and its impact on both ranges
-2. Quantify range advantage and nut advantage and explain strategic implications
-3. Identify the key combos driving each metric
-4. Evaluate the EV of each available action
-5. Select the optimal action with explicit frequency recommendations
-6. Identify 3 exploitable tendencies in the villain's range
-7. State one counter-adjustment
+FLOOR — Do NOT define or explain: pot odds, MDF, range advantage, nut advantage, polarity, SPR, board texture categories, EV formula, or combo counting. The consumer is a poker professional who already knows GTO theory. Apply these concepts to the specific game state — do not educate.
 
-Output ONLY valid JSON matching this schema - no preamble, no markdown:
-{"reasoning_trace":{"board_diagnosis":"","range_dynamics":{"hero_assessment":"","villain_assessment":"","key_metric_drivers":[]},"action_evaluation":[{"action":"","ev_estimate_bb":0,"rationale":"","frequency_recommendation_pct":0}],"optimal_action":{"action":"","frequency_pct":0,"sizing_pct_pot":null,"primary_justification":""},"exploitability_notes":[],"counter_adjustment":{"villain_adjustment":"","hero_response":""}}}`;
+Your trace MUST:
+1. Diagnose the specific board texture: name draw types present (OESD/FD/backdoor), count flushing combos, classify pairing
+2. Quantify range dynamics using the provided computed_metrics — do not restate definitions
+3. Name at least 3 specific combos (e.g. "KhQh") with role (value/bluff/marginal), recommended frequency, and mechanistic reasoning
+4. Evaluate EV for each available action — use ev_tree_line frequencies when present, otherwise derive from pot geometry and polarity
+5. Select optimal action with exact frequency (not "often" or "sometimes") and sizing tied explicitly to polarity_index or SPR
+6. Identify 3 exploitable tendencies with specific frequency thresholds (e.g. "folds to flop cbet >55%")
+7. State one concrete counter-adjustment
 
-  const generateTrace = async () => {
-    const context = buildContext();
+REJECTION: If you cannot identify at least 3 specific combos with mechanistic reasoning, output {"quality_tier":"insufficient","reason":"<specific reason>"} and nothing else.
+
+Self-assess before outputting: "tier_2_expert" requires named combos, quantified frequencies, explicit polarity/SPR reference. Output "tier_1_competent" if generic.
+
+Output ONLY valid JSON — no preamble, no markdown:
+{"reasoning_trace":{"board_diagnosis":"","range_dynamics":{"hero_assessment":"","villain_assessment":"","key_metric_drivers":[]},"key_combos":[{"hand":"","role":"value|bluff|marginal","frequency_pct":0,"reasoning":""}],"action_evaluation":[{"action":"","ev_estimate_bb":0,"rationale":"","frequency_recommendation":{"value":0,"confidence":"high|medium|low"},"frequency_source":"ev_tree|heuristic|estimated"}],"optimal_action":{"action":"","frequency_pct":0,"sizing_pct_pot":null,"primary_justification":""},"exploitability_notes":[],"counter_adjustment":{"villain_adjustment":"","hero_response":""}},"quality_self_assessment":"tier_2_expert|tier_1_competent"}`;
+
+  const applyQualityGate = (trace, record) => {
+    if (trace.quality_tier === "insufficient") {
+      dispatch({ type: "ADD_REJECTED_TRACE", payload: { ...record, rejection_reasons: ["insufficient_combos_explicit"] } });
+      return false;
+    }
+    const rt = trace.reasoning_trace;
+    const reasons = [];
+
+    if (trace.quality_self_assessment !== "tier_2_expert") reasons.push("quality_tier_1");
+    if (!rt?.board_diagnosis || rt.board_diagnosis.length < 100) reasons.push("short_board_diagnosis");
+    if ((rt?.key_combos || []).length < 3) reasons.push("insufficient_key_combos");
+    if ((rt?.action_evaluation || []).filter(e => e.ev_estimate_bb !== 0).length < 2) reasons.push("insufficient_ev_entries");
+    const freq = rt?.optimal_action?.frequency_pct;
+    if (!freq || freq < 1 || freq > 100) reasons.push("invalid_frequency");
+    if (/i('ve| have) been|in (this|our) session/i.test(JSON.stringify(rt))) reasons.push("session_history_hallucination");
+
+    // Draw-as-value check (only when hero hand is set on current board)
+    if (heroHand?.length === 2 && board.length >= 3) {
+      const heroClass = classifyHand(heroHand, board);
+      const valueTiers = ["Straight Flush","Quads","Full House","Flush","Straight","Three of a Kind","Two Pair","Overpair","Top Pair (Good Kicker)"];
+      if (heroClass.draws.length > 0 && !valueTiers.includes(heroClass.category)) {
+        const drawAsValue = (rt?.action_evaluation || []).some(e =>
+          /\bvalue\b/i.test(e.rationale) && !/semi.bluff|equity|protection/i.test(e.rationale)
+        );
+        if (drawAsValue) reasons.push("draw_as_value");
+      }
+    }
+
+    // EV tree action alignment
+    const evTreeLine = evTreeConfig.evTreeLine;
+    if (evTreeLine?.length > 0 && rt?.optimal_action?.action) {
+      const heroActions = evTreeLine.map(n => n.action).filter(a => !a.startsWith("villain_") && a !== "check_behind");
+      const optFold = rt.optimal_action.action === "fold";
+      const lineHasFold = heroActions.some(a => a === "hero_fold");
+      if (optFold && !lineHasFold && heroActions.length > 0) reasons.push("ev_tree_action_mismatch");
+    }
+
+    if (reasons.length > 0) {
+      dispatch({ type: "ADD_REJECTED_TRACE", payload: { ...record, rejection_reasons: reasons } });
+      return false;
+    }
+    return true;
+  };
+
+  const generateTrace = async ({
+    boardOverride = null, potSizeOverride = null, effStackOverride = null,
+    equityOverride = null, textureOverride = null, batchCell = null,
+  } = {}) => {
+    const activeBoard = boardOverride ?? board;
+    const activePot = potSizeOverride ?? evTreeConfig.potSize;
+    const activeStack = effStackOverride ?? evTreeConfig.effStack;
+    const activeSpr = activePot > 0 ? activeStack / activePot : null;
+    const activeTexture = textureOverride ?? boardTexture(activeBoard);
+    const activeEquity = equityOverride ?? (metrics.equity?.hero ?? null);
+
+    const context = buildCtx(activeBoard, activePot, activeStack, activeEquity, activeTexture, activeSpr);
     dispatch({ type: "SET_TRACE_ERROR", payload: null });
+
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -1800,7 +1923,7 @@ Output ONLY valid JSON matching this schema - no preamble, no markdown:
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 2000,
-          system: SYSTEM_PROMPT,
+          system: SYSTEM_PROMPT_V2,
           messages: [{ role: "user", content: JSON.stringify(context) }],
         }),
       });
@@ -1808,54 +1931,215 @@ Output ONLY valid JSON matching this schema - no preamble, no markdown:
       const text = data.content?.[0]?.text || "";
       const trace = JSON.parse(text);
 
+      const textureProfile = activeTexture ? [
+        activeTexture.wetness >= 7 ? "wet" : activeTexture.wetness >= 4 ? "medium" : "dry",
+        (activeTexture.flushTexture || "rainbow").toLowerCase().replace(/[^a-z]/g, ""),
+        activeTexture.isPaired ? "paired" : "unpaired",
+        activeTexture.connectivity >= 2 ? "connected" : activeTexture.connectivity === 1 ? "semi_connected" : "disconnected",
+        activeSpr !== null ? (activeSpr < 6 ? "lowspr" : "highspr") : null,
+      ].filter(Boolean).join("_") : null;
+
+      let freqDivergence = null;
+      const evTreeLine = evTreeConfig.evTreeLine;
+      if (evTreeLine?.length > 0 && trace.reasoning_trace?.optimal_action?.frequency_pct) {
+        const firstBetNode = evTreeLine.find(n => n.action === "bet");
+        if (firstBetNode) {
+          freqDivergence = Math.abs(firstBetNode.villainFoldPct - trace.reasoning_trace.optimal_action.frequency_pct);
+        }
+      }
+
       const record = {
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPT_V2 },
           { role: "user", content: JSON.stringify(context) },
           { role: "assistant", content: text },
         ],
+        reasoning_trace: trace.reasoning_trace,
         metadata: {
           scenario_id: context.scenario_id,
+          game_state_key: context.game_state_key,
           street: context.game_state.street,
-          hero_equity: context.computed_metrics.hero_equity_pct,
-          range_advantage: context.computed_metrics.range_advantage_score,
-          nut_advantage: context.computed_metrics.nut_advantage_score,
+          hero_equity: activeEquity,
+          range_advantage: metrics.ra ?? null,
+          nut_advantage: metrics.na ?? null,
           optimal_action: trace.reasoning_trace?.optimal_action?.action || "unknown",
-          source: "RangeIQ-synthetic-v1",
+          quality_tier: trace.quality_self_assessment || "unknown",
+          ev_tree_anchored: (evTreeLine?.length ?? 0) > 0,
+          board_texture_profile: textureProfile,
+          spr: activeSpr !== null ? Math.round(activeSpr * 10) / 10 : null,
+          villain_range_type: "custom",
+          freq_divergence_from_tree: freqDivergence !== null ? Math.round(freqDivergence * 10) / 10 : null,
+          equity_approximated: (evTreeLine || []).some(n => n.equity_is_approximated),
+          batch_cell: batchCell,
+          source: "RangeIQ-synthetic-v2",
           generated_at: new Date().toISOString(),
         }
       };
-      dispatch({ type: "ADD_TRACE", payload: record });
+
+      if (applyQualityGate(trace, record)) {
+        dispatch({ type: "ADD_TRACE", payload: record });
+      }
     } catch (err) {
       dispatch({ type: "SET_TRACE_ERROR", payload: err.message });
     }
   };
 
+  const generateBatch = async () => {
+    if (!heroRange.size || !villainRange.size) return;
+    batchStopRef.current = false;
+    dispatch({ type: "SET_BATCH_RUNNING", payload: true });
+    dispatch({ type: "SET_TRACE_ERROR", payload: null });
+    try {
+      for (let i = 0; i < BATCH_BOARD_MATRIX.length; i++) {
+        if (batchStopRef.current) break;
+        const cell = BATCH_BOARD_MATRIX[i];
+        if ((coverageMap[cell.cell] || 0) >= 30) continue;
+
+        dispatch({ type: "SET_BATCH_PROGRESS", payload: {
+          currentCell: cell.cell, cellIndex: i + 1, totalCells: BATCH_BOARD_MATRIX.length,
+        }});
+
+        const cellHeroCombos = [...heroRange].flatMap(h => expandHand(h, cell.board));
+        const cellVillainCombos = [...villainRange].flatMap(h => expandHand(h, cell.board));
+        if (!cellHeroCombos.length || !cellVillainCombos.length) continue;
+
+        const equity = computeEquityFast(cellHeroCombos, cellVillainCombos, cell.board, 500) * 100;
+        await generateTrace({
+          boardOverride: cell.board, potSizeOverride: cell.potSize, effStackOverride: cell.effStack,
+          equityOverride: equity, textureOverride: boardTexture(cell.board), batchCell: cell.cell,
+        });
+        await new Promise(r => setTimeout(r, 500));
+      }
+    } finally {
+      dispatch({ type: "SET_BATCH_RUNNING", payload: false });
+      dispatch({ type: "SET_BATCH_PROGRESS", payload: null });
+    }
+  };
+
+  const runAuditor = () => {
+    const groups = {};
+    traceQueue.forEach(r => {
+      const key = r.metadata?.game_state_key || "";
+      if (!key) return;
+      if (!groups[key]) groups[key] = [];
+      const f = r.reasoning_trace?.optimal_action?.frequency_pct;
+      if (f != null) groups[key].push(f);
+    });
+    const inconsistent = Object.entries(groups)
+      .filter(([, freqs]) => freqs.length >= 2)
+      .map(([key, freqs]) => {
+        const mean = freqs.reduce((a,b) => a+b,0) / freqs.length;
+        const sd = Math.sqrt(freqs.reduce((a,b) => a+(b-mean)**2, 0) / freqs.length);
+        return { key: key.slice(0, 60), count: freqs.length, sd: sd.toFixed(1) };
+      })
+      .filter(g => parseFloat(g.sd) > 20);
+    dispatch({ type: "SET_BATCH_STATS", payload: { inconsistentGroups: inconsistent, auditedAt: new Date().toISOString() } });
+    setShowAuditor(true);
+  };
+
   const exportJSONL = () => {
-    const lines = traceQueue.map(r => JSON.stringify(r)).join("\n");
+    const eligible = exportTier2Only
+      ? traceQueue.filter(r => r.metadata?.quality_tier === "tier_2_expert")
+      : traceQueue;
+    const lines = eligible.map(r => JSON.stringify(r)).join("\n");
     const blob = new Blob([lines], { type: "application/jsonl" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `rangeiq-traces-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    a.download = `rangeiq-traces-v2-${new Date().toISOString().slice(0,10)}.jsonl`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <Btn onClick={generateTrace} color={T.green}>Generate Trace (G)</Btn>
+      {/* Action bar */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <Btn onClick={() => generateTrace()} disabled={batchRunning} color={T.green}>Generate Trace (G)</Btn>
+        {!batchRunning
+          ? <Btn onClick={generateBatch} disabled={!heroRange.size || !villainRange.size} color={T.blue}>Batch Generate</Btn>
+          : <Btn onClick={() => { batchStopRef.current = true; dispatch({ type: "SET_BATCH_RUNNING", payload: false }); }} color={T.red}>Stop Batch</Btn>
+        }
+        <Btn onClick={runAuditor} disabled={traceQueue.length < 2}>Audit</Btn>
         <Btn onClick={exportJSONL} disabled={traceQueue.length === 0} color={T.yellow}>Export JSONL (E)</Btn>
-        <Btn onClick={() => dispatch({ type: "CLEAR_TRACES" })} disabled={traceQueue.length === 0}>Clear Queue</Btn>
-        <span style={{ fontFamily: "monospace", fontSize: 12, color: T.muted, alignSelf: "center" }}>
-          {traceQueue.length} traces (~{(JSON.stringify(traceQueue).length / 1024).toFixed(1)}KB)
-        </span>
+        <Btn
+          onClick={() => setExportTier2Only(v => !v)}
+          style={{ fontSize: 11, border: `1px solid ${exportTier2Only ? T.green : T.border}`, background: exportTier2Only ? T.green + "22" : T.bgElevated }}
+        >{exportTier2Only ? "Tier 2 only" : "All traces"}</Btn>
+        <Btn onClick={() => dispatch({ type: "CLEAR_TRACES" })} disabled={traceQueue.length === 0}>Clear</Btn>
       </div>
+
+      {/* Stats row */}
+      <div style={{ fontFamily: "monospace", fontSize: 12, color: T.muted, marginBottom: 12 }}>
+        Queue: <span style={{ color: T.text }}>{traceQueue.length}</span>
+        {" · "}Tier 2: <span style={{ color: T.green }}>{tier2Count}</span>
+        {" · "}Rejected: <span style={{ color: T.red }}>{rejectedTraces.length}</span>
+        {" · "}Coverage: <span style={{ color: coveredCells >= 20 ? T.green : coveredCells >= 12 ? T.yellow : T.red }}>{coveredCells}/24 cells ≥15</span>
+        {" · "}~{(JSON.stringify(traceQueue).length / 1024).toFixed(1)}KB
+      </div>
+
+      {/* Batch progress */}
+      {batchProgress && (
+        <Card style={{ marginBottom: 12 }}>
+          <Label>Batch Progress</Label>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: T.muted, marginTop: 4 }}>
+            Cell {batchProgress.cellIndex}/{batchProgress.totalCells}: <span style={{ color: T.text }}>{batchProgress.currentCell}</span>
+          </div>
+          <div style={{ background: T.bgPrimary, borderRadius: 2, height: 6, marginTop: 6 }}>
+            <div style={{ background: T.blue, height: 6, borderRadius: 2, transition: "width 0.3s",
+              width: `${(batchProgress.cellIndex / batchProgress.totalCells) * 100}%` }} />
+          </div>
+        </Card>
+      )}
+
+      {/* Coverage map */}
+      <Card style={{ marginBottom: 12 }}>
+        <Label>Coverage — 24 cells (12 textures × 2 SPR)</Label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+          {BATCH_BOARD_MATRIX.map(cell => {
+            const count = coverageMap[cell.cell] || 0;
+            const color = count >= 15 ? T.green : count >= 5 ? T.yellow : T.red;
+            const label = cell.cell.replace(/_low|_highspr|_lowspr/g,"").replace(/_/g," ").slice(0,18);
+            const spr = cell.cell.endsWith("_lowspr") ? "L" : "H";
+            return (
+              <div key={cell.cell} title={cell.cell} style={{
+                background: T.bgElevated, border: `1px solid ${color}`, borderRadius: 3,
+                padding: "2px 5px", fontSize: 9, fontFamily: "monospace", textAlign: "center", minWidth: 48,
+              }}>
+                <div style={{ color: T.muted }}>{spr} {label}</div>
+                <div style={{ color, fontWeight: "bold" }}>{count}/30</div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
 
       {traceError && (
         <Card style={{ borderColor: T.red, marginBottom: 12 }}>
           <span style={{ color: T.red, fontSize: 12, fontFamily: "monospace" }}>Error: {traceError}</span>
+        </Card>
+      )}
+
+      {/* Auditor results */}
+      {showAuditor && batchStats && (
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Label>Trace Auditor</Label>
+            <span style={{ fontSize: 10, color: T.muted, fontFamily: "monospace" }}>{batchStats.auditedAt?.slice(0,19)}</span>
+          </div>
+          {batchStats.inconsistentGroups.length === 0
+            ? <div style={{ color: T.green, fontSize: 12, marginTop: 6 }}>No inconsistent groups (all sd ≤20pp)</div>
+            : <div style={{ marginTop: 6 }}>
+                <div style={{ color: T.red, fontSize: 12, marginBottom: 4 }}>
+                  {batchStats.inconsistentGroups.length} inconsistent group(s) — sd &gt;20pp
+                </div>
+                {batchStats.inconsistentGroups.slice(0, 5).map((g, i) => (
+                  <div key={i} style={{ fontFamily: "monospace", fontSize: 10, color: T.muted, marginBottom: 2 }}>
+                    sd={g.sd}pp n={g.count}: {g.key}
+                  </div>
+                ))}
+              </div>
+          }
         </Card>
       )}
 
@@ -1871,9 +2155,6 @@ Output ONLY valid JSON matching this schema - no preamble, no markdown:
           </pre>
         </Card>
       )}
-
-      {/* TODO: Batch generation mode */}
-      {/* TODO: Trace quality indicators (coverage, specificity, consistency) */}
     </div>
   );
 }
