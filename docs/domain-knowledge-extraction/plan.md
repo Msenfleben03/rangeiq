@@ -24,7 +24,7 @@ tags:
 | 1 | Solver Theory and GTO Equilibrium | `references/solver-theory-gto.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations |
 | 2 | Range Construction and Equity Distribution | `references/range-construction.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS applied |
 | 3 | Bet Sizing Theory and Pot Geometry | `references/bet-sizing-theory.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (2) applied |
-| 4 | Multi-Street Planning and EV Architecture | `references/multi-street-planning.md` | ⬜ PENDING | — | — |
+| 4 | Multi-Street Planning and EV Architecture | `references/multi-street-planning.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (5) applied |
 | 5 | Exploitative Adjustments and Population Dynamics | `references/exploitative-adjustments.md` | ⬜ PENDING | — | — |
 | 6 | LLM Trace Quality and Fine-Tuning Architecture | `references/trace-quality-finetuning.md` | ⬜ PENDING | — | Integration domain |
 
@@ -49,7 +49,7 @@ Geometric bet sizing formula `b = ((S_eff/P)^(1/N) - 1) / 2` assumes villain cal
 
 ### Domain 4: Multi-Street Planning and EV Architecture
 
-*(Write after Domain 4 passes cross-domain review)*
+Equity realization by position: IP realizes 105-115% of raw equity, OOP realizes 60-80%. For `computeNodeEV`, equity should be position-adjusted — a dampening formula `eq_turn = eq_flop * 0.95 + 0.50 * 0.05` regresses toward 50% on later streets. SPR-based commitment thresholds in 5 tiers: <2 (any call commits), 2-4 (flop call commits to one more street), 4-8 (first call doesn't commit), 8-13 (sequence creates implicit commitment), >13 (implied odds dominant). "Call flop, fold turn" is dominated at SPR <4 — `heroFoldToRaise` should be seeded 5-15% vs default pot-odds formula in these spots. Range narrowing across streets means `equityAssumption` should change per street — the `equity_is_approximated` flag signals static equity but ideally represents range-conditional equity. Blocker effects cascade: As blocks nut flush draws on flop, then inverts to blocking made nut flushes on flush-completing turn, then blocks villain's natural bluffs (busted draws) on river — the "blocker paradox." Reverse implied odds dominate when drawing to non-nut hands at SPR >8 on paired boards or when nut flush draw is in villain's range. Multi-street bluff coherence requires forward-coherent stories — the EV tree's `villainFoldPct` is sizing-dependent but story-independent, missing the narrative dimension. Trace serialization needs `committed_fraction`, `street_equity_delta`, and `line_coherence` fields.
 
 ### Domain 5: Exploitative Adjustments and Population Dynamics
 
@@ -64,7 +64,7 @@ Geometric bet sizing formula `b = ((S_eff/P)^(1/N) - 1) / 2` assumes villain cal
 | 1 | 0 | N/A (foundation) | None |
 | 2 | 0 | MINOR_EDITS (4 cross-refs applied) | Indifference principle link, deterministic-mixing warning, equity realization note, approximation flag ref |
 | 3 | 0 | MINOR_EDITS (2 cross-refs applied) | Two Pair wetness bucketing in PI calc, raisePct=10 distortion ref |
-| 4 | — | — | — |
+| 4 | 0 | MINOR_EDITS (5 cross-refs applied) | D2 polarity proxy, D1 serialization gaps, D3 sizing-independence, D2 blocker framework, SPR tier clarification |
 | 5 | — | — | — |
 | 6 | — | — | — |
 
