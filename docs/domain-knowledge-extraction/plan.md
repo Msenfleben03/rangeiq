@@ -26,7 +26,7 @@ tags:
 | 3 | Bet Sizing Theory and Pot Geometry | `references/bet-sizing-theory.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (2) applied |
 | 4 | Multi-Street Planning and EV Architecture | `references/multi-street-planning.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (5) applied |
 | 5 | Exploitative Adjustments and Population Dynamics | `references/exploitative-adjustments.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (3) applied |
-| 6 | LLM Trace Quality and Fine-Tuning Architecture | `references/trace-quality-finetuning.md` | ⬜ PENDING | — | Integration domain |
+| 6 | LLM Trace Quality and Fine-Tuning Architecture | `references/trace-quality-finetuning.md` | ✅ DONE | Practitioner | Rubric: ACCEPT_WITH_DISTINCTION, 0 iterations; Cross-domain: MINOR_EDITS (3) applied |
 
 Status codes: ⬜ PENDING → 🔄 IN PROGRESS → ✅ DONE → ⚠️ DONE_WITH_CONCERNS → 🚫 BLOCKED
 
@@ -66,7 +66,7 @@ Deviation thresholds follow binomial CI: >15pp reliable at ~50 hands, 5-15pp at 
 | 3 | 0 | MINOR_EDITS (2 cross-refs applied) | Two Pair wetness bucketing in PI calc, raisePct=10 distortion ref |
 | 4 | 0 | MINOR_EDITS (5 cross-refs applied) | D2 polarity proxy, D1 serialization gaps, D3 sizing-independence, D2 blocker framework, SPR tier clarification |
 | 5 | 0 | MINOR_EDITS (3 cross-refs applied) | MDF baseline caveat, wetness inversion cases, raisePct=10 in exploit mode |
-| 6 | — | — | — |
+| 6 | 0 | MINOR_EDITS (3 cross-refs applied) | Unified 15pp threshold, node-level flag detection, exploit EV overestimation ref |
 
 ## Final Quality Checklist
 
