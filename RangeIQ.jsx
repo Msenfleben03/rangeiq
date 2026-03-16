@@ -2039,8 +2039,11 @@ Output ONLY valid JSON — no preamble, no markdown:
 
   const exportJSONL = () => {
     const eligible = exportTier2Only
-      ? traceQueue.filter(r => r.metadata?.quality_tier === "tier_2_expert")
-      : traceQueue;
+      ? traceQueue
+      : [
+          ...traceQueue,
+          ...rejectedTraces.map(r => ({ ...r, metadata: { ...r.metadata, _export_status: "rejected" } })),
+        ];
     const lines = eligible.map(r => JSON.stringify(r)).join("\n");
     const blob = new Blob([lines], { type: "application/jsonl" });
     const url = URL.createObjectURL(blob);
