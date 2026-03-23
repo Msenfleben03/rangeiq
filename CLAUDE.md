@@ -39,28 +39,28 @@ pre-commit run --all-files
 
 - **Global architecture**: `useReducer` with single state object, all action types defined
 - **Module 1 (Range Builder)**: Fully functional — 13×13 matrix, click+drag, Hero/Villain toggle, 14 presets, combo counters, nut advantage gauge (recharts RadialBarChart)
-- **Module 2 (Board & Equity)**: Fully functional — card selector UI, `classifyHand`, `detectDraws` (8 draw types), `runMonteCarlo` (50k iterations, chunked, heroHandFixed mode), `boardTexture`, RangeBreakdown bar charts
-- **Module 3 (EV Tree)**: Fully functional — auto-generated multi-street tree, recursive EV with corrected GTO seeding, live EV re-stamp on frequency edits, BreakevenPanel, Send to Trace integration
-- **Module 4 (Trace Generator)**: Full API flow — context serialization (including `ev_tree_line` from Module 3), Claude API call, JSONL record packaging, export download, error handling
+- **Module 2 (Board & Equity)**: Fully functional — card selector UI, `classifyHand`, `detectDraws` (8 draw types), `runMonteCarlo` (50k iterations, chunked, heroHandFixed mode, per-combo histogram), `boardTexture`, RangeBreakdown bar charts
+- **Module 3 (EV Tree)**: Fully functional — auto-generated multi-street tree, recursive EV with corrected GTO seeding, live EV re-stamp on frequency edits, BreakevenPanel, Send to Trace integration, per-street equity via `computeEquityFast`
+- **Module 4 (Trace Generator)**: Full API flow — SYSTEM_PROMPT v2, `buildCtx` context serialization, Claude API call, `applyQualityGate` (5-step triage), `rejectedTraces` with `_export_status` tag, batch generation (24-cell `BATCH_BOARD_MATRIX`), `runAuditor` (frequency variance), JSONL export
 - **Module 5 (Scenario Library)**: Save/load/tag/export all functional (in-memory)
 - **Header**: Persistent with live stats (combos, nut advantage, trace count), module tabs
 - **Keyboard shortcuts**: 1-5 module switch, C clear range, R run MC
 - **Design system**: Dark theme with all CSS variables applied, monospace numerical output
+- **P0 (Analytical Accuracy)**: Per-combo equity histogram, polarity index, per-street equity re-estimation via `computeEquityFast`
+- **P1 (Batch + Quality)**: Batch generation, quality gate, SYSTEM_PROMPT v2, trace auditor, rejected trace export
 
 ### 🔧 Needs Implementation (priority order)
 
-#### P0 — Analytical Accuracy (unblocks trace quality)
+#### P1.5 — DPO Preference Pair Pipeline
 
-1. **Per-combo equity histogram**: Implement `histogram` in `runMonteCarlo` (line 390) — per-combo win tracking → 10% equity buckets → polarity index. Enables `metrics.pi.hero` and postflop nut advantage. Referenced in 4 of 6 domain skill references as the key gap.
-2. **Polarity-aware sizing recommendation**: Compute PI from `classifyHand` buckets (value/marginal/air), condition Two Pair on `boardTexture.wetness` (<3 = value, >=3 = marginal), store in `metrics.pi`. Feed into trace context via `buildContext`.
-3. **Per-street equity re-estimation**: Re-run `runMonteCarlo` with 4 board cards (turn) and 5 (river) at street transitions in `buildTree`. Replace static `equityAssumption` propagation. The `equity_is_approximated` flag documents the current gap; this eliminates it.
+Spec: `docs/superpowers/specs/2026-03-22-dpo-preference-pairs-design.md`
+Plan: `docs/superpowers/plans/2026-03-22-dpo-preference-pairs.md`
 
-#### P1 — Module 4 Batch Generation + Quality Pipeline
-
-1. **Batch generation**: Multi-board × multi-range iteration across 24-cell coverage matrix (12 texture profiles × 2 SPR regimes), 500ms delay between API calls, progress bar, per-cell cap of 30 traces
-2. **Trace quality gate**: Enforce 5-step triage before JSONL inclusion — reject session-history hallucinations, draw-as-value errors, frequency divergence >15pp from `ev_tree_line`, flag unanchored traces (`ev_tree_line: null`), flag under-represented textures (<15 traces in batch)
-3. **SYSTEM_PROMPT v2**: Upgrade Module 4 prompt from Tier 1 (Competent) to Tier 2 (Expert) — add floor declaration, mandatory combo identification (min 3), frequency confidence levels (`high/medium/low`), rejection criteria for insufficient specificity
-4. **Post-batch trace auditor**: Group traces by `(hero_range, villain_range, board)`, compute frequency variance within groups, flag batches where sd >20pp as inconsistent
+1. **`scoreTrace`**: Quality score (0-100) for ranking traces within a `game_state_key` group
+2. **`buildPreferencePairs`**: 1:1 best-worst matching of accepted vs rejected traces (≥2 rejection reasons), Standard DPO/TRL format
+3. **`exportDPO`**: JSONL download of `{prompt, chosen, rejected, metadata}` pairs
+4. **Adaptive batch loop**: Per-cell retry up to 5 attempts to ensure ≥1 accepted + ≥1 qualified rejected trace, using `useRef` accumulators to avoid stale closure reads
+5. **UI**: Pair counter in stats row, "Export DPO" button (purple)
 
 #### P2 — Module 3 Minor Deferred
 
@@ -151,6 +151,10 @@ compareHands(h1, h2)            // → 1 / -1 / 0
 runMonteCarlo(heroRange, villainRange, board, deadCards, iterations, dispatch, heroHand)
 boardTexture(board)             // → { wetness, connectivity, flushTexture }
 
+// ── Per-street equity (P0) ──
+computeEquityFast(heroCombos, villainCombos, board, N)
+  // → quick equity estimate for turn/river re-estimation in buildTree
+
 // ── EV Tree (Module 3) ──
 makeNodeId(parentId, action, sizing)  // → deterministic node ID
 buildTree({ potSize, effStack, betSizings, equity, street, depth, parentId, heroInvestment })
@@ -158,6 +162,16 @@ buildTree({ potSize, effStack, betSizings, equity, street, depth, parentId, hero
 computeNodeEV(node)             // → EV in bb (recursive)
 stampEV(nodes)                  // → nodes array with ev stamped on every node
 buildAncestorChain(leafId)      // → array of ancestor node IDs (root → leaf)
+
+// ── Trace Pipeline (Module 4) ──
+BATCH_BOARD_MATRIX             // 24-cell coverage matrix (12 textures × 2 SPR)
+SYSTEM_PROMPT_V2               // Tier 2 expert prompt for trace generation
+buildCtx(board, pot, stack, equity, texture, spr)  // → context object for API call
+applyQualityGate(trace, record)  // → {accepted, reasonCount}; dispatches ADD_REJECTED_TRACE on fail
+generateTrace({ overrides })   // → "accepted"|"rejected_qualified"|"rejected_unqualified"|"error"
+generateBatch()                // → adaptive loop over BATCH_BOARD_MATRIX
+runAuditor()                   // → groups traces by game_state_key, computes freq variance
+exportJSONL()                  // → download accepted traces as JSONL
 ```
 
 ## Module 3 — EV Tree Architecture
@@ -225,6 +239,14 @@ Sub-classify one pair: overpair / top pair / middle pair / bottom pair / underpa
 7. **EV tree equity**: `equity_is_approximated = true` on all nodes where `street !== "flop"`. Static equity is intentional for the prototype — do not attempt per-street MC re-estimation without flagging it clearly.
 8. **EV re-stamp**: `UPDATE_EV_NODE_FREQ` calls `stampEV` after patching — EV updates live. `buildTree` + `stampEV` are the two entry points; never mutate node EVs directly.
 9. **villain_bet vs bet in computeNodeEV**: `"bet"` (hero bets) and `"villain_bet"` (villain donks) are handled by separate branches. Do not merge these conditions — they have different child structures.
+10. **Stale closures in async loops**: `dispatch` enqueues React state updates — closed-over arrays (`traceQueue`, `rejectedTraces`) are stale inside async batch loops. Use `useRef` accumulators to track within-batch state. See `batchAcceptedRef`/`batchRejectedRef` in `generateBatch`.
+11. **Quality gate return shape**: `applyQualityGate` returns `{accepted: bool, reasonCount: number}`, not a plain boolean. Always destructure the result.
+
+## Design Docs
+
+- `docs/superpowers/specs/` — approved design specs (brainstormed + reviewed)
+- `docs/superpowers/plans/` — implementation plans (task-level, with code)
+- `docs/plans/` — legacy design docs (Module 3)
 
 ## Reference Files (domain context, not code)
 
