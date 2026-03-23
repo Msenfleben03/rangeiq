@@ -48,19 +48,9 @@ pre-commit run --all-files
 - **Design system**: Dark theme with all CSS variables applied, monospace numerical output
 - **P0 (Analytical Accuracy)**: Per-combo equity histogram, polarity index, per-street equity re-estimation via `computeEquityFast`
 - **P1 (Batch + Quality)**: Batch generation, quality gate, SYSTEM_PROMPT v2, trace auditor, rejected trace export
+- **P1.5 (DPO Pairs)**: `scoreTrace` (0-100 quality ranking), `buildPreferencePairs` (1:1 best-worst matching, ≥2 rejection reasons), `exportDPO` (JSONL download), adaptive batch loop (per-cell retry ×5 with `useRef` accumulators), DPO pair counter + purple Export DPO button
 
 ### 🔧 Needs Implementation (priority order)
-
-#### P1.5 — DPO Preference Pair Pipeline
-
-Spec: `docs/superpowers/specs/2026-03-22-dpo-preference-pairs-design.md`
-Plan: `docs/superpowers/plans/2026-03-22-dpo-preference-pairs.md`
-
-1. **`scoreTrace`**: Quality score (0-100) for ranking traces within a `game_state_key` group
-2. **`buildPreferencePairs`**: 1:1 best-worst matching of accepted vs rejected traces (≥2 rejection reasons), Standard DPO/TRL format
-3. **`exportDPO`**: JSONL download of `{prompt, chosen, rejected, metadata}` pairs
-4. **Adaptive batch loop**: Per-cell retry up to 5 attempts to ensure ≥1 accepted + ≥1 qualified rejected trace, using `useRef` accumulators to avoid stale closure reads
-5. **UI**: Pair counter in stats row, "Export DPO" button (purple)
 
 #### P2 — Module 3 Minor Deferred
 
@@ -171,6 +161,9 @@ applyQualityGate(trace, record)  // → {accepted, reasonCount}; dispatches ADD_
 generateTrace({ overrides })   // → "accepted"|"rejected_qualified"|"rejected_unqualified"|"error"
 generateBatch()                // → adaptive loop over BATCH_BOARD_MATRIX
 runAuditor()                   // → groups traces by game_state_key, computes freq variance
+scoreTrace(record, isAccepted) // → 0-100 quality score for DPO ranking
+buildPreferencePairs(accepted, rejected)  // → [{prompt, chosen, rejected, metadata}]
+exportDPO(pairs)               // → download DPO preference pairs as JSONL
 exportJSONL()                  // → download accepted traces as JSONL
 ```
 

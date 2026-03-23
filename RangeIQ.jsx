@@ -1792,6 +1792,8 @@ function Module4({ state, dispatch }) {
   const { traceQueue, rejectedTraces, lastTrace, traceError, heroRange, villainRange,
     board, heroHand, metrics, batchRunning, batchProgress, batchStats, evTreeConfig } = state;
   const batchStopRef = useRef(false);
+  const batchAcceptedRef = useRef(new Map());
+  const batchRejectedRef = useRef(new Map());
   const [exportTier2Only, setExportTier2Only] = useState(true);
   const [showAuditor, setShowAuditor] = useState(false);
 
@@ -1861,7 +1863,7 @@ Output ONLY valid JSON — no preamble, no markdown:
   const applyQualityGate = (trace, record) => {
     if (trace.quality_tier === "insufficient") {
       dispatch({ type: "ADD_REJECTED_TRACE", payload: { ...record, rejection_reasons: ["insufficient_combos_explicit"] } });
-      return false;
+      return { accepted: false, reasonCount: 1 };
     }
     const rt = trace.reasoning_trace;
     const reasons = [];
@@ -1897,9 +1899,9 @@ Output ONLY valid JSON — no preamble, no markdown:
 
     if (reasons.length > 0) {
       dispatch({ type: "ADD_REJECTED_TRACE", payload: { ...record, rejection_reasons: reasons } });
-      return false;
+      return { accepted: false, reasonCount: reasons.length };
     }
-    return true;
+    return { accepted: true, reasonCount: 0 };
   };
 
   const generateTrace = async ({
@@ -1976,17 +1978,25 @@ Output ONLY valid JSON — no preamble, no markdown:
         }
       };
 
-      if (applyQualityGate(trace, record)) {
+      const gate = applyQualityGate(trace, record);
+      if (gate.accepted) {
         dispatch({ type: "ADD_TRACE", payload: record });
+        return "accepted";
       }
+      return gate.reasonCount >= 2
+        ? "rejected_qualified"
+        : "rejected_unqualified";
     } catch (err) {
       dispatch({ type: "SET_TRACE_ERROR", payload: err.message });
+      return "error";
     }
   };
 
   const generateBatch = async () => {
     if (!heroRange.size || !villainRange.size) return;
     batchStopRef.current = false;
+    batchAcceptedRef.current = new Map();
+    batchRejectedRef.current = new Map();
     dispatch({ type: "SET_BATCH_RUNNING", payload: true });
     dispatch({ type: "SET_TRACE_ERROR", payload: null });
     try {
@@ -1995,20 +2005,63 @@ Output ONLY valid JSON — no preamble, no markdown:
         const cell = BATCH_BOARD_MATRIX[i];
         if ((coverageMap[cell.cell] || 0) >= 30) continue;
 
-        dispatch({ type: "SET_BATCH_PROGRESS", payload: {
-          currentCell: cell.cell, cellIndex: i + 1, totalCells: BATCH_BOARD_MATRIX.length,
-        }});
+        const cellHeroCombos = [...heroRange].flatMap(
+          h => expandHand(h, cell.board)
+        );
+        const cellVillainCombos = [...villainRange].flatMap(
+          h => expandHand(h, cell.board)
+        );
+        if (!cellHeroCombos.length || !cellVillainCombos.length)
+          continue;
 
-        const cellHeroCombos = [...heroRange].flatMap(h => expandHand(h, cell.board));
-        const cellVillainCombos = [...villainRange].flatMap(h => expandHand(h, cell.board));
-        if (!cellHeroCombos.length || !cellVillainCombos.length) continue;
+        const equity = computeEquityFast(
+          cellHeroCombos, cellVillainCombos, cell.board, 500
+        ) * 100;
+        const cellKey = `${[...heroRange].sort().join(",")}`
+          + `|${[...villainRange].sort().join(",")}`
+          + `|${cell.board.join("")}`
+          + `|${cell.potSize}|${cell.effStack}`;
 
-        const equity = computeEquityFast(cellHeroCombos, cellVillainCombos, cell.board, 500) * 100;
-        await generateTrace({
-          boardOverride: cell.board, potSizeOverride: cell.potSize, effStackOverride: cell.effStack,
-          equityOverride: equity, textureOverride: boardTexture(cell.board), batchCell: cell.cell,
-        });
-        await new Promise(r => setTimeout(r, 500));
+        let attempts = 0;
+        while (attempts < 5) {
+          if (batchStopRef.current) break;
+          const hasAcc =
+            (batchAcceptedRef.current.get(cellKey) || 0) > 0;
+          const hasRej =
+            (batchRejectedRef.current.get(cellKey) || 0) > 0;
+          if (hasAcc && hasRej) break;
+
+          dispatch({ type: "SET_BATCH_PROGRESS", payload: {
+            currentCell: cell.cell,
+            cellIndex: i + 1,
+            totalCells: BATCH_BOARD_MATRIX.length,
+            attempt: attempts + 1,
+          }});
+
+          const result = await generateTrace({
+            boardOverride: cell.board,
+            potSizeOverride: cell.potSize,
+            effStackOverride: cell.effStack,
+            equityOverride: equity,
+            textureOverride: boardTexture(cell.board),
+            batchCell: cell.cell,
+          });
+          attempts++;
+
+          if (result === "accepted") {
+            batchAcceptedRef.current.set(
+              cellKey,
+              (batchAcceptedRef.current.get(cellKey) || 0) + 1
+            );
+          } else if (result === "rejected_qualified") {
+            batchRejectedRef.current.set(
+              cellKey,
+              (batchRejectedRef.current.get(cellKey) || 0) + 1
+            );
+          }
+
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
     } finally {
       dispatch({ type: "SET_BATCH_RUNNING", payload: false });
@@ -2036,6 +2089,118 @@ Output ONLY valid JSON — no preamble, no markdown:
     dispatch({ type: "SET_BATCH_STATS", payload: { inconsistentGroups: inconsistent, auditedAt: new Date().toISOString() } });
     setShowAuditor(true);
   };
+
+  const scoreTrace = (record, isAccepted) => {
+    if (!isAccepted) {
+      const len = (record.rejection_reasons || []).length;
+      return Math.max(0, Math.min(100, 100 - len * 20));
+    }
+    const rt = record.reasoning_trace;
+    if (!rt) return 0;
+    let score = 0;
+    // Board diagnosis length
+    const diagLen = (rt.board_diagnosis || "").length;
+    if (diagLen >= 200) score += 20;
+    else if (diagLen >= 100) score += 10;
+    // Key combos count
+    const comboCount = (rt.key_combos || []).length;
+    if (comboCount >= 5) score += 20;
+    else if (comboCount >= 3) score += 10;
+    // Frequency confidence
+    const evals = rt.action_evaluation || [];
+    const allHigh = evals.length > 0
+      && evals.every(
+        e => e.frequency_recommendation?.confidence === "high"
+      );
+    const anyHigh = evals.some(
+      e => e.frequency_recommendation?.confidence === "high"
+    );
+    if (allHigh) score += 15;
+    else if (anyHigh) score += 8;
+    // EV tree anchored
+    if (record.metadata?.ev_tree_anchored) score += 15;
+    // Frequency source
+    if (evals.some(e => e.frequency_source === "ev_tree")) {
+      score += 15;
+    }
+    // Freq divergence from tree
+    const div = record.metadata?.freq_divergence_from_tree;
+    if (div != null && div < 10) score += 15;
+    else if (div != null && div < 20) score += 8;
+    return Math.min(score, 100);
+  };
+
+  const buildPreferencePairs = (accepted, rejected) => {
+    const groups = new Map();
+    const addTo = (arr, field) => {
+      arr.forEach(r => {
+        const k = r.metadata?.game_state_key;
+        if (!k) return;
+        if (!groups.has(k)) groups.set(k, { accepted: [], rejected: [] });
+        groups.get(k)[field].push(r);
+      });
+    };
+    addTo(accepted, "accepted");
+    addTo(rejected, "rejected");
+
+    const pairs = [];
+    groups.forEach((g, key) => {
+      const qualRej = g.rejected.filter(
+        r => (r.rejection_reasons || []).length >= 2
+      );
+      if (!g.accepted.length || !qualRej.length) return;
+
+      const sortedAcc = [...g.accepted]
+        .map(r => ({ r, s: scoreTrace(r, true) }))
+        .sort((a, b) => b.s - a.s);
+      const sortedRej = [...qualRej]
+        .map(r => ({ r, s: scoreTrace(r, false) }))
+        .sort((a, b) => a.s - b.s);
+
+      const count = Math.min(sortedAcc.length, sortedRej.length);
+      for (let i = 0; i < count; i++) {
+        const acc = sortedAcc[i];
+        const rej = sortedRej[i];
+        if (
+          (acc.r.messages?.length ?? 0) < 3
+          || (rej.r.messages?.length ?? 0) < 3
+        ) continue;
+        pairs.push({
+          prompt: acc.r.messages[0].content
+            + "\n\n" + acc.r.messages[1].content,
+          chosen: acc.r.messages[2].content,
+          rejected: rej.r.messages[2].content,
+          metadata: {
+            game_state_key: key,
+            chosen_score: acc.s,
+            rejected_score: rej.s,
+            rejection_reasons: rej.r.rejection_reasons,
+            chosen_scenario_id: acc.r.metadata?.scenario_id,
+            rejected_scenario_id: rej.r.metadata?.scenario_id,
+          },
+        });
+      }
+    });
+    return pairs;
+  };
+
+  const exportDPO = (pairs) => {
+    const lines = pairs.map(p => JSON.stringify(p)).join("\n");
+    const blob = new Blob([lines], { type: "application/jsonl" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rangeiq-dpo-pairs-${
+      new Date().toISOString().slice(0, 10)
+    }.jsonl`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const dpoPairs = useMemo(
+    () => buildPreferencePairs(traceQueue, rejectedTraces),
+    [traceQueue, rejectedTraces]
+  );
 
   const exportJSONL = () => {
     const eligible = exportTier2Only
@@ -2065,6 +2230,7 @@ Output ONLY valid JSON — no preamble, no markdown:
         }
         <Btn onClick={runAuditor} disabled={traceQueue.length < 2}>Audit</Btn>
         <Btn onClick={exportJSONL} disabled={traceQueue.length === 0} color={T.yellow}>Export JSONL (E)</Btn>
+        <Btn onClick={() => exportDPO(dpoPairs)} disabled={dpoPairs.length === 0} color={T.purple}>Export DPO ({dpoPairs.length})</Btn>
         <Btn
           onClick={() => setExportTier2Only(v => !v)}
           style={{ fontSize: 11, border: `1px solid ${exportTier2Only ? T.green : T.border}`, background: exportTier2Only ? T.green + "22" : T.bgElevated }}
@@ -2077,6 +2243,7 @@ Output ONLY valid JSON — no preamble, no markdown:
         Queue: <span style={{ color: T.text }}>{traceQueue.length}</span>
         {" · "}Tier 2: <span style={{ color: T.green }}>{tier2Count}</span>
         {" · "}Rejected: <span style={{ color: T.red }}>{rejectedTraces.length}</span>
+        {" · "}Pairs: <span style={{ color: dpoPairs.length > 0 ? T.purple : T.muted }}>{dpoPairs.length}</span>
         {" · "}Coverage: <span style={{ color: coveredCells >= 20 ? T.green : coveredCells >= 12 ? T.yellow : T.red }}>{coveredCells}/24 cells ≥15</span>
         {" · "}~{(JSON.stringify(traceQueue).length / 1024).toFixed(1)}KB
       </div>
@@ -2087,6 +2254,7 @@ Output ONLY valid JSON — no preamble, no markdown:
           <Label>Batch Progress</Label>
           <div style={{ fontFamily: "monospace", fontSize: 12, color: T.muted, marginTop: 4 }}>
             Cell {batchProgress.cellIndex}/{batchProgress.totalCells}: <span style={{ color: T.text }}>{batchProgress.currentCell}</span>
+            {batchProgress.attempt && <span> (attempt {batchProgress.attempt}/5)</span>}
           </div>
           <div style={{ background: T.bgPrimary, borderRadius: 2, height: 6, marginTop: 6 }}>
             <div style={{ background: T.blue, height: 6, borderRadius: 2, transition: "width 0.3s",
